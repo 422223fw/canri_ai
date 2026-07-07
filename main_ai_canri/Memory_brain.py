@@ -1,0 +1,668 @@
+"""
+Memory_brain.py
+Canri AI
+
+Deep memory system for Canri:
+- stores every Understanding_brain report as an episodic memory
+- builds semantic profiles for topics, intents, words, and tasks
+- searches by topic, intent, keywords, text similarity, and recency
+- returns a compact memory report that other brains can use
+"""
+
+import json
+import re
+from collections import Counter, defaultdict
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+DATA_DIR = Path(__file__).parent / "data"
+MEMORY_FILE = DATA_DIR / "Memory_database.json"
+MEMORY_STATS_FILE = DATA_DIR / "Memory_statistics.json"
+LEGACY_MEMORY_FILE = Path("memory.json")
+
+MAX_EPISODES = 5000
+MAX_MATCHES = 12
+DEFAULT_SESSION_ID = "default_session"
+
+STOP_WORDS = {
+    "the", "and", "for", "with", "that", "this", "what", "where",
+    "how", "why", "is", "are", "was", "were", "does", "did",
+    "about", "from", "into", "code", "create", "make", "build",
+    "של", "את", "על", "מה", "איפה", "איך", "למה", "זה", "אני",
+    "רוצה", "תעשה", "תכין", "לי"
+}
+
+
+class MemoryBrain:
+
+    def __init__(self):
+
+        self.database = {
+            "episodes": [],
+            "semantic_memory": {
+                "topics": {},
+                "intents": {},
+                "keywords": {},
+                "tasks": {}
+            },
+            "metadata": {
+                "version": "2.0.0",
+                "created_utc": datetime.now(timezone.utc).isoformat()
+            }
+        }
+
+        self.statistics = {}
+
+        self.load_memory()
+        self.load_statistics()
+
+        print("Memory Brain Loaded")
+
+    # ---------- file handling ----------
+
+    def load_memory(self):
+
+        source_file = MEMORY_FILE
+
+        if not source_file.exists() and LEGACY_MEMORY_FILE.exists():
+            source_file = LEGACY_MEMORY_FILE
+
+        if not source_file.exists():
+            return
+
+        try:
+            with source_file.open("r", encoding="utf-8") as file:
+                loaded = json.load(file)
+        except (OSError, json.JSONDecodeError):
+            return
+
+        if isinstance(loaded, list):
+            self.database["episodes"] = [
+                self.normalize_old_memory(item)
+                for item in loaded
+                if isinstance(item, dict)
+            ]
+            self.rebuild_semantic_memory()
+            return
+
+        if isinstance(loaded, dict):
+            self.database.update(loaded)
+            self.database.setdefault("episodes", [])
+            self.database.setdefault("semantic_memory", {})
+            for key in ["topics", "intents", "keywords", "tasks"]:
+                self.database["semantic_memory"].setdefault(key, {})
+
+    def load_statistics(self):
+
+        if not MEMORY_STATS_FILE.exists():
+            return
+
+        try:
+            with MEMORY_STATS_FILE.open("r", encoding="utf-8") as file:
+                self.statistics = json.load(file)
+        except (OSError, json.JSONDecodeError):
+            self.statistics = {}
+
+    def save_memory(self):
+
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+        with MEMORY_FILE.open("w", encoding="utf-8") as file:
+            json.dump(
+                self.database,
+                file,
+                indent=2,
+                ensure_ascii=False
+            )
+            file.write("\n")
+
+    def save_statistics(self):
+
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+        with MEMORY_STATS_FILE.open("w", encoding="utf-8") as file:
+            json.dump(
+                self.statistics,
+                file,
+                indent=2,
+                ensure_ascii=False
+            )
+            file.write("\n")
+
+    # ---------- extraction ----------
+
+    def get_understanding_report(self, data):
+
+        if not isinstance(data, dict):
+            return {
+                "original_text": str(data),
+                "main_topic": "unknown",
+                "intent": "unknown",
+                "words": []
+            }
+
+        understanding = data.get("understanding")
+
+        if isinstance(understanding, dict):
+            return understanding
+
+        return data
+
+    def get_session_id(self, data):
+
+        if isinstance(data, dict):
+            session_id = data.get("session_id")
+
+            if not session_id and isinstance(data.get("memory"), dict):
+                session_id = data["memory"].get("session_id")
+
+            if session_id:
+                return str(session_id)
+
+        return DEFAULT_SESSION_ID
+
+    def extract_text(self, report):
+
+        parts = []
+
+        for key in [
+            "original_text",
+            "corrected_text",
+            "user_message",
+            "question",
+            "query",
+            "text",
+            "main_topic",
+            "intent"
+        ]:
+
+            value = report.get(key)
+            if value:
+                parts.append(str(value))
+
+        return " ".join(parts).strip()
+
+    def extract_keywords(self, report, text):
+
+        keywords = []
+
+        for key in ["main_topic", "intent", "language", "target_language"]:
+            value = report.get(key)
+            if value and value != "unknown":
+                keywords.append(str(value))
+
+        topics = report.get("topics", {})
+        if isinstance(topics, dict):
+            keywords.extend(str(topic) for topic in topics)
+
+        for task in report.get("possible_tasks", []):
+            keywords.append(str(task).replace("_", " "))
+
+        for word_data in report.get("words", []):
+            if not isinstance(word_data, dict):
+                continue
+
+            word = str(word_data.get("word", "")).strip()
+            if word and word_data.get("exists", True):
+                keywords.append(word)
+
+            for connection in word_data.get("connections", [])[:8]:
+                keywords.append(str(connection))
+
+        keywords.extend(
+            re.findall(
+                r"[a-zA-Z\u0590-\u05FF][a-zA-Z0-9_\-\u0590-\u05FF]{1,}",
+                text
+            )
+        )
+
+        clean = []
+
+        for keyword in keywords:
+            keyword = re.sub(r"\s+", " ", str(keyword).lower()).strip()
+            keyword = re.sub(r"^[^\w\u0590-\u05FF]+|[^\w\u0590-\u05FF]+$", "", keyword)
+
+            if (
+                keyword
+                and len(keyword) > 1
+                and keyword not in STOP_WORDS
+                and keyword not in clean
+            ):
+                clean.append(keyword)
+
+        return clean[:80]
+
+    def normalize_old_memory(self, item):
+
+        text = self.extract_text(item)
+        keywords = self.extract_keywords(item, text)
+
+        return {
+            "id": self.make_memory_id(
+                item,
+                text,
+                item.get("session_id", "legacy_session")
+            ),
+            "session_id": item.get("session_id", "legacy_session"),
+            "created_utc": item.get(
+                "created_utc",
+                datetime.now(timezone.utc).isoformat()
+            ),
+            "main_topic": item.get("main_topic", "unknown"),
+            "intent": item.get("intent", "unknown"),
+            "summary": self.make_summary(item, text),
+            "text": text,
+            "keywords": keywords,
+            "possible_tasks": item.get("possible_tasks", []),
+            "importance": self.estimate_importance(item, keywords),
+            "source": "legacy_memory",
+            "raw_report": item
+        }
+
+    def make_memory_id(self, report, text, session_id=DEFAULT_SESSION_ID):
+
+        base = "|".join([
+            str(session_id),
+            str(report.get("main_topic", "unknown")),
+            str(report.get("intent", "unknown")),
+            text[:80]
+        ])
+
+        return "mem_" + str(abs(hash(base)))
+
+    def make_summary(self, report, text):
+
+        topic = report.get("main_topic", "unknown")
+        intent = report.get("intent", "unknown")
+
+        if text:
+            return f"{intent} about {topic}: {text[:140]}"
+
+        return f"{intent} about {topic}"
+
+    def estimate_importance(self, report, keywords):
+
+        score = 35
+
+        if report.get("intent") in [
+            "code_generation",
+            "translation",
+            "question",
+            "research"
+        ]:
+            score += 15
+
+        if report.get("main_topic") in [
+            "code",
+            "language",
+            "science",
+            "geography",
+            "technology"
+        ]:
+            score += 15
+
+        score += min(len(keywords), 20)
+
+        return min(score, 100)
+
+    # ---------- semantic memory ----------
+
+    def update_semantic_bucket(self, bucket_name, key, episode):
+
+        if not key:
+            return
+
+        bucket = self.database["semantic_memory"].setdefault(bucket_name, {})
+
+        item = bucket.get(key, {
+            "count": 0,
+            "last_seen_utc": None,
+            "related_keywords": {},
+            "episode_ids": []
+        })
+
+        item["count"] += 1
+        item["last_seen_utc"] = episode["created_utc"]
+
+        for keyword in episode.get("keywords", [])[:20]:
+            item["related_keywords"][keyword] = item["related_keywords"].get(keyword, 0) + 1
+
+        if episode["id"] not in item["episode_ids"]:
+            item["episode_ids"].append(episode["id"])
+            item["episode_ids"] = item["episode_ids"][-30:]
+
+        bucket[key] = item
+
+    def rebuild_semantic_memory(self):
+
+        self.database["semantic_memory"] = {
+            "topics": {},
+            "intents": {},
+            "keywords": {},
+            "tasks": {}
+        }
+
+        for episode in self.database["episodes"]:
+            self.index_episode(episode)
+
+    def index_episode(self, episode):
+
+        self.update_semantic_bucket(
+            "topics",
+            episode.get("main_topic", "unknown"),
+            episode
+        )
+
+        self.update_semantic_bucket(
+            "intents",
+            episode.get("intent", "unknown"),
+            episode
+        )
+
+        for keyword in episode.get("keywords", [])[:40]:
+            self.update_semantic_bucket("keywords", keyword, episode)
+
+        for task in episode.get("possible_tasks", [])[:20]:
+            self.update_semantic_bucket(
+                "tasks",
+                str(task).replace("_", " ").lower(),
+                episode
+            )
+
+    # ---------- storing ----------
+
+    def add_memory(self, understanding_report, session_id=DEFAULT_SESSION_ID):
+
+        text = self.extract_text(understanding_report)
+        keywords = self.extract_keywords(understanding_report, text)
+
+        episode = {
+            "id": self.make_memory_id(understanding_report, text, session_id),
+            "session_id": session_id,
+            "created_utc": datetime.now(timezone.utc).isoformat(),
+            "main_topic": understanding_report.get("main_topic", "unknown"),
+            "intent": understanding_report.get("intent", "unknown"),
+            "summary": self.make_summary(understanding_report, text),
+            "text": text,
+            "keywords": keywords,
+            "possible_tasks": understanding_report.get("possible_tasks", []),
+            "importance": self.estimate_importance(understanding_report, keywords),
+            "source": "Understanding_brain",
+            "raw_report": understanding_report
+        }
+
+        existing_ids = {
+            item.get("id")
+            for item in self.database["episodes"]
+        }
+
+        if episode["id"] in existing_ids:
+            return episode
+
+        self.database["episodes"].append(episode)
+        self.database["episodes"] = self.database["episodes"][-MAX_EPISODES:]
+
+        self.index_episode(episode)
+        self.save_memory()
+
+        return episode
+
+    # ---------- search ----------
+
+    def same_session(self, episode, session_id):
+
+        return episode.get("session_id", "legacy_session") == session_id
+
+    def session_episodes(self, session_id):
+
+        return [
+            episode
+            for episode in self.database.get("episodes", [])
+            if self.same_session(episode, session_id)
+        ]
+
+    def score_episode(self, episode, topic, intent, keywords, text):
+
+        score = 0
+        reasons = []
+
+        if topic and episode.get("main_topic") == topic:
+            score += 25
+            reasons.append("same_topic")
+
+        if intent and episode.get("intent") == intent:
+            score += 20
+            reasons.append("same_intent")
+
+        episode_keywords = set(episode.get("keywords", []))
+        keyword_overlap = sorted(set(keywords) & episode_keywords)
+
+        if keyword_overlap:
+            score += len(keyword_overlap) * 6
+            reasons.append("keyword_overlap")
+
+        lowered_text = text.lower()
+        episode_text = episode.get("text", "").lower()
+
+        shared_text_tokens = set(
+            token
+            for token in re.findall(r"[a-zA-Z\u0590-\u05FF]{3,}", lowered_text)
+            if token in episode_text
+        )
+
+        if shared_text_tokens:
+            score += min(len(shared_text_tokens) * 2, 16)
+            reasons.append("text_similarity")
+
+        score += min(episode.get("importance", 0) / 10, 10)
+
+        return {
+            "score": round(score, 2),
+            "reasons": reasons,
+            "keyword_overlap": keyword_overlap
+        }
+
+    def search_memory(self, topic, intent, keywords, text, session_id):
+
+        matches = []
+
+        for episode in self.database.get("episodes", []):
+            if not self.same_session(episode, session_id):
+                continue
+
+            scored = self.score_episode(
+                episode,
+                topic,
+                intent,
+                keywords,
+                text
+            )
+
+            if scored["score"] <= 0:
+                continue
+
+            matches.append({
+                "id": episode.get("id"),
+                "score": scored["score"],
+                "reasons": scored["reasons"],
+                "keyword_overlap": scored["keyword_overlap"],
+                "topic": episode.get("main_topic"),
+                "intent": episode.get("intent"),
+                "summary": episode.get("summary"),
+                "keywords": episode.get("keywords", [])[:20],
+                "created_utc": episode.get("created_utc"),
+                "session_id": episode.get("session_id", "legacy_session"),
+                "importance": episode.get("importance", 0)
+            })
+
+        matches.sort(
+            key=lambda item: (
+                item["score"],
+                item.get("importance", 0),
+                item.get("created_utc", "")
+            ),
+            reverse=True
+        )
+
+        return matches[:MAX_MATCHES]
+
+    def search_topic(self, topic, session_id):
+
+        return [
+            episode
+            for episode in self.database.get("episodes", [])
+            if self.same_session(episode, session_id)
+            if episode.get("main_topic") == topic
+        ][-MAX_MATCHES:]
+
+    def search_intent(self, intent, session_id):
+
+        return [
+            episode
+            for episode in self.database.get("episodes", [])
+            if self.same_session(episode, session_id)
+            if episode.get("intent") == intent
+        ][-MAX_MATCHES:]
+
+    def search_keywords(self, keywords, session_id):
+
+        keyword_set = set(keywords)
+        results = []
+
+        for episode in self.database.get("episodes", []):
+            if not self.same_session(episode, session_id):
+                continue
+
+            if keyword_set & set(episode.get("keywords", [])):
+                results.append(episode)
+
+        return results[-MAX_MATCHES:]
+
+    # ---------- reports ----------
+
+    def build_semantic_summary(self, keywords, session_id):
+
+        topic_counter = Counter()
+        intent_counter = Counter()
+        keyword_profiles = defaultdict(Counter)
+        related_counter = Counter()
+        known_keywords = set()
+
+        for episode in self.session_episodes(session_id):
+            topic_counter.update([episode.get("main_topic", "unknown")])
+            intent_counter.update([episode.get("intent", "unknown")])
+
+            episode_keywords = episode.get("keywords", [])[:40]
+            episode_keyword_set = set(episode_keywords)
+
+            for keyword in keywords[:20]:
+                if keyword not in episode_keyword_set:
+                    continue
+
+                known_keywords.add(keyword)
+                keyword_profiles[keyword].update(episode_keywords[:20])
+
+        for keyword in keywords[:20]:
+            related_counter.update(keyword_profiles.get(keyword, {}))
+
+        return {
+            "session_id": session_id,
+            "known_keywords": [
+                keyword
+                for keyword in keywords
+                if keyword in known_keywords
+            ],
+            "related_keywords": [
+                keyword
+                for keyword, _ in related_counter.most_common(20)
+                if keyword not in keywords
+            ],
+            "topic_profiles": dict(topic_counter.most_common(20)),
+            "intent_profiles": dict(intent_counter.most_common(20))
+        }
+
+    def update_statistics(self, memory_report):
+
+        stats = self.statistics.get("Memory_brain", {})
+        stats["uses"] = stats.get("uses", 0) + 1
+        stats["episodes"] = len(self.database.get("episodes", []))
+        stats["last_memory_found"] = memory_report.get("memory_found", 0)
+        stats["last_used_utc"] = datetime.now(timezone.utc).isoformat()
+
+        self.statistics["Memory_brain"] = stats
+        self.save_statistics()
+
+    def process(self, data):
+
+        understanding_report = self.get_understanding_report(data)
+        session_id = self.get_session_id(data)
+        text = self.extract_text(understanding_report)
+        keywords = self.extract_keywords(understanding_report, text)
+
+        topic = understanding_report.get("main_topic", "unknown")
+        intent = understanding_report.get("intent", "unknown")
+
+        ranked_matches = self.search_memory(
+            topic,
+            intent,
+            keywords,
+            text,
+            session_id
+        )
+
+        topic_matches = self.search_topic(topic, session_id)
+        intent_matches = self.search_intent(intent, session_id)
+        keyword_matches = self.search_keywords(keywords, session_id)
+
+        semantic_summary = self.build_semantic_summary(keywords, session_id)
+
+        memory_report = {
+            "memory_found": len(ranked_matches),
+            "session_id": session_id,
+            "session_isolation": True,
+            "ranked_matches": ranked_matches,
+            "topic_matches": topic_matches,
+            "intent_matches": intent_matches,
+            "keyword_matches": keyword_matches,
+            "semantic_summary": semantic_summary,
+            "current_keywords": keywords,
+            "memory_depth": {
+                "episodes": len(self.database.get("episodes", [])),
+                "session_episodes": len(self.session_episodes(session_id)),
+                "topics": len(self.database["semantic_memory"].get("topics", {})),
+                "intents": len(self.database["semantic_memory"].get("intents", {})),
+                "keywords": len(self.database["semantic_memory"].get("keywords", {})),
+                "tasks": len(self.database["semantic_memory"].get("tasks", {}))
+            }
+        }
+
+        stored_episode = self.add_memory(understanding_report, session_id)
+
+        memory_report["stored_episode_id"] = stored_episode["id"]
+        memory_report["memory_depth"] = {
+            "episodes": len(self.database.get("episodes", [])),
+            "session_episodes": len(self.session_episodes(session_id)),
+            "topics": len(self.database["semantic_memory"].get("topics", {})),
+            "intents": len(self.database["semantic_memory"].get("intents", {})),
+            "keywords": len(self.database["semantic_memory"].get("keywords", {})),
+            "tasks": len(self.database["semantic_memory"].get("tasks", {}))
+        }
+
+        self.update_statistics(memory_report)
+
+        return {
+            "brain": "Memory_brain",
+            "understanding": understanding_report,
+            "memory": memory_report,
+            "rules": [
+                "Store Understanding_brain reports as episodic memories.",
+                "Keep memory search isolated by session_id.",
+                "Build semantic memory from topics, intents, keywords, and tasks.",
+                "Return ranked memory matches for other brains.",
+                "Keep memory compact enough for other brains to use safely."
+            ]
+        }
+
+
+brain = MemoryBrain()

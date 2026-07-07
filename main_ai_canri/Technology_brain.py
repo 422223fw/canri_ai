@@ -1,0 +1,1161 @@
+"""
+Technology_brain.py
+Canri AI
+
+תפקיד:
+מוח מומחה לטכנולוגיה, תוכנה, חומרה, רשתות, AI, רובוטיקה,
+סייבר, מערכות, API, דאטה וארכיטקטורה טכנולוגית.
+
+הוא עובד לפי הכלל של Canri:
+הוא לא מנחש מהטקסט הגולמי בלבד. הוא קורא את הדוח של
+Understanding_brain, משתמש ב-main_topic / intent / possible_tasks /
+words / connections, מחפש ידע מקומי, ואם אין מספיק ידע מפעיל
+Research_brain כדי לקבל מקורות אמינים.
+"""
+
+import json
+import re
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+DATA_DIR = Path(__file__).parent / "data"
+TERMS_PATH = DATA_DIR / "Technology_terms.json"
+HARDWARE_PATH = DATA_DIR / "Hardware_dictionary.json"
+STACKS_PATH = DATA_DIR / "Tech_stack_templates.json"
+STATISTICS_PATH = DATA_DIR / "Technology_statistics.json"
+
+LOCAL_CONFIDENCE_THRESHOLD = 55
+MAX_LOCAL_RESULTS = 6
+
+STOP_WORDS = {
+    "the", "and", "for", "with", "that", "this", "what", "how", "why",
+    "are", "is", "was", "were", "does", "did", "can", "could", "should",
+    "about", "into", "from", "של", "את", "על", "מה", "איך", "למה", "אני",
+    "רוצה", "צריך", "תעשה", "האם"
+}
+
+
+class TechnologyBrain:
+
+    def __init__(self):
+
+        self.terms = self._load_json(
+            TERMS_PATH,
+            {}
+        )
+
+        self.hardware = self._load_json(
+            HARDWARE_PATH,
+            {}
+        )
+
+        self.stack_templates = self._load_json(
+            STACKS_PATH,
+            {}
+        )
+
+        self.statistics = self._load_json(
+            STATISTICS_PATH,
+            {}
+        )
+
+        print("Technology Brain Loaded")
+
+    # ---------- loading ----------
+
+    def _load_json(
+        self,
+        path,
+        default
+    ):
+
+        if not path.exists():
+            return default
+
+        try:
+
+            with path.open(
+                "r",
+                encoding="utf-8"
+            ) as file:
+
+                return json.load(
+                    file
+                )
+
+        except (OSError, json.JSONDecodeError):
+            return default
+
+    def _save_statistics(self):
+
+        DATA_DIR.mkdir(
+            parents=True,
+            exist_ok=True
+        )
+
+        with STATISTICS_PATH.open(
+            "w",
+            encoding="utf-8"
+        ) as file:
+
+            json.dump(
+                self.statistics,
+                file,
+                ensure_ascii=False,
+                indent=2
+            )
+
+            file.write(
+                "\n"
+            )
+
+    # ---------- understanding report ----------
+
+    def get_understanding_report(
+        self,
+        data
+    ):
+
+        if not isinstance(
+            data,
+            dict
+        ):
+
+            return {}
+
+        understanding = data.get(
+            "understanding",
+            {}
+        )
+
+        if isinstance(
+            understanding,
+            dict
+        ) and (
+            "words" in understanding
+            or "main_topic" in understanding
+            or "intent" in understanding
+        ):
+
+            return understanding
+
+        if (
+            "words" in data
+            or "main_topic" in data
+            or "intent" in data
+        ):
+
+            return data
+
+        return {}
+
+    def extract_text(
+        self,
+        data,
+        report
+    ):
+
+        parts = []
+
+        if isinstance(
+            data,
+            str
+        ):
+
+            parts.append(
+                data
+            )
+
+        if isinstance(
+            data,
+            dict
+        ):
+
+            for key in [
+                "original_text",
+                "corrected_text",
+                "user_message",
+                "question",
+                "query",
+                "text"
+            ]:
+
+                value = data.get(
+                    key
+                )
+
+                if value:
+                    parts.append(
+                        str(value)
+                    )
+
+        for key in [
+            "original_text",
+            "corrected_text",
+            "main_topic",
+            "intent"
+        ]:
+
+            value = report.get(
+                key
+            )
+
+            if value:
+                parts.append(
+                    str(value)
+                )
+
+        return " ".join(
+            parts
+        )
+
+    def collect_terms_from_report(
+        self,
+        report,
+        fallback_text
+    ):
+
+        terms = []
+
+        for key in [
+            "main_topic",
+            "intent"
+        ]:
+
+            value = report.get(
+                key
+            )
+
+            if value and value != "unknown":
+                terms.append(
+                    str(value)
+                )
+
+        topics = report.get(
+            "topics",
+            {}
+        )
+
+        if isinstance(
+            topics,
+            dict
+        ):
+
+            for topic in topics:
+                terms.append(
+                    str(topic)
+                )
+
+        for task in report.get(
+            "possible_tasks",
+            []
+        ):
+
+            terms.append(
+                str(task).replace(
+                    "_",
+                    " "
+                )
+            )
+
+        for word_data in report.get(
+            "words",
+            []
+        ):
+
+            if not isinstance(
+                word_data,
+                dict
+            ):
+
+                continue
+
+            word = str(
+                word_data.get(
+                    "word",
+                    ""
+                )
+            ).strip()
+
+            if (
+                word
+                and len(word) > 2
+                and word_data.get(
+                    "exists",
+                    True
+                )
+            ):
+
+                terms.append(
+                    word
+                )
+
+            for connection in word_data.get(
+                "connections",
+                []
+            )[:8]:
+
+                terms.append(
+                    str(connection)
+                )
+
+        for token in re.findall(
+            r"[a-zA-Z][a-zA-Z0-9_\-\+\.]{1,}",
+            fallback_text
+        ):
+
+            terms.append(
+                token
+            )
+
+        clean_terms = []
+
+        for term in terms:
+
+            term = re.sub(
+                r"[^a-zA-Z0-9_\-\+\.\s]",
+                " ",
+                term
+            )
+
+            term = re.sub(
+                r"\s+",
+                " ",
+                term
+            ).strip().lower()
+
+            if (
+                term
+                and len(term) > 1
+                and term not in STOP_WORDS
+                and term not in clean_terms
+            ):
+
+                clean_terms.append(
+                    term
+                )
+
+        return clean_terms
+
+    # ---------- detection ----------
+
+    def detect_intent(
+        self,
+        report,
+        terms,
+        text
+    ):
+
+        intent = str(
+            report.get(
+                "intent",
+                ""
+            )
+        ).lower()
+
+        if intent:
+            return intent
+
+        lowered = text.lower()
+
+        intent_keywords = {
+            "hardware_recommendation": [
+                "gpu",
+                "cpu",
+                "ram",
+                "computer",
+                "pc",
+                "laptop",
+                "build",
+                "upgrade",
+                "hardware"
+            ],
+            "architecture_planning": [
+                "architecture",
+                "system",
+                "stack",
+                "components",
+                "project",
+                "design"
+            ],
+            "troubleshooting": [
+                "error",
+                "bug",
+                "not working",
+                "problem",
+                "fix",
+                "issue",
+                "slow"
+            ],
+            "comparison": [
+                "vs",
+                "versus",
+                "compare",
+                "better",
+                "difference"
+            ],
+            "explanation": [
+                "what is",
+                "explain",
+                "how does",
+                "מה זה",
+                "תסביר"
+            ]
+        }
+
+        for detected_intent, keywords in intent_keywords.items():
+
+            if any(
+                keyword in lowered
+                or keyword in terms
+                for keyword in keywords
+            ):
+
+                return detected_intent
+
+        return "technology_analysis"
+
+    def detect_domain(
+        self,
+        terms,
+        text
+    ):
+
+        lowered = text.lower()
+
+        domain_keywords = {
+            "hardware": [
+                "hardware",
+                "cpu",
+                "gpu",
+                "ram",
+                "ssd",
+                "motherboard",
+                "power supply",
+                "sensor"
+            ],
+            "software": [
+                "software",
+                "program",
+                "app",
+                "api",
+                "web",
+                "backend",
+                "frontend"
+            ],
+            "networking": [
+                "network",
+                "router",
+                "switch",
+                "wifi",
+                "tcp",
+                "ip",
+                "dns"
+            ],
+            "security": [
+                "security",
+                "cyber",
+                "encryption",
+                "auth",
+                "password",
+                "malware"
+            ],
+            "ai": [
+                "ai",
+                "artificial intelligence",
+                "machine learning",
+                "model",
+                "neural"
+            ],
+            "robotics": [
+                "robot",
+                "robotics",
+                "motor",
+                "actuator",
+                "microcontroller"
+            ],
+            "cloud": [
+                "cloud",
+                "server",
+                "deploy",
+                "hosting",
+                "scale"
+            ],
+            "data": [
+                "database",
+                "data",
+                "sql",
+                "nosql",
+                "json"
+            ],
+            "gaming_technology": [
+                "game",
+                "engine",
+                "rendering",
+                "fps",
+                "physics"
+            ]
+        }
+
+        scores = {}
+
+        for domain, keywords in domain_keywords.items():
+
+            score = 0
+
+            for keyword in keywords:
+
+                if (
+                    keyword in lowered
+                    or keyword in terms
+                ):
+
+                    score += 1
+
+            if score:
+                scores[domain] = score
+
+        if scores:
+            return max(
+                scores,
+                key=scores.get
+            )
+
+        main_topic = ""
+
+        if terms:
+            main_topic = terms[0]
+
+        if main_topic in [
+            "technology",
+            "code",
+            "programming"
+        ]:
+
+            return "software"
+
+        return "technology"
+
+    # ---------- local search ----------
+
+    def _score_text(
+        self,
+        text,
+        terms,
+        weight
+    ):
+
+        lowered = text.lower()
+
+        matches = [
+            term
+            for term in terms
+            if term and term in lowered
+        ]
+
+        return len(
+            matches
+        ) * weight, matches
+
+    def search_terms(
+        self,
+        terms
+    ):
+
+        results = []
+
+        for name, item in self.terms.items():
+
+            searchable = " ".join([
+                name,
+                item.get(
+                    "domain",
+                    ""
+                ),
+                item.get(
+                    "definition",
+                    ""
+                ),
+                " ".join(
+                    item.get(
+                        "related",
+                        []
+                    )
+                ),
+                " ".join(
+                    item.get(
+                        "use_cases",
+                        []
+                    )
+                )
+            ])
+
+            score, matches = self._score_text(
+                searchable,
+                terms,
+                3
+            )
+
+            if name in terms:
+                score += 8
+                matches.append(
+                    name
+                )
+
+            if score:
+
+                results.append({
+                    "type": "technology_term",
+                    "name": name,
+                    "score": score,
+                    "matches": sorted(
+                        set(matches)
+                    ),
+                    "data": item
+                })
+
+        return results
+
+    def search_hardware(
+        self,
+        terms
+    ):
+
+        results = []
+
+        for name, item in self.hardware.items():
+
+            searchable = " ".join([
+                name,
+                item.get(
+                    "category",
+                    ""
+                ),
+                item.get(
+                    "role",
+                    ""
+                ),
+                " ".join(
+                    item.get(
+                        "important_specs",
+                        []
+                    )
+                ),
+                " ".join(
+                    item.get(
+                        "compatibility_checks",
+                        []
+                    )
+                )
+            ])
+
+            score, matches = self._score_text(
+                searchable,
+                terms,
+                4
+            )
+
+            if name in terms:
+                score += 10
+                matches.append(
+                    name
+                )
+
+            if score:
+
+                results.append({
+                    "type": "hardware_component",
+                    "name": name,
+                    "score": score,
+                    "matches": sorted(
+                        set(matches)
+                    ),
+                    "data": item
+                })
+
+        return results
+
+    def search_stacks(
+        self,
+        terms
+    ):
+
+        results = []
+
+        for name, item in self.stack_templates.items():
+
+            searchable = " ".join([
+                name,
+                item.get(
+                    "goal",
+                    ""
+                ),
+                " ".join(
+                    item.get(
+                        "recommended_stack",
+                        []
+                    )
+                ),
+                " ".join(
+                    item.get(
+                        "components",
+                        []
+                    )
+                ),
+                " ".join(
+                    item.get(
+                        "risks",
+                        []
+                    )
+                )
+            ])
+
+            score, matches = self._score_text(
+                searchable,
+                terms,
+                2
+            )
+
+            if score:
+
+                results.append({
+                    "type": "stack_template",
+                    "name": name,
+                    "score": score,
+                    "matches": sorted(
+                        set(matches)
+                    ),
+                    "data": item
+                })
+
+        return results
+
+    def search_local_knowledge(
+        self,
+        terms
+    ):
+
+        results = (
+            self.search_terms(
+                terms
+            )
+            +
+            self.search_hardware(
+                terms
+            )
+            +
+            self.search_stacks(
+                terms
+            )
+        )
+
+        results.sort(
+            key=lambda item: item["score"],
+            reverse=True
+        )
+
+        return results[:MAX_LOCAL_RESULTS]
+
+    # ---------- output building ----------
+
+    def calculate_confidence(
+        self,
+        local_matches,
+        terms
+    ):
+
+        if not local_matches:
+            return 0
+
+        top_score = local_matches[0]["score"]
+        matched_terms = set()
+
+        for match in local_matches[:3]:
+            matched_terms.update(
+                match.get(
+                    "matches",
+                    []
+                )
+            )
+
+        coverage = 0
+
+        if terms:
+            coverage = (
+                len(matched_terms)
+                /
+                max(
+                    len(terms[:12]),
+                    1
+                )
+            ) * 100
+
+        confidence = min(
+            (top_score * 8) + (coverage * 0.5),
+            100
+        )
+
+        return round(
+            confidence,
+            2
+        )
+
+    def collect_recommendations(
+        self,
+        local_matches
+    ):
+
+        components = []
+        risks = []
+        stack = []
+        next_brains = []
+
+        for match in local_matches:
+
+            data = match.get(
+                "data",
+                {}
+            )
+
+            components.extend(
+                data.get(
+                    "related",
+                    []
+                )
+            )
+
+            components.extend(
+                data.get(
+                    "components",
+                    []
+                )
+            )
+
+            components.extend(
+                data.get(
+                    "important_specs",
+                    []
+                )
+            )
+
+            risks.extend(
+                data.get(
+                    "risks",
+                    []
+                )
+            )
+
+            risks.extend(
+                data.get(
+                    "common_bottlenecks",
+                    []
+                )
+            )
+
+            stack.extend(
+                data.get(
+                    "recommended_stack",
+                    []
+                )
+            )
+
+            next_brains.extend(
+                data.get(
+                    "next_brains",
+                    []
+                )
+            )
+
+        return {
+            "recommended_components": list(
+                dict.fromkeys(
+                    components
+                )
+            )[:12],
+            "recommended_stack": list(
+                dict.fromkeys(
+                    stack
+                )
+            )[:12],
+            "risks": list(
+                dict.fromkeys(
+                    risks
+                )
+            )[:10],
+            "suggested_next_brains": list(
+                dict.fromkeys(
+                    next_brains
+                )
+            )[:8]
+        }
+
+    def detect_needs(
+        self,
+        local_matches,
+        intent,
+        domain,
+        confidence
+    ):
+
+        needs_code = False
+        needs_security = False
+
+        for match in local_matches:
+
+            data = match.get(
+                "data",
+                {}
+            )
+
+            if data.get(
+                "needs_code"
+            ):
+                needs_code = True
+
+            if data.get(
+                "needs_security"
+            ):
+                needs_security = True
+
+        if intent in [
+            "code_generation",
+            "architecture_planning"
+        ]:
+            needs_code = True
+
+        if domain in [
+            "security",
+            "robotics"
+        ]:
+            needs_security = True
+
+        return {
+            "needs_code": needs_code,
+            "needs_security": needs_security,
+            "needs_research": confidence < LOCAL_CONFIDENCE_THRESHOLD,
+            "needs_planner": intent in [
+                "architecture_planning",
+                "project_planning",
+                "code_generation"
+            ],
+            "needs_hardware_check": domain in [
+                "hardware",
+                "robotics",
+                "electronics"
+            ]
+        }
+
+    def build_research_payload(
+        self,
+        report,
+        text,
+        terms,
+        domain,
+        intent
+    ):
+
+        query = " ".join(
+            list(
+                dict.fromkeys(
+                    [domain, intent] + terms[:10] + [text]
+                )
+            )
+        )
+
+        payload = dict(
+            report
+        )
+
+        payload.update({
+            "original_text": text,
+            "main_topic": "technology",
+            "intent": intent,
+            "query": query,
+            "technology_domain": domain,
+            "technology_terms": terms
+        })
+
+        return payload
+
+    def run_research_fallback(
+        self,
+        payload
+    ):
+
+        try:
+
+            from Research_brain import ResearchBrain
+
+            research_brain = ResearchBrain()
+
+            return research_brain.process(
+                payload
+            )
+
+        except Exception as error:
+
+            return {
+                "brain": "Research_brain",
+                "error": str(error),
+                "verified": False,
+                "confidence": 0
+            }
+
+    def update_statistics(
+        self,
+        confidence,
+        domain,
+        intent
+    ):
+
+        stats = self.statistics.get(
+            "Technology_brain",
+            {}
+        )
+
+        stats["uses"] = stats.get(
+            "uses",
+            0
+        ) + 1
+
+        stats["last_confidence"] = confidence
+        stats["last_domain"] = domain
+        stats["last_intent"] = intent
+        stats["last_used_utc"] = datetime.now(
+            timezone.utc
+        ).isoformat()
+
+        self.statistics["Technology_brain"] = stats
+
+        self._save_statistics()
+
+    # ---------- process ----------
+
+    def process(
+        self,
+        data
+    ):
+
+        report = self.get_understanding_report(
+            data
+        )
+
+        text = self.extract_text(
+            data,
+            report
+        )
+
+        terms = self.collect_terms_from_report(
+            report,
+            text
+        )
+
+        domain = self.detect_domain(
+            terms,
+            text
+        )
+
+        intent = self.detect_intent(
+            report,
+            terms,
+            text
+        )
+
+        local_matches = self.search_local_knowledge(
+            terms
+        )
+
+        confidence = self.calculate_confidence(
+            local_matches,
+            terms
+        )
+
+        recommendations = self.collect_recommendations(
+            local_matches
+        )
+
+        needs = self.detect_needs(
+            local_matches,
+            intent,
+            domain,
+            confidence
+        )
+
+        research_result = None
+
+        if needs["needs_research"]:
+
+            research_payload = self.build_research_payload(
+                report,
+                text,
+                terms,
+                domain,
+                intent
+            )
+
+            research_result = self.run_research_fallback(
+                research_payload
+            )
+
+        self.update_statistics(
+            confidence,
+            domain,
+            intent
+        )
+
+        return {
+            "brain": "Technology_brain",
+            "used_understanding_report": bool(report),
+            "technology_domain": domain,
+            "intent": intent,
+            "terms_used": terms,
+            "confidence": confidence,
+            "local_knowledge_found": len(local_matches),
+            "local_matches": [
+                {
+                    "type": match["type"],
+                    "name": match["name"],
+                    "score": match["score"],
+                    "matches": match["matches"],
+                    "data": match["data"]
+                }
+                for match in local_matches
+            ],
+            "recommended_components": recommendations["recommended_components"],
+            "recommended_stack": recommendations["recommended_stack"],
+            "risks": recommendations["risks"],
+            "suggested_next_brains": list(
+                dict.fromkeys(
+                    recommendations["suggested_next_brains"]
+                    +
+                    [
+                        brain_name
+                        for brain_name, enabled in [
+                            ("Code_brain", needs["needs_code"]),
+                            ("Security_brain", needs["needs_security"]),
+                            ("Research_brain", needs["needs_research"]),
+                            ("Planner_brain", needs["needs_planner"])
+                        ]
+                        if enabled
+                    ]
+                )
+            ),
+            "needs_code": needs["needs_code"],
+            "needs_security": needs["needs_security"],
+            "needs_research": needs["needs_research"],
+            "needs_planner": needs["needs_planner"],
+            "needs_hardware_check": needs["needs_hardware_check"],
+            "research_fallback": research_result,
+            "rules": [
+                "Use the Understanding_brain report as the main input.",
+                "Search local technology and hardware knowledge first.",
+                "If local confidence is low, call Research_brain for trusted sources.",
+                "Do not write code directly; route implementation work to Code_brain.",
+                "Route unsafe or security-sensitive topics to Security_brain.",
+                "For hardware, check compatibility, power, heat, and physical constraints."
+            ]
+        }
+
+
+brain = TechnologyBrain()
