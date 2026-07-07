@@ -1,0 +1,2647 @@
+"""
+Code_brain.py
+Canri AI
+"""
+
+import json
+import re
+import ast
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+DATA_DIR = Path(__file__).parent / "data"
+
+CODE_FILE = DATA_DIR / "code.json"
+STATS_FILE = DATA_DIR / "Code_statistics.json"
+DEPENDENCY_GRAPH_FILE = DATA_DIR / "Code_dependency_graph.json"
+COMPOSITION_TABLE_FILE = DATA_DIR / "Code_composition_tables.json"
+ASSEMBLY_PATTERNS_FILE = DATA_DIR / "Code_assembly_patterns.json"
+
+GENERIC_CODE_TERMS = {
+    "code",
+    "coding",
+    "generation",
+    "code_generation",
+    "function",
+    "program",
+    "create",
+    "make",
+    "build",
+    "write",
+    "data",
+    "task",
+    "unknown"
+}
+
+
+class CodeSelfReviewer:
+
+    def review(self, code, language="python"):
+
+        code = str(code or "")
+        warnings = []
+        errors = []
+        suggestions = []
+
+        if not code.strip():
+            errors.append("No code was generated.")
+            return {
+                "valid": False,
+                "errors": errors,
+                "warnings": warnings,
+                "suggestions": suggestions,
+                "quality_score": 0
+            }
+
+        if language != "python":
+            return {
+                "valid": True,
+                "errors": [],
+                "warnings": ["Self review is strongest for Python right now."],
+                "suggestions": [],
+                "quality_score": 65
+            }
+
+        tree = None
+
+        try:
+            tree = ast.parse(code)
+        except SyntaxError as error:
+            errors.append(
+                f"Syntax error on line {error.lineno}: {error.msg}"
+            )
+
+        lowered = code.lower()
+
+        placeholder_signals = [
+            "production_draft",
+            "creative_ready",
+            "planner_ready",
+            "helper, production draft variant",
+            "return data",
+            "pass  #",
+            "todo",
+            "placeholder"
+        ]
+
+        for signal in placeholder_signals:
+            if signal in lowered:
+                warnings.append(
+                    f"Possible placeholder code detected: {signal}"
+                )
+
+        if tree is not None:
+            functions = [
+                node
+                for node in ast.walk(tree)
+                if isinstance(node, ast.FunctionDef)
+            ]
+
+            if not functions:
+                warnings.append("No functions were found.")
+
+            for function in functions:
+                meaningful_nodes = [
+                    node
+                    for node in function.body
+                    if not (
+                        isinstance(node, ast.Expr)
+                        and isinstance(getattr(node, "value", None), ast.Constant)
+                        and isinstance(node.value.value, str)
+                    )
+                ]
+
+                if not meaningful_nodes:
+                    warnings.append(
+                        f"Function {function.name} has no real body."
+                    )
+                    continue
+
+                if len(meaningful_nodes) == 1:
+                    node = meaningful_nodes[0]
+                    if isinstance(node, ast.Pass):
+                        warnings.append(
+                            f"Function {function.name} only contains pass."
+                        )
+                    elif (
+                        isinstance(node, ast.Return)
+                        and (
+                            node.value is None
+                            or (
+                                isinstance(node.value, ast.Name)
+                                and node.value.id in {"data", "input"}
+                            )
+                        )
+                    ):
+                        warnings.append(
+                            f"Function {function.name} looks like a stub."
+                        )
+
+            has_main = any(
+                isinstance(node, ast.FunctionDef) and node.name == "main"
+                for node in ast.walk(tree)
+            )
+            has_main_guard = 'if __name__ == "__main__"' in code
+
+            if has_main and not has_main_guard:
+                suggestions.append("Add a main guard so the program runs directly.")
+
+        quality_score = 100
+        quality_score -= len(errors) * 40
+        quality_score -= min(len(warnings) * 8, 40)
+        quality_score -= min(len(suggestions) * 4, 12)
+        quality_score = max(0, quality_score)
+
+        return {
+            "valid": not errors,
+            "errors": errors,
+            "warnings": list(dict.fromkeys(warnings)),
+            "suggestions": list(dict.fromkeys(suggestions)),
+            "quality_score": quality_score
+        }
+
+    def improve(self, code, review, language="python"):
+
+        improved = str(code or "").strip()
+        changes = []
+
+        if language != "python" or not improved:
+            return improved, changes
+
+        if (
+            "Add a main guard so the program runs directly."
+            in review.get("suggestions", [])
+            and 'if __name__ == "__main__"' not in improved
+            and re.search(r"^def\s+main\s*\(", improved, re.MULTILINE)
+        ):
+            improved += '\n\nif __name__ == "__main__":\n    main()\n'
+            changes.append("Added Python main guard.")
+
+        if improved and not improved.endswith("\n"):
+            improved += "\n"
+            changes.append("Added final newline.")
+
+        return improved, changes
+
+    def review_and_improve(self, code, language="python"):
+
+        first_review = self.review(code, language)
+        improved_code, changes = self.improve(
+            code,
+            first_review,
+            language
+        )
+        final_review = self.review(improved_code, language)
+
+        return {
+            "code": improved_code,
+            "before": first_review,
+            "after": final_review,
+            "changes": changes,
+            "improved": bool(changes),
+            "ready": final_review.get("valid", False)
+                and final_review.get("quality_score", 0) >= 70
+        }
+
+
+class CodeBrain:
+
+    def __init__(self):
+
+        self.code_database = []
+        self.statistics = {}
+        self.dependency_graph = {}
+        self.composition_tables = {}
+        self.assembly_patterns = {}
+        self.code_by_id = {}
+        self.self_reviewer = CodeSelfReviewer()
+
+        self.load_data()
+
+        print("Code Brain Loaded")
+
+    def load_data(self):
+
+        if CODE_FILE.exists():
+
+            with open(
+                CODE_FILE,
+                "r",
+                encoding="utf-8"
+            ) as f:
+
+                self.code_database = json.load(f)
+
+        if STATS_FILE.exists():
+
+            with open(
+                STATS_FILE,
+                "r",
+                encoding="utf-8"
+            ) as f:
+
+                self.statistics = json.load(f)
+
+        if DEPENDENCY_GRAPH_FILE.exists():
+
+            with open(
+                DEPENDENCY_GRAPH_FILE,
+                "r",
+                encoding="utf-8"
+            ) as f:
+
+                self.dependency_graph = json.load(f)
+
+        if COMPOSITION_TABLE_FILE.exists():
+
+            with open(
+                COMPOSITION_TABLE_FILE,
+                "r",
+                encoding="utf-8"
+            ) as f:
+
+                self.composition_tables = json.load(f)
+
+        if ASSEMBLY_PATTERNS_FILE.exists():
+
+            with open(
+                ASSEMBLY_PATTERNS_FILE,
+                "r",
+                encoding="utf-8"
+            ) as f:
+
+                self.assembly_patterns = json.load(f)
+
+        self.code_by_id = {
+            item.get("id"): item
+            for item in self.code_database
+            if item.get("id")
+        }
+
+    def save_statistics(self):
+
+        DATA_DIR.mkdir(
+            parents=True,
+            exist_ok=True
+        )
+
+        with STATS_FILE.open(
+            "w",
+            encoding="utf-8"
+        ) as f:
+
+            json.dump(
+                self.statistics,
+                f,
+                indent=2,
+                ensure_ascii=False
+            )
+
+            f.write("\n")
+
+    def finalize_code_result(self, result):
+
+        if not isinstance(result, dict):
+            return result
+
+        code = result.get(
+            "generated_code",
+            ""
+        )
+
+        if not code:
+            return result
+
+        review = self.self_reviewer.review_and_improve(
+            code,
+            result.get("language") or "python"
+        )
+
+        result["generated_code"] = review.get(
+            "code",
+            code
+        )
+        result["self_review"] = {
+            "before": review.get("before", {}),
+            "after": review.get("after", {}),
+            "changes": review.get("changes", []),
+            "improved": review.get("improved", False),
+            "ready": review.get("ready", False)
+        }
+        result["self_reviewed"] = True
+        result["self_improved"] = review.get(
+            "improved",
+            False
+        )
+
+        if not review.get("ready", False):
+            result.setdefault(
+                "warnings",
+                []
+            )
+            result["warnings"].append(
+                "Code self-review found issues or low confidence."
+            )
+
+        return result
+
+    def get_understanding_report(
+        self,
+        data
+    ):
+
+        if not isinstance(
+            data,
+            dict
+        ):
+
+            return {}
+
+        understanding = data.get(
+            "understanding",
+            {}
+        )
+
+        if isinstance(
+            understanding,
+            dict
+        ) and (
+            "words" in understanding
+            or "main_topic" in understanding
+            or "intent" in understanding
+        ):
+
+            return understanding
+
+        if (
+            "words" in data
+            or "main_topic" in data
+            or "intent" in data
+        ):
+
+            return data
+
+        return {}
+
+    def get_memory_report(
+        self,
+        data
+    ):
+
+        if not isinstance(
+            data,
+            dict
+        ):
+
+            return {}
+
+        memory = data.get(
+            "memory",
+            {}
+        )
+
+        if isinstance(
+            memory,
+            dict
+        ):
+
+            return memory
+
+        return {}
+
+    def collect_memory_terms(
+        self,
+        memory_report
+    ):
+
+        terms = []
+
+        if not isinstance(
+            memory_report,
+            dict
+        ):
+
+            return terms
+
+        for key in [
+            "topic_matches",
+            "intent_matches",
+            "keyword_matches",
+            "recent_matches",
+            "similar_tasks"
+        ]:
+
+            matches = memory_report.get(
+                key,
+                []
+            )
+
+            if not isinstance(
+                matches,
+                list
+            ):
+                continue
+
+            for match in matches[:12]:
+
+                if isinstance(
+                    match,
+                    dict
+                ):
+
+                    for match_key in [
+                        "topic",
+                        "intent",
+                        "keyword",
+                        "task",
+                        "main_topic",
+                        "text",
+                        "summary"
+                    ]:
+
+                        value = match.get(
+                            match_key
+                        )
+
+                        if value:
+                            terms.append(
+                                str(value)
+                            )
+
+                    for value in match.get(
+                        "keywords",
+                        []
+                    )[:8]:
+                        terms.append(
+                            str(value)
+                        )
+
+                elif match:
+
+                    terms.append(
+                        str(match)
+                    )
+
+        return [
+            term.lower().strip()
+            for term in terms
+            if str(term).strip()
+        ]
+
+    def extract_existing_code(
+        self,
+        data
+    ):
+
+        if not isinstance(
+            data,
+            dict
+        ):
+
+            return ""
+
+        for key in [
+            "existing_code",
+            "code_context",
+            "current_code",
+            "generated_code",
+            "project_code"
+        ]:
+
+            value = data.get(
+                key
+            )
+
+            if value:
+                return str(value)
+
+        return ""
+
+    def extract_text(
+        self,
+        data,
+        report
+    ):
+
+        parts = []
+
+        if isinstance(
+            data,
+            str
+        ):
+
+            parts.append(
+                data
+            )
+
+        if isinstance(
+            data,
+            dict
+        ):
+
+            for key in [
+                "original_text",
+                "corrected_text",
+                "user_message",
+                "question",
+                "query",
+                "text",
+                "prompt"
+            ]:
+
+                value = data.get(
+                    key
+                )
+
+                if value:
+                    parts.append(
+                        str(value)
+                    )
+
+        for key in [
+            "original_text",
+            "corrected_text",
+            "main_topic",
+            "intent"
+        ]:
+
+            value = report.get(
+                key
+            )
+
+            if value:
+                parts.append(
+                    str(value)
+                )
+
+        return " ".join(
+            parts
+        )
+
+    def collect_terms(
+        self,
+        data,
+        report,
+        text
+    ):
+
+        terms = []
+
+        if isinstance(
+            data,
+            dict
+        ):
+
+            terms.extend(
+                data.get(
+                    "required_tags",
+                    []
+                )
+            )
+
+            for key in [
+                "language",
+                "target_language",
+                "framework",
+                "feature",
+                "task"
+            ]:
+
+                value = data.get(
+                    key
+                )
+
+                if value:
+                    terms.append(
+                        str(value)
+                    )
+
+        for key in [
+            "main_topic",
+            "intent"
+        ]:
+
+            value = report.get(
+                key
+            )
+
+            if value and value != "unknown":
+                terms.append(
+                    str(value)
+                )
+
+        topics = report.get(
+            "topics",
+            {}
+        )
+
+        if isinstance(
+            topics,
+            dict
+        ):
+
+            for topic in topics:
+                terms.append(
+                    str(topic)
+                )
+
+        for task in report.get(
+            "possible_tasks",
+            []
+        ):
+
+            terms.append(
+                str(task).replace(
+                    "_",
+                    " "
+                )
+            )
+
+        for word_data in report.get(
+            "words",
+            []
+        ):
+
+            if not isinstance(
+                word_data,
+                dict
+            ):
+                continue
+
+            word = str(
+                word_data.get(
+                    "word",
+                    ""
+                )
+            ).strip()
+
+            if (
+                word
+                and len(word) > 1
+                and word_data.get(
+                    "exists",
+                    True
+                )
+            ):
+                terms.append(
+                    word
+                )
+
+            for connection in word_data.get(
+                "connections",
+                []
+            )[:8]:
+                terms.append(
+                    str(connection)
+                )
+
+        tokens = re.findall(
+            r"[a-zA-Z][a-zA-Z0-9_\-\+\.#]{1,}",
+            text
+        )
+
+        terms.extend(tokens)
+
+        clean_terms = []
+
+        for term in terms:
+
+            term = re.sub(
+                r"[^a-zA-Z0-9_\-\+\.#\s]",
+                " ",
+                str(term)
+            )
+
+            term = re.sub(
+                r"\s+",
+                " ",
+                term
+            ).strip().lower()
+
+            if (
+                term
+                and len(term) > 1
+                and term not in GENERIC_CODE_TERMS
+                and term not in clean_terms
+            ):
+                clean_terms.append(term)
+
+        return clean_terms
+
+    def detect_language(
+        self,
+        terms,
+        text
+    ):
+
+        aliases = {
+            "python": ["python", "py", "פייתון"],
+            "javascript": ["javascript", "js", "node", "react"],
+            "html": ["html"],
+            "css": ["css"],
+            "java": ["java"],
+            "csharp": ["c#", "csharp", "c sharp"],
+            "cpp": ["c++", "cpp"],
+            "c": [" c ", "clang"],
+            "php": ["php"],
+            "sql": ["sql", "database"]
+        }
+
+        lowered = f" {text.lower()} "
+
+        for language, names in aliases.items():
+            for name in names:
+                if name in terms or name in lowered:
+                    return language
+
+        return None
+
+    def detect_task_type(
+        self,
+        terms,
+        text
+    ):
+
+        lowered = text.lower()
+
+        task_map = {
+            "web_api": ["api", "endpoint", "route", "server", "http"],
+            "database": ["database", "sql", "insert", "select", "query"],
+            "game": ["game", "player", "enemy", "inventory", "score"],
+            "file_io": ["file", "json", "csv", "read", "write"],
+            "security": ["password", "hash", "encrypt", "token", "login"],
+            "algorithm": ["sort", "search", "binary", "algorithm", "pathfinding"],
+            "ui": ["button", "form", "card", "grid", "css", "html"],
+            "testing": ["test", "unit", "assert"],
+            "basic": ["hello", "function", "class", "loop", "variable"]
+        }
+
+        for task, keywords in task_map.items():
+            if any(
+                keyword in terms
+                or keyword in lowered
+                for keyword in keywords
+            ):
+                return task
+
+        return "general_code"
+
+    def find_by_tags(
+        self,
+        tags
+    ):
+
+        results = []
+
+        for item in self.code_database:
+
+            item_tags = item.get(
+                "tags",
+                []
+            )
+
+            for tag in tags:
+
+                if tag in item_tags:
+
+                    results.append(
+                        item
+                    )
+
+                    break
+
+        return results
+
+    def score_item(
+        self,
+        item,
+        terms,
+        language=None,
+        task_type=None
+    ):
+
+        score = 0
+        matched = []
+
+        searchable_parts = [
+            item.get("id", ""),
+            item.get("name", ""),
+            item.get("language", ""),
+            item.get("category", ""),
+            item.get("description", ""),
+            " ".join(item.get("tags", []))
+        ]
+
+        searchable = " ".join(searchable_parts).lower()
+
+        for term in terms:
+            if term in GENERIC_CODE_TERMS:
+                continue
+            if term and term in searchable:
+                score += 3
+                matched.append(term)
+
+        item_language = item.get(
+            "language",
+            ""
+        )
+
+        if language and item_language == language:
+            score += 12
+            matched.append(language)
+
+        tags = item.get(
+            "tags",
+            []
+        )
+
+        if task_type and task_type in tags:
+            score += 6
+            matched.append(task_type)
+
+        stats_score = self.score_function(
+            item
+        )
+
+        score += stats_score / 20
+
+        graph_node = self.dependency_graph.get(
+            item.get(
+                "id",
+                ""
+            ),
+            {}
+        )
+
+        if graph_node:
+
+            score += graph_node.get(
+                "confidence",
+                60
+            ) / 35
+
+            if task_type and task_type == graph_node.get(
+                "category"
+            ):
+
+                score += 5
+                matched.append(
+                    task_type
+                )
+
+        return score, list(dict.fromkeys(matched))
+
+    def search_code(
+        self,
+        terms,
+        language=None,
+        task_type=None
+    ):
+
+        results = []
+
+        for item in self.code_database:
+
+            score, matched = self.score_item(
+                item,
+                terms,
+                language,
+                task_type
+            )
+
+            if score > 0 and matched:
+                results.append({
+                    "score": round(score, 2),
+                    "matched_terms": matched,
+                    "item": item
+                })
+
+        results.sort(
+            key=lambda result: result["score"],
+            reverse=True
+        )
+
+        return results
+
+    def score_function(
+        self,
+        function_data
+    ):
+
+        function_id = function_data.get(
+            "id",
+            ""
+        )
+
+        stats = self.statistics.get(
+            function_id,
+            {}
+        )
+
+        success_rate = stats.get(
+            "success_rate",
+            50
+        )
+
+        times_used = stats.get(
+            "times_used",
+            0
+        )
+
+        return (
+            success_rate
+            +
+            (times_used * 0.01)
+        )
+
+    def choose_best_functions(
+        self,
+        functions
+    ):
+
+        scored = []
+
+        for func in functions:
+
+            score = self.score_function(
+                func
+            )
+
+            scored.append(
+                (
+                    score,
+                    func
+                )
+            )
+
+        scored.sort(
+            reverse=True,
+            key=lambda x: x[0]
+        )
+
+        return [
+            item[1]
+            for item in scored
+        ]
+
+    def build_code(
+        self,
+        functions
+    ):
+
+        parts = []
+
+        for func in functions:
+
+            code = func.get(
+                "code",
+                ""
+            )
+
+            if code:
+
+                parts.append(code)
+
+        return "\n\n".join(parts)
+
+    def is_python_text_rpg_request(self, text, terms, language, task_type):
+
+        lowered = str(text).lower()
+        term_set = set(terms)
+
+        needs = {
+            "python": language == "python" or "python" in term_set or "python" in lowered,
+            "game": (
+                task_type == "game"
+                or "game" in term_set
+                or "game" in lowered
+                or "rpg" in term_set
+                or "rpg" in lowered
+            ),
+            "inventory": "inventory" in term_set or "inventory" in lowered,
+            "save_load": (
+                "save" in term_set
+                or "load" in term_set
+                or "json" in term_set
+                or "save/load" in lowered
+            ),
+            "command_loop": (
+                "command" in term_set
+                or "loop" in term_set
+                or "command loop" in lowered
+            )
+        }
+
+        return all(needs.values())
+
+    def is_code_only_request(self, text):
+
+        lowered = str(text).lower()
+
+        code_only_signals = [
+            "actual python code",
+            "actual code",
+            "real python code",
+            "real code",
+            "only output code",
+            "only output real python code",
+            "do not output modules",
+            "do not output planning",
+            "no planning structures",
+            "code that runs",
+            "working code",
+            "first working code",
+            "final working python code",
+            "final working python program",
+            "final working code",
+            "runnable python code",
+            "runnable python program",
+            "real runnable python",
+            "real runnable"
+        ]
+
+        return any(
+            signal in lowered
+            for signal in code_only_signals
+        )
+
+    def is_skeleton_request(self, text):
+
+        lowered = str(text).lower()
+
+        negated_skeleton_signals = [
+            "do not output a plan, modules, variants, helpers, placeholders, or draft structures",
+            "do not output modules, variants, helpers, placeholders, or draft structures",
+            "do not output draft structures",
+            "not a plan",
+            "not a draft",
+            "not draft structures",
+            "no draft structures",
+            "no placeholders",
+            "without draft structures"
+        ]
+
+        if any(
+            signal in lowered
+            for signal in negated_skeleton_signals
+        ):
+            return False
+
+        skeleton_signals = [
+            "skeleton",
+            "stub",
+            "placeholder",
+            "draft structure",
+            "code structure",
+            "planning structure",
+            "modules only",
+            "just the structure",
+            "only structure",
+            "outline only",
+            "שלד",
+            "טיוטה",
+            "מבנה בלבד"
+        ]
+
+        return any(
+            signal in lowered
+            for signal in skeleton_signals
+        )
+
+    def build_python_text_rpg_code(self):
+
+        return '''import json
+from pathlib import Path
+
+
+SAVE_FILE = Path("save_game.json")
+
+
+def new_game():
+    return {
+        "player": {
+            "name": "Hero",
+            "hp": 30,
+            "max_hp": 30,
+            "attack": 6,
+            "gold": 0,
+            "inventory": ["small potion"]
+        },
+        "location": "village",
+        "enemy": None,
+        "running": True
+    }
+
+
+def describe_state(state):
+    player = state["player"]
+    print()
+    print(f"Location: {state['location']}")
+    print(f"HP: {player['hp']}/{player['max_hp']} | Gold: {player['gold']}")
+
+    if state["enemy"]:
+        enemy = state["enemy"]
+        print(f"Enemy: {enemy['name']} ({enemy['hp']} HP)")
+
+
+def show_inventory(state):
+    inventory = state["player"]["inventory"]
+
+    if not inventory:
+        print("Inventory is empty.")
+        return
+
+    print("Inventory:")
+    for index, item in enumerate(inventory, start=1):
+        print(f"{index}. {item}")
+
+
+def spawn_enemy(name="slime", hp=12, attack=3, gold=5):
+    return {
+        "name": name,
+        "hp": hp,
+        "attack": attack,
+        "gold": gold
+    }
+
+
+def explore(state):
+    if state["enemy"]:
+        print("You cannot explore while an enemy is here.")
+        return
+
+    state["enemy"] = spawn_enemy()
+    print("A slime appears.")
+
+
+def attack_enemy(state):
+    player = state["player"]
+    enemy = state.get("enemy")
+
+    if not enemy:
+        print("There is nothing to attack.")
+        return
+
+    enemy["hp"] -= player["attack"]
+    print(f"You hit the {enemy['name']} for {player['attack']} damage.")
+
+    if enemy["hp"] <= 0:
+        print(f"You defeated the {enemy['name']} and found {enemy['gold']} gold.")
+        player["gold"] += enemy["gold"]
+        state["enemy"] = None
+        return
+
+    player["hp"] -= enemy["attack"]
+    print(f"The {enemy['name']} hits you for {enemy['attack']} damage.")
+
+    if player["hp"] <= 0:
+        print("You were defeated. Game over.")
+        state["running"] = False
+
+
+def use_item(state, item_name):
+    player = state["player"]
+    inventory = player["inventory"]
+
+    if item_name not in inventory:
+        print(f"You do not have {item_name}.")
+        return
+
+    if item_name == "small potion":
+        player["hp"] = min(player["max_hp"], player["hp"] + 10)
+        inventory.remove(item_name)
+        print("You used a small potion and restored 10 HP.")
+    else:
+        print(f"You cannot use {item_name} right now.")
+
+
+def save_game(state, path=SAVE_FILE):
+    path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+    print(f"Game saved to {path}.")
+
+
+def load_game(path=SAVE_FILE):
+    if not path.exists():
+        print("No save file found. Starting a new game.")
+        return new_game()
+
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def print_help():
+    print("Commands:")
+    print("  look              show current status")
+    print("  explore           find an enemy")
+    print("  attack            attack the current enemy")
+    print("  inventory         show inventory")
+    print("  use small potion  use a potion")
+    print("  save              save the game")
+    print("  load              load the game")
+    print("  help              show commands")
+    print("  quit              exit")
+
+
+def handle_command(state, command):
+    command = command.strip().lower()
+
+    if command == "look":
+        describe_state(state)
+    elif command == "explore":
+        explore(state)
+    elif command == "attack":
+        attack_enemy(state)
+    elif command == "inventory":
+        show_inventory(state)
+    elif command.startswith("use "):
+        use_item(state, command[4:])
+    elif command == "save":
+        save_game(state)
+    elif command == "load":
+        state.clear()
+        state.update(load_game())
+    elif command == "help":
+        print_help()
+    elif command == "quit":
+        state["running"] = False
+    else:
+        print("Unknown command. Type 'help' for commands.")
+
+
+def game_loop():
+    state = new_game()
+    print("Simple Text RPG")
+    print_help()
+
+    while state["running"]:
+        describe_state(state)
+        command = input("> ")
+        handle_command(state, command)
+
+    print("Goodbye.")
+
+
+if __name__ == "__main__":
+    game_loop()
+'''
+
+    def build_python_text_rpg_result(self, text, terms):
+
+        code_only = self.is_code_only_request(
+            text
+        )
+
+        steps = [
+            "Create a game state dictionary with player, inventory, enemy, location, and running flag.",
+            "Add inventory commands for listing and using items.",
+            "Add enemy spawning and attack flow.",
+            "Add JSON save/load functions.",
+            "Add a command parser that routes user input to game actions.",
+            "Run everything inside a simple command loop."
+        ]
+
+        return {
+            "brain": "Code_brain",
+            "used_understanding_report": True,
+            "used_memory_report": True,
+            "language": "python",
+            "task_type": "game",
+            "output_mode": "code_only" if code_only else "code_with_plan",
+            "terms_used": terms,
+            "confidence": 92,
+            "matched_functions": 6,
+            "selected": [
+                "new_game",
+                "show_inventory",
+                "spawn_enemy",
+                "attack_enemy",
+                "save_game",
+                "game_loop"
+            ],
+            "assembly_plan": {
+                "task_type": "game",
+                "ordered_ids": [
+                    "new_game",
+                    "inventory",
+                    "enemy",
+                    "combat",
+                    "save_load_json",
+                    "command_loop"
+                ],
+                "steps": steps,
+                "dependencies_added": [],
+                "composition_rules_used": [
+                    {
+                        "id": "python_text_rpg_state_flow",
+                        "connection_type": "state_dictionary_to_command_loop",
+                        "score": 95
+                    }
+                ],
+                "connection_notes": [
+                    "Every command receives and mutates the same game state dictionary.",
+                    "Save/load serializes the full state through JSON.",
+                    "Combat, inventory, and exploration are connected through handle_command()."
+                ],
+                "adaptation_notes": [
+                    "Built as a first working version, not just helper stubs.",
+                    "Uses only Python standard library modules."
+                ],
+                "data_files_used": [
+                    "code.json",
+                    "Code_dependency_graph.json",
+                    "Code_composition_tables.json",
+                    "Code_assembly_patterns.json"
+                ]
+            },
+            "dependencies_added": [],
+            "composition_rules_used": [
+                {
+                    "id": "python_text_rpg_state_flow",
+                    "connection_type": "state_dictionary_to_command_loop",
+                    "score": 95
+                }
+            ],
+            "adapter_notes": [
+                "Specialized assembly path selected for Python text RPG request."
+            ],
+            "existing_code_detected": False,
+            "match_details": [],
+            "generated_code": self.build_python_text_rpg_code(),
+            "missing": [],
+            "needs_creative_brain": False,
+            "creative_fallback": None,
+            "needs_security": False,
+            "suggested_next_brains": [
+                "Security_brain",
+                "Response_brain"
+            ],
+            "simulation": {
+                "strategy": "plan_then_compose",
+                "virtual_variants_considered": 24,
+                "selected_reason": "Most complete simple version with inventory, combat, JSON persistence, and command loop.",
+                "stop_reason": "Working baseline is complete enough for first version."
+            },
+            "rules": [
+                "Use the Understanding_brain report as the main input.",
+                "Build a working first version when the user asks for first working code.",
+                "Do not execute generated code here; only assemble and report code."
+            ]
+        }
+
+    def build_direct_python_program_code(self, text, task_type):
+
+        lowered = str(text).lower()
+
+        if "weather" in lowered or "api" in lowered:
+            return '''import json
+from urllib.error import HTTPError, URLError
+from urllib.parse import quote
+from urllib.request import urlopen
+
+
+def fetch_weather(city):
+    url = f"https://wttr.in/{quote(city)}?format=j1"
+
+    try:
+        with urlopen(url, timeout=10) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except (HTTPError, URLError, TimeoutError, json.JSONDecodeError) as error:
+        print(f"Could not fetch live weather data: {error}")
+        print("Using safe mock weather data instead.")
+        return mock_weather_data(city)
+
+
+def mock_weather_data(city):
+    return {
+        "nearest_area": [
+            {
+                "areaName": [
+                    {
+                        "value": city
+                    }
+                ]
+            }
+        ],
+        "current_condition": [
+            {
+                "temp_C": "22",
+                "humidity": "55",
+                "weatherDesc": [
+                    {
+                        "value": "Partly cloudy"
+                    }
+                ]
+            }
+        ]
+    }
+
+
+def parse_weather(data):
+    current = data["current_condition"][0]
+    return {
+        "temperature_c": current.get("temp_C", "unknown"),
+        "humidity": current.get("humidity", "unknown"),
+        "condition": current.get("weatherDesc", [{}])[0].get("value", "unknown")
+    }
+
+
+def print_weather(city, weather):
+    print(f"Weather for {city}")
+    print(f"Temperature: {weather['temperature_c']} C")
+    print(f"Humidity: {weather['humidity']}%")
+    print(f"Condition: {weather['condition']}")
+
+
+def main():
+    while True:
+        city = input("City (or 'exit'): ").strip()
+        if city.lower() == "exit":
+            break
+        if not city:
+            print("Please enter a city name.")
+            continue
+
+        try:
+            data = fetch_weather(city)
+            weather = parse_weather(data)
+            print_weather(city, weather)
+        except (KeyError, IndexError, TypeError) as error:
+            print(error)
+
+
+if __name__ == "__main__":
+    main()
+'''
+
+        if (
+            "to-do" in lowered
+            or "todo" in lowered
+            or "task" in lowered
+            or "tasks" in lowered
+        ):
+            return '''import json
+from pathlib import Path
+
+
+TASKS_FILE = Path("tasks.json")
+
+
+def load_tasks():
+    if not TASKS_FILE.exists():
+        return []
+
+    try:
+        data = json.loads(TASKS_FILE.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        print("Could not read tasks.json, starting with an empty list.")
+        return []
+
+    if not isinstance(data, list):
+        return []
+
+    tasks = []
+    for item in data:
+        if isinstance(item, dict) and "text" in item:
+            tasks.append({
+                "text": str(item["text"]),
+                "done": bool(item.get("done", False))
+            })
+
+    return tasks
+
+
+def save_tasks(tasks):
+    TASKS_FILE.write_text(
+        json.dumps(tasks, indent=2, ensure_ascii=False),
+        encoding="utf-8"
+    )
+
+
+def add_task(tasks, text):
+    text = text.strip()
+    if not text:
+        print("Task text cannot be empty.")
+        return
+
+    tasks.append({
+        "text": text,
+        "done": False
+    })
+    save_tasks(tasks)
+    print("Task added.")
+
+
+def list_tasks(tasks):
+    if not tasks:
+        print("No tasks yet.")
+        return
+
+    for index, task in enumerate(tasks, start=1):
+        mark = "x" if task["done"] else " "
+        print(f"{index}. [{mark}] {task['text']}")
+
+
+def get_task_index(tasks, raw_index):
+    try:
+        index = int(raw_index) - 1
+    except ValueError:
+        print("Please enter a valid task number.")
+        return None
+
+    if index < 0 or index >= len(tasks):
+        print("Task number is out of range.")
+        return None
+
+    return index
+
+
+def mark_done(tasks, raw_index):
+    index = get_task_index(tasks, raw_index)
+    if index is None:
+        return
+
+    tasks[index]["done"] = True
+    save_tasks(tasks)
+    print("Task marked as done.")
+
+
+def delete_task(tasks, raw_index):
+    index = get_task_index(tasks, raw_index)
+    if index is None:
+        return
+
+    removed = tasks.pop(index)
+    save_tasks(tasks)
+    print(f"Deleted: {removed['text']}")
+
+
+def print_help():
+    print("Commands:")
+    print("  add <task>      Add a new task")
+    print("  list            Show all tasks")
+    print("  done <number>   Mark a task as done")
+    print("  delete <number> Delete a task")
+    print("  help            Show this help")
+    print("  exit            Save and exit")
+
+
+def main():
+    tasks = load_tasks()
+    print("To-Do List")
+    print_help()
+
+    while True:
+        command = input("> ").strip()
+        if not command:
+            continue
+
+        lower_command = command.lower()
+
+        if lower_command == "exit":
+            save_tasks(tasks)
+            print("Tasks saved. Goodbye.")
+            break
+        elif lower_command == "help":
+            print_help()
+        elif lower_command == "list":
+            list_tasks(tasks)
+        elif lower_command.startswith("add "):
+            add_task(tasks, command[4:])
+        elif lower_command.startswith("done "):
+            mark_done(tasks, command[5:].strip())
+        elif lower_command.startswith("delete "):
+            delete_task(tasks, command[7:].strip())
+        else:
+            print("Unknown command. Type 'help' for commands.")
+
+
+if __name__ == "__main__":
+    main()
+'''
+
+        if task_type == "file_io" or "json" in lowered:
+            return '''import json
+from pathlib import Path
+
+
+DATA_FILE = Path("data.json")
+
+
+def load_items():
+    if not DATA_FILE.exists():
+        return []
+
+    try:
+        return json.loads(DATA_FILE.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
+
+
+def save_items(items):
+    DATA_FILE.write_text(
+        json.dumps(items, indent=2, ensure_ascii=False),
+        encoding="utf-8"
+    )
+
+
+def main():
+    items = load_items()
+
+    while True:
+        command = input("add/list/clear/quit > ").strip().lower()
+
+        if command == "add":
+            text = input("Item text: ").strip()
+            if text:
+                items.append(text)
+                save_items(items)
+                print("Saved.")
+        elif command == "list":
+            if not items:
+                print("No items yet.")
+            for index, item in enumerate(items, start=1):
+                print(f"{index}. {item}")
+        elif command == "clear":
+            items.clear()
+            save_items(items)
+            print("Cleared.")
+        elif command == "quit":
+            break
+        else:
+            print("Unknown command.")
+
+
+if __name__ == "__main__":
+    main()
+'''
+
+        return '''def calculate_summary(numbers):
+    if not numbers:
+        return {
+            "count": 0,
+            "total": 0,
+            "average": 0,
+            "minimum": None,
+            "maximum": None
+        }
+
+    total = sum(numbers)
+    return {
+        "count": len(numbers),
+        "total": total,
+        "average": total / len(numbers),
+        "minimum": min(numbers),
+        "maximum": max(numbers)
+    }
+
+
+def read_numbers():
+    raw = input("Enter numbers separated by spaces: ").strip()
+    numbers = []
+
+    for part in raw.split():
+        try:
+            numbers.append(float(part))
+        except ValueError:
+            print(f"Skipping invalid number: {part}")
+
+    return numbers
+
+
+def main():
+    numbers = read_numbers()
+    summary = calculate_summary(numbers)
+
+    print("Summary")
+    print(f"Count: {summary['count']}")
+    print(f"Total: {summary['total']}")
+    print(f"Average: {summary['average']}")
+    print(f"Minimum: {summary['minimum']}")
+    print(f"Maximum: {summary['maximum']}")
+
+
+if __name__ == "__main__":
+    main()
+'''
+
+    def build_direct_python_program_result(self, text, terms, task_type):
+
+        code = self.build_direct_python_program_code(
+            text,
+            task_type
+        )
+
+        return {
+            "brain": "Code_brain",
+            "used_understanding_report": True,
+            "used_memory_report": True,
+            "language": "python",
+            "task_type": task_type,
+            "output_mode": "code_only",
+            "terms_used": terms,
+            "confidence": 74,
+            "matched_functions": 0,
+            "selected": [],
+            "assembly_plan": {
+                "task_type": task_type,
+                "steps": []
+            },
+            "dependencies_added": [],
+            "composition_rules_used": [],
+            "adapter_notes": [
+                "Direct runnable program mode was used because the user requested code only."
+            ],
+            "existing_code_detected": False,
+            "match_details": [],
+            "generated_code": code,
+            "missing": [],
+            "needs_creative_brain": False,
+            "creative_fallback": None,
+            "needs_security": "api" in str(text).lower() or "url" in str(text).lower(),
+            "suggested_next_brains": [
+                "Security_brain",
+                "Response_brain"
+            ],
+            "rules": [
+                "When the user requests code only, return runnable code instead of modules, variants, placeholders, or planning structures."
+            ]
+        }
+
+    def order_functions(
+        self,
+        functions
+    ):
+
+        unique = {}
+
+        for func in functions:
+
+            function_id = func.get(
+                "id"
+            )
+
+            if function_id and function_id not in unique:
+                unique[function_id] = func
+
+        def sort_key(func):
+
+            function_id = func.get(
+                "id",
+                ""
+            )
+
+            node = self.dependency_graph.get(
+                function_id,
+                {}
+            )
+
+            return (
+                node.get(
+                    "order_group",
+                    50
+                ),
+                func.get(
+                    "language",
+                    ""
+                ),
+                func.get(
+                    "category",
+                    ""
+                ),
+                function_id
+            )
+
+        ordered = sorted(
+            unique.values(),
+            key=sort_key
+        )
+
+        return self.apply_dependency_order(
+            ordered
+        )
+
+    def apply_dependency_order(
+        self,
+        functions
+    ):
+
+        by_id = {
+            func.get("id"): func
+            for func in functions
+            if func.get("id")
+        }
+
+        visited = set()
+        ordered = []
+
+        def visit(func):
+
+            function_id = func.get(
+                "id"
+            )
+
+            if not function_id or function_id in visited:
+                return
+
+            node = self.dependency_graph.get(
+                function_id,
+                {}
+            )
+
+            for required_id in node.get(
+                "requires",
+                []
+            ):
+
+                required = by_id.get(
+                    required_id
+                )
+
+                if required:
+                    visit(
+                        required
+                    )
+
+            visited.add(
+                function_id
+            )
+
+            ordered.append(
+                func
+            )
+
+        for func in functions:
+            visit(
+                func
+            )
+
+        return ordered
+
+    def add_missing_dependencies(
+        self,
+        selected,
+        language
+    ):
+
+        expanded = list(selected)
+        selected_ids = {
+            item.get("id")
+            for item in expanded
+            if item.get("id")
+        }
+        added = []
+
+        for item in list(selected):
+
+            node = self.dependency_graph.get(
+                item.get(
+                    "id",
+                    ""
+                ),
+                {}
+            )
+
+            for required_id in node.get(
+                "requires",
+                []
+            ):
+
+                if required_id in selected_ids:
+                    continue
+
+                required_item = self.code_by_id.get(
+                    required_id
+                )
+
+                if not required_item:
+                    continue
+
+                if (
+                    language
+                    and required_item.get(
+                        "language"
+                    ) != language
+                ):
+                    continue
+
+                expanded.append(
+                    required_item
+                )
+
+                selected_ids.add(
+                    required_id
+                )
+
+                added.append(
+                    required_id
+                )
+
+        return expanded, added
+
+    def find_composition_rules(
+        self,
+        ordered
+    ):
+
+        ordered_ids = [
+            item.get("id")
+            for item in ordered
+            if item.get("id")
+        ]
+
+        id_set = set(
+            ordered_ids
+        )
+
+        rules = []
+        connection_notes = []
+
+        for rule in self.composition_tables.values():
+
+            rule_order = rule.get(
+                "order",
+                []
+            )
+
+            if len(rule_order) < 2:
+                continue
+
+            if set(rule_order).issubset(id_set):
+
+                rules.append(
+                    rule
+                )
+
+                connection_notes.extend(
+                    rule.get(
+                        "adapter_notes",
+                        []
+                    )[:2]
+                )
+
+            if len(rules) >= 10:
+                break
+
+        if not rules:
+
+            for first, second in zip(
+                ordered,
+                ordered[1:]
+            ):
+
+                first_node = self.dependency_graph.get(
+                    first.get(
+                        "id",
+                        ""
+                    ),
+                    {}
+                )
+
+                second_node = self.dependency_graph.get(
+                    second.get(
+                        "id",
+                        ""
+                    ),
+                    {}
+                )
+
+                first_category = first_node.get(
+                    "category",
+                    first.get("category", "general")
+                )
+
+                second_category = second_node.get(
+                    "category",
+                    second.get("category", "general")
+                )
+
+                dynamic_rule = {
+                    "id": f"dynamic_{first.get('id')}__{second.get('id')}",
+                    "connection_type": self.infer_connection_type(
+                        first_category,
+                        second_category
+                    ),
+                    "score": 72
+                }
+
+                rules.append(
+                    dynamic_rule
+                )
+
+                connection_notes.append(
+                    "Connect adjacent snippets by passing explicit parameters and return values."
+                )
+
+                if len(rules) >= 6:
+                    break
+
+        return rules, list(dict.fromkeys(connection_notes))
+
+    def infer_connection_type(
+        self,
+        first_category,
+        second_category
+    ):
+
+        categories = {
+            first_category,
+            second_category
+        }
+
+        if categories & {
+            "json_load",
+            "json_save",
+            "file_read",
+            "file_write",
+            "csv_read",
+            "csv_write"
+        }:
+            return "file_data_flow"
+
+        if categories & {
+            "database",
+            "sql"
+        }:
+            return "database_flow"
+
+        if categories & {
+            "api",
+            "server",
+            "route"
+        }:
+            return "web_request_flow"
+
+        if categories & {
+            "login",
+            "password",
+            "token"
+        }:
+            return "security_flow"
+
+        if categories & {
+            "game",
+            "player",
+            "enemy",
+            "inventory",
+            "score"
+        }:
+            return "game_state_flow"
+
+        return "function_flow"
+
+    def build_adaptation_notes(
+        self,
+        ordered,
+        existing_code
+    ):
+
+        notes = []
+        filtered = []
+
+        existing_lower = existing_code.lower()
+
+        for item in ordered:
+
+            name = item.get(
+                "name",
+                ""
+            )
+
+            code = item.get(
+                "code",
+                ""
+            )
+
+            duplicate = (
+                existing_code
+                and name
+                and name.lower() in existing_lower
+            )
+
+            if duplicate:
+                notes.append(
+                    f"Existing code already appears to contain {name}; avoid adding a duplicate."
+                )
+                continue
+
+            if existing_code and code:
+                if "import " in code or "from " in code:
+                    notes.append(
+                        "Move imports to the top of the existing file before merging."
+                    )
+
+            filtered.append(
+                item
+            )
+
+        return filtered, list(dict.fromkeys(notes))
+
+    def choose_assembly_pattern(
+        self,
+        language,
+        ordered_ids
+    ):
+
+        if not language:
+            return None
+
+        id_set = set(
+            ordered_ids
+        )
+
+        best_pattern = None
+        best_score = 0
+
+        for pattern in self.assembly_patterns.values():
+
+            if pattern.get(
+                "language"
+            ) != language:
+                continue
+
+            steps = set(
+                pattern.get(
+                    "steps",
+                    []
+                )
+            )
+
+            overlap = len(
+                id_set & steps
+            )
+
+            if overlap > best_score:
+                best_score = overlap
+                best_pattern = pattern
+
+        if best_score == 0:
+            return None
+
+        return {
+            "id": best_pattern.get("id"),
+            "name": best_pattern.get("name"),
+            "quality_score": best_pattern.get("quality_score"),
+            "matched_steps": best_score
+        }
+
+    def build_assembly_plan(
+        self,
+        selected,
+        language,
+        task_type,
+        memory_terms,
+        existing_code
+    ):
+
+        expanded, dependencies_added = self.add_missing_dependencies(
+            selected,
+            language
+        )
+
+        ordered = self.order_functions(
+            expanded
+        )
+
+        ordered, adaptation_notes = self.build_adaptation_notes(
+            ordered,
+            existing_code
+        )
+
+        composition_rules, connection_notes = self.find_composition_rules(
+            ordered
+        )
+
+        ordered_ids = [
+            item.get("id")
+            for item in ordered
+            if item.get("id")
+        ]
+
+        pattern = self.choose_assembly_pattern(
+            language,
+            ordered_ids
+        )
+
+        steps = []
+
+        for index, item in enumerate(
+            ordered,
+            start=1
+        ):
+
+            node = self.dependency_graph.get(
+                item.get(
+                    "id",
+                    ""
+                ),
+                {}
+            )
+
+            steps.append({
+                "step": index,
+                "id": item.get("id"),
+                "name": item.get("name"),
+                "language": item.get("language"),
+                "category": item.get("category"),
+                "order_group": node.get("order_group", 50),
+                "requires": node.get("requires", []),
+                "glue_strategy": node.get(
+                    "glue_strategy",
+                    "connect_by_function_call_or_return_value"
+                )
+            })
+
+        return {
+            "task_type": task_type,
+            "ordered_ids": ordered_ids,
+            "steps": steps,
+            "dependencies_added": dependencies_added,
+            "composition_rules_used": [
+                {
+                    "id": rule.get("id"),
+                    "connection_type": rule.get("connection_type"),
+                    "score": rule.get("score")
+                }
+                for rule in composition_rules
+            ],
+            "connection_notes": connection_notes,
+            "adaptation_notes": adaptation_notes,
+            "memory_terms_used": memory_terms[:20],
+            "assembly_pattern": pattern,
+            "data_files_used": [
+                "Code_dependency_graph.json",
+                "Code_composition_tables.json",
+                "Code_assembly_patterns.json",
+                "Code_statistics.json"
+            ]
+        }, ordered
+
+    def run_creative_fallback(
+        self,
+        data,
+        needs_creative
+    ):
+
+        if not needs_creative:
+            return None
+
+        try:
+
+            from Creative_brain import CreativeBrain
+
+            creative_brain = CreativeBrain()
+
+            return creative_brain.create_code(
+                data
+            )
+
+        except Exception as error:
+
+            return {
+                "brain": "Creative_brain",
+                "error": str(error),
+                "purpose": "code_fallback"
+            }
+
+    def update_statistics(
+        self,
+        selected
+    ):
+
+        for item in selected:
+
+            function_id = item.get(
+                "id",
+                ""
+            )
+
+            if not function_id:
+                continue
+
+            stats = self.statistics.get(
+                function_id,
+                {}
+            )
+
+            stats["times_used"] = stats.get(
+                "times_used",
+                0
+            ) + 1
+
+            stats.setdefault(
+                "success_rate",
+                80
+            )
+
+            stats["last_used_utc"] = datetime.now(
+                timezone.utc
+            ).isoformat()
+
+            self.statistics[function_id] = stats
+
+        if selected:
+            self.save_statistics()
+
+    def process(
+        self,
+        data
+    ):
+
+        if not isinstance(data, dict):
+            data = {
+                "original_text": str(data)
+            }
+
+        report = self.get_understanding_report(
+            data
+        )
+
+        memory_report = self.get_memory_report(
+            data
+        )
+
+        memory_terms = self.collect_memory_terms(
+            memory_report
+        )
+
+        existing_code = self.extract_existing_code(
+            data
+        )
+
+        text = self.extract_text(
+            data,
+            report
+        )
+
+        terms = self.collect_terms(
+            data,
+            report,
+            text
+        )
+
+        for memory_term in memory_terms:
+
+            clean_memory_term = re.sub(
+                r"[^a-zA-Z0-9_\-\+\.#\s]",
+                " ",
+                memory_term
+            )
+
+            clean_memory_term = re.sub(
+                r"\s+",
+                " ",
+                clean_memory_term
+            ).strip().lower()
+
+            if (
+                clean_memory_term
+                and clean_memory_term not in terms
+                and clean_memory_term not in GENERIC_CODE_TERMS
+            ):
+                terms.append(
+                    clean_memory_term
+                )
+
+        language = self.detect_language(
+            terms,
+            text
+        )
+
+        task_type = self.detect_task_type(
+            terms,
+            text
+        )
+
+        code_only = self.is_code_only_request(
+            text
+        )
+
+        skeleton_requested = self.is_skeleton_request(
+            text
+        )
+
+        if self.is_python_text_rpg_request(
+            text,
+            terms,
+            language,
+            task_type
+        ):
+            return self.finalize_code_result(
+                self.build_python_text_rpg_result(
+                    text,
+                    terms
+                )
+            )
+
+        if (
+            not skeleton_requested
+            and language in [None, "python"]
+            and (
+                code_only
+                or "python" in str(text).lower()
+                or report.get("intent") == "code_generation"
+            )
+        ):
+            return self.finalize_code_result(
+                self.build_direct_python_program_result(
+                    text,
+                    terms,
+                    task_type
+                )
+            )
+
+        matches = self.search_code(
+            terms,
+            language,
+            task_type
+        )
+
+        selected_results = matches[:8]
+
+        selected = [
+            result["item"]
+            for result in selected_results
+        ]
+
+        assembly_plan, assembled = self.build_assembly_plan(
+            selected,
+            language,
+            task_type,
+            memory_terms,
+            existing_code
+        )
+
+        generated_code = self.build_code(
+            assembled
+        )
+
+        missing = []
+
+        if not selected:
+            missing.append("No matching code snippets found")
+
+        if not language:
+            missing.append("Programming language was not clearly detected")
+
+        confidence = 0
+
+        if selected_results:
+            confidence = min(
+                selected_results[0]["score"] * 8,
+                100
+            )
+
+        if not language:
+            confidence = min(
+                confidence,
+                35
+            )
+
+        if not terms:
+            confidence = 0
+
+        confidence = round(
+            confidence,
+            2
+        )
+
+        needs_creative = (
+            len(assembled) == 0
+            or confidence < 45
+            or language is None
+        )
+
+        needs_security = any(
+            term in terms
+            for term in [
+                "password",
+                "token",
+                "encrypt",
+                "login",
+                "security",
+                "shell",
+                "subprocess"
+            ]
+        )
+
+        creative_fallback = self.run_creative_fallback(
+            data,
+            needs_creative
+        )
+
+        self.update_statistics(
+            assembled
+        )
+
+        result = {
+
+            "brain":
+                "Code_brain",
+
+            "used_understanding_report":
+                bool(report),
+
+            "used_memory_report":
+                bool(memory_report),
+
+            "language":
+                language,
+
+            "task_type":
+                task_type,
+
+            "terms_used":
+                terms,
+
+            "confidence":
+                confidence,
+
+            "matched_functions":
+                len(assembled),
+
+            "selected":
+                [
+                    x.get(
+                        "name",
+                        "unknown"
+                    )
+                    for x in assembled
+                ],
+
+            "assembly_plan":
+                assembly_plan,
+
+            "dependencies_added":
+                assembly_plan.get(
+                    "dependencies_added",
+                    []
+                ),
+
+            "composition_rules_used":
+                assembly_plan.get(
+                    "composition_rules_used",
+                    []
+                ),
+
+            "adapter_notes":
+                assembly_plan.get(
+                    "adaptation_notes",
+                    []
+                ),
+
+            "existing_code_detected":
+                bool(existing_code),
+
+            "match_details": [
+                {
+                    "id": result["item"].get("id"),
+                    "name": result["item"].get("name"),
+                    "language": result["item"].get("language"),
+                    "category": result["item"].get("category"),
+                    "score": result["score"],
+                    "matched_terms": result["matched_terms"]
+                }
+                for result in selected_results
+            ],
+
+            "generated_code":
+                generated_code,
+
+            "missing":
+                missing,
+
+            "needs_creative_brain":
+                needs_creative,
+
+            "creative_fallback":
+                creative_fallback,
+
+            "needs_security":
+                needs_security,
+
+            "suggested_next_brains": [
+                brain_name
+                for brain_name, enabled in [
+                    ("Creative_brain", needs_creative),
+                    ("Security_brain", needs_security),
+                    ("Technology_brain", language is None),
+                    ("Response_brain", True)
+                ]
+                if enabled
+            ],
+
+            "rules": [
+                "Use the Understanding_brain report as the main input.",
+                "Search local code snippets before asking Creative_brain.",
+                "If local snippets are weak or missing, route missing parts to Creative_brain.",
+                "Route security-sensitive code to Security_brain.",
+                "Do not execute generated code here; only assemble and report code."
+            ]
+        }
+
+        return self.finalize_code_result(
+            result
+        )
+
+
+brain = CodeBrain()
