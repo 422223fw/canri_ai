@@ -1,0 +1,1 @@
+powershell -ExecutionPolicy Bypass -File .\push_canri.ps1
