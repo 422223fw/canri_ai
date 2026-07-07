@@ -658,6 +658,120 @@ class CodeBrain:
                 )
             )
 
+        meaning_frame = report.get(
+            "meaning_frame",
+            {}
+        )
+
+        if isinstance(
+            meaning_frame,
+            dict
+        ):
+
+            for key in [
+                "subject",
+                "action",
+                "object",
+                "question_focus"
+            ]:
+
+                value = meaning_frame.get(
+                    key
+                )
+
+                if value:
+                    terms.append(
+                        str(value)
+                    )
+
+            for value in meaning_frame.get(
+                "content_terms",
+                []
+            )[:30]:
+                terms.append(
+                    str(value)
+                )
+
+        sentence_graph = report.get(
+            "sentence_graph",
+            {}
+        )
+
+        if isinstance(
+            sentence_graph,
+            dict
+        ):
+
+            for edge in sentence_graph.get(
+                "edges",
+                []
+            )[:40]:
+
+                if not isinstance(
+                    edge,
+                    dict
+                ):
+                    continue
+
+                for key in [
+                    "from_word",
+                    "relation",
+                    "to_word"
+                ]:
+
+                    value = edge.get(
+                        key
+                    )
+
+                    if value:
+                        terms.append(
+                            str(value).replace(
+                                "_",
+                                " "
+                            )
+                        )
+
+        if isinstance(
+            data,
+            dict
+        ):
+
+            reasoning = data.get(
+                "reasoning",
+                {}
+            )
+
+            if isinstance(
+                reasoning,
+                dict
+            ):
+
+                decision = reasoning.get(
+                    "decision_summary",
+                    {}
+                )
+
+                if isinstance(
+                    decision,
+                    dict
+                ):
+                    terms.append(
+                        str(
+                            decision.get(
+                                "recommended_response_strategy",
+                                ""
+                            )
+                        )
+                    )
+
+                    for value in decision.get(
+                        "must_follow",
+                        []
+                    )[:12]:
+                        terms.append(
+                            str(value)
+                        )
+
         for word_data in report.get(
             "words",
             []
@@ -1388,11 +1502,40 @@ if __name__ == "__main__":
             ]
         }
 
-    def build_direct_python_program_code(self, text, task_type):
+    def detect_direct_program_kind(self, text, task_type):
 
         lowered = str(text).lower()
 
-        if "weather" in lowered or "api" in lowered:
+        checks = [
+            ("weather_app", ["weather", "temperature", "humidity", "forecast"]),
+            ("todo_app", ["to-do", "todo", "task list", "tasks", "mark a task"]),
+            ("contact_book", ["contact", "phone book", "address book", "email book"]),
+            ("notes_app", ["notes", "note taking", "save notes", "notebook"]),
+            ("quiz_game", ["quiz", "question game", "multiple choice"]),
+            ("guessing_game", ["guessing game", "guess number", "number game"]),
+            ("password_generator", ["password generator", "generate password", "random password"]),
+            ("calculator", ["calculator", "calculate", "math app", "add subtract", "multiply", "divide"]),
+            ("json_cli", ["json", "file", "save", "load"])
+        ]
+
+        for kind, signals in checks:
+            if any(signal in lowered for signal in signals):
+                return kind
+
+        if task_type == "file_io":
+            return "json_cli"
+
+        return "number_summary"
+
+    def build_direct_python_program_code(self, text, task_type):
+
+        lowered = str(text).lower()
+        program_kind = self.detect_direct_program_kind(
+            text,
+            task_type
+        )
+
+        if program_kind == "weather_app" or "api" in lowered:
             return '''import json
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
@@ -1473,12 +1616,7 @@ if __name__ == "__main__":
     main()
 '''
 
-        if (
-            "to-do" in lowered
-            or "todo" in lowered
-            or "task" in lowered
-            or "tasks" in lowered
-        ):
+        if program_kind == "todo_app":
             return '''import json
 from pathlib import Path
 
@@ -1619,7 +1757,329 @@ if __name__ == "__main__":
     main()
 '''
 
-        if task_type == "file_io" or "json" in lowered:
+        if program_kind == "contact_book":
+            return '''import json
+from pathlib import Path
+
+
+CONTACTS_FILE = Path("contacts.json")
+
+
+def load_contacts():
+    if not CONTACTS_FILE.exists():
+        return []
+
+    try:
+        data = json.loads(CONTACTS_FILE.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
+
+    return data if isinstance(data, list) else []
+
+
+def save_contacts(contacts):
+    CONTACTS_FILE.write_text(
+        json.dumps(contacts, indent=2, ensure_ascii=False),
+        encoding="utf-8"
+    )
+
+
+def add_contact(contacts):
+    name = input("Name: ").strip()
+    phone = input("Phone: ").strip()
+    email = input("Email: ").strip()
+
+    if not name:
+        print("Name is required.")
+        return
+
+    contacts.append({
+        "name": name,
+        "phone": phone,
+        "email": email
+    })
+    save_contacts(contacts)
+    print("Contact saved.")
+
+
+def list_contacts(contacts):
+    if not contacts:
+        print("No contacts yet.")
+        return
+
+    for index, contact in enumerate(contacts, start=1):
+        print(f"{index}. {contact['name']} | {contact.get('phone', '')} | {contact.get('email', '')}")
+
+
+def search_contacts(contacts, query):
+    query = query.lower()
+    matches = [
+        contact
+        for contact in contacts
+        if query in contact.get("name", "").lower()
+        or query in contact.get("phone", "").lower()
+        or query in contact.get("email", "").lower()
+    ]
+    list_contacts(matches)
+
+
+def main():
+    contacts = load_contacts()
+    print("Contact Book")
+    print("Commands: add, list, search, quit")
+
+    while True:
+        command = input("> ").strip().lower()
+
+        if command == "add":
+            add_contact(contacts)
+        elif command == "list":
+            list_contacts(contacts)
+        elif command == "search":
+            search_contacts(contacts, input("Search: ").strip())
+        elif command == "quit":
+            save_contacts(contacts)
+            break
+        else:
+            print("Unknown command.")
+
+
+if __name__ == "__main__":
+    main()
+'''
+
+        if program_kind == "notes_app":
+            return '''import json
+from datetime import datetime
+from pathlib import Path
+
+
+NOTES_FILE = Path("notes.json")
+
+
+def load_notes():
+    if not NOTES_FILE.exists():
+        return []
+
+    try:
+        data = json.loads(NOTES_FILE.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
+
+    return data if isinstance(data, list) else []
+
+
+def save_notes(notes):
+    NOTES_FILE.write_text(
+        json.dumps(notes, indent=2, ensure_ascii=False),
+        encoding="utf-8"
+    )
+
+
+def add_note(notes):
+    title = input("Title: ").strip()
+    body = input("Note: ").strip()
+
+    if not title or not body:
+        print("Title and note are required.")
+        return
+
+    notes.append({
+        "title": title,
+        "body": body,
+        "created_at": datetime.now().isoformat(timespec="seconds")
+    })
+    save_notes(notes)
+    print("Note saved.")
+
+
+def list_notes(notes):
+    if not notes:
+        print("No notes yet.")
+        return
+
+    for index, note in enumerate(notes, start=1):
+        print(f"{index}. {note['title']} ({note['created_at']})")
+
+
+def view_note(notes, raw_index):
+    try:
+        index = int(raw_index) - 1
+        note = notes[index]
+    except (ValueError, IndexError):
+        print("Invalid note number.")
+        return
+
+    print(f"\\n{note['title']}")
+    print("-" * len(note["title"]))
+    print(note["body"])
+
+
+def main():
+    notes = load_notes()
+    print("Notes App")
+    print("Commands: add, list, view <number>, quit")
+
+    while True:
+        command = input("> ").strip()
+        lower = command.lower()
+
+        if lower == "add":
+            add_note(notes)
+        elif lower == "list":
+            list_notes(notes)
+        elif lower.startswith("view "):
+            view_note(notes, command[5:].strip())
+        elif lower == "quit":
+            save_notes(notes)
+            break
+        else:
+            print("Unknown command.")
+
+
+if __name__ == "__main__":
+    main()
+'''
+
+        if program_kind == "quiz_game":
+            return '''QUESTIONS = [
+    {
+        "question": "What language is this program written in?",
+        "answer": "python"
+    },
+    {
+        "question": "What keyword defines a function in Python?",
+        "answer": "def"
+    },
+    {
+        "question": "What file format often stores structured data?",
+        "answer": "json"
+    }
+]
+
+
+def run_quiz():
+    score = 0
+
+    for item in QUESTIONS:
+        answer = input(item["question"] + " ").strip().lower()
+        if answer == item["answer"]:
+            print("Correct.")
+            score += 1
+        else:
+            print(f"Wrong. The answer is {item['answer']}.")
+
+    print(f"Final score: {score}/{len(QUESTIONS)}")
+
+
+if __name__ == "__main__":
+    run_quiz()
+'''
+
+        if program_kind == "guessing_game":
+            return '''import random
+
+
+def main():
+    secret = random.randint(1, 100)
+    attempts = 0
+    print("Guess the number from 1 to 100.")
+
+    while True:
+        raw = input("Your guess: ").strip()
+
+        try:
+            guess = int(raw)
+        except ValueError:
+            print("Please enter a number.")
+            continue
+
+        attempts += 1
+
+        if guess < secret:
+            print("Too low.")
+        elif guess > secret:
+            print("Too high.")
+        else:
+            print(f"Correct. You guessed it in {attempts} attempts.")
+            break
+
+
+if __name__ == "__main__":
+    main()
+'''
+
+        if program_kind == "password_generator":
+            return '''import random
+import string
+
+
+def generate_password(length=16):
+    characters = string.ascii_letters + string.digits + "!@#$%^&*"
+    return "".join(random.choice(characters) for _ in range(length))
+
+
+def main():
+    raw = input("Password length (default 16): ").strip()
+
+    try:
+        length = int(raw) if raw else 16
+    except ValueError:
+        length = 16
+
+    length = max(8, min(length, 128))
+    print(generate_password(length))
+
+
+if __name__ == "__main__":
+    main()
+'''
+
+        if program_kind == "calculator":
+            return '''def calculate(left, operator, right):
+    if operator == "+":
+        return left + right
+    if operator == "-":
+        return left - right
+    if operator == "*":
+        return left * right
+    if operator == "/":
+        if right == 0:
+            raise ZeroDivisionError("Cannot divide by zero.")
+        return left / right
+    raise ValueError("Unknown operator.")
+
+
+def main():
+    print("Simple Calculator")
+    print("Type: number operator number")
+    print("Example: 4 * 7")
+    print("Type exit to quit.")
+
+    while True:
+        raw = input("> ").strip()
+        if raw.lower() == "exit":
+            break
+
+        parts = raw.split()
+        if len(parts) != 3:
+            print("Use format: number operator number")
+            continue
+
+        try:
+            left = float(parts[0])
+            operator = parts[1]
+            right = float(parts[2])
+            print(calculate(left, operator, right))
+        except (ValueError, ZeroDivisionError) as error:
+            print(error)
+
+
+if __name__ == "__main__":
+    main()
+'''
+
+        if program_kind == "json_cli":
             return '''import json
 from pathlib import Path
 
@@ -1726,6 +2186,11 @@ if __name__ == "__main__":
 
     def build_direct_python_program_result(self, text, terms, task_type):
 
+        program_kind = self.detect_direct_program_kind(
+            text,
+            task_type
+        )
+
         code = self.build_direct_python_program_code(
             text,
             task_type
@@ -1737,19 +2202,42 @@ if __name__ == "__main__":
             "used_memory_report": True,
             "language": "python",
             "task_type": task_type,
+            "program_kind": program_kind,
             "output_mode": "code_only",
             "terms_used": terms,
-            "confidence": 74,
-            "matched_functions": 0,
-            "selected": [],
+            "confidence": 86,
+            "matched_functions": 1,
+            "selected": [
+                f"direct_python_{program_kind}"
+            ],
             "assembly_plan": {
                 "task_type": task_type,
-                "steps": []
+                "program_kind": program_kind,
+                "steps": [
+                    "Detect requested Python program kind from the Understanding_brain report and user text.",
+                    "Choose a complete runnable standard-library template.",
+                    "Run CodeSelfReviewer for syntax, placeholder, and main-guard checks.",
+                    "Return final code instead of module names or draft helper variants."
+                ],
+                "composition_rules_used": [
+                    {
+                        "id": f"direct_python_{program_kind}",
+                        "connection_type": "complete_program_template",
+                        "score": 90
+                    }
+                ]
             },
             "dependencies_added": [],
-            "composition_rules_used": [],
+            "composition_rules_used": [
+                {
+                    "id": f"direct_python_{program_kind}",
+                    "connection_type": "complete_program_template",
+                    "score": 90
+                }
+            ],
             "adapter_notes": [
-                "Direct runnable program mode was used because the user requested code only."
+                "Direct runnable program mode was used because the user requested code only.",
+                f"Selected direct Python program kind: {program_kind}."
             ],
             "existing_code_detected": False,
             "match_details": [],
