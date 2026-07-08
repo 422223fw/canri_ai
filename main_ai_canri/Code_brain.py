@@ -2435,7 +2435,34 @@ if __name__ == "__main__":
 '''
 
         if program_kind == "calculator":
-            return '''def calculate(left, operator, right):
+            return '''import json
+from datetime import datetime
+from pathlib import Path
+
+
+HISTORY_FILE = Path("calculator_history.json")
+
+
+def load_history():
+    if not HISTORY_FILE.exists():
+        return []
+
+    try:
+        data = json.loads(HISTORY_FILE.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
+
+    return data if isinstance(data, list) else []
+
+
+def save_history(history):
+    HISTORY_FILE.write_text(
+        json.dumps(history, indent=2, ensure_ascii=False),
+        encoding="utf-8"
+    )
+
+
+def calculate(left, operator, right):
     if operator == "+":
         return left + right
     if operator == "-":
@@ -2446,19 +2473,44 @@ if __name__ == "__main__":
         if right == 0:
             raise ZeroDivisionError("Cannot divide by zero.")
         return left / right
+    if operator == "%":
+        return left * right / 100
     raise ValueError("Unknown operator.")
 
 
+def format_number(value):
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
+
+
+def show_history(history):
+    if not history:
+        print("No calculations yet.")
+        return
+
+    for index, item in enumerate(history, start=1):
+        print(f"{index}. {item['expression']} = {item['result']}")
+
+
 def main():
+    history = load_history()
+
     print("Simple Calculator")
     print("Type: number operator number")
     print("Example: 4 * 7")
+    print("Percentage example: 20 % 150 means 20 percent of 150")
+    print("Type history to show saved calculations.")
     print("Type exit to quit.")
 
     while True:
         raw = input("> ").strip()
         if raw.lower() == "exit":
+            save_history(history)
             break
+        if raw.lower() == "history":
+            show_history(history)
+            continue
 
         parts = raw.split()
         if len(parts) != 3:
@@ -2469,7 +2521,15 @@ def main():
             left = float(parts[0])
             operator = parts[1]
             right = float(parts[2])
-            print(calculate(left, operator, right))
+            result = calculate(left, operator, right)
+            expression = f"{format_number(left)} {operator} {format_number(right)}"
+            print(format_number(result))
+            history.append({
+                "time": datetime.now().isoformat(timespec="seconds"),
+                "expression": expression,
+                "result": format_number(result)
+            })
+            save_history(history)
         except (ValueError, ZeroDivisionError) as error:
             print(error)
 

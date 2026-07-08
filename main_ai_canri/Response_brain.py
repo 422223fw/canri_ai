@@ -135,6 +135,45 @@ class ResponseBrain:
 
         return " ".join(parts).strip()
 
+    def user_focus_terms(self, text):
+
+        stop_words = {
+            "the", "and", "for", "with", "what", "how", "why", "when",
+            "where", "who", "is", "are", "was", "were", "this", "that",
+            "explain", "check", "reliable", "information", "local",
+            "knowledge", "available", "use", "used", "if", "you", "your"
+        }
+
+        terms = []
+
+        for word in re.findall(r"[A-Za-z][A-Za-z0-9_\-]{2,}", str(text).lower()):
+            if word not in stop_words and word not in terms:
+                terms.append(word)
+
+        return terms[:12]
+
+    def rank_items_by_focus(self, items, focus_terms):
+
+        if not focus_terms:
+            return items
+
+        def score(item):
+            if isinstance(item, dict):
+                text = " ".join(str(value) for value in item.values())
+            else:
+                text = str(item)
+            lowered = text.lower()
+            total = 0
+            for term in focus_terms:
+                total += lowered.count(term)
+                if lowered.startswith(term):
+                    total += 6
+                if term in lowered[:120]:
+                    total += 2
+            return total
+
+        return sorted(items, key=score, reverse=True)
+
     def is_capability_question(self, text):
 
         lowered = str(text).lower()
@@ -274,10 +313,32 @@ class ResponseBrain:
             "creative_generation",
             "game_design",
             "planning",
+            "math",
             "translation",
             "correction",
             "request"
         }
+
+    def is_definition_or_explanation_request(self, text, report):
+
+        lowered = str(text).lower()
+        intent = str(report.get("intent", "")).lower()
+
+        if intent in {"question", "research"}:
+            return True
+
+        markers = [
+            "what is",
+            "what are",
+            "explain what",
+            "explain",
+            "define",
+            "meaning of",
+            "check if",
+            "reliable"
+        ]
+
+        return any(marker in lowered for marker in markers)
 
     def is_greeting(self, text):
 
@@ -426,9 +487,21 @@ class ResponseBrain:
 
         return score
 
-    def choose_primary_result(self, results):
+    def choose_primary_result(self, results, report=None):
 
         candidates = []
+        report = report or {}
+        topic = str(report.get("main_topic", "")).lower()
+        intent = str(report.get("intent", "")).lower()
+        allow_creative = topic in {"story", "creative", "game"} or intent in {
+            "story_creation",
+            "creative_generation",
+            "game_design"
+        }
+        allow_code = intent in {"code_generation", "code_analysis"} or (
+            topic == "code"
+            and intent not in {"question", "research"}
+        )
 
         for brain_name, result in results.items():
             if brain_name in {
@@ -438,6 +511,10 @@ class ResponseBrain:
                 "Learning_brain",
                 "Emotion_brain"
             }:
+                continue
+            if brain_name == "Creative_brain" and not allow_creative:
+                continue
+            if brain_name == "Code_brain" and not allow_code:
                 continue
 
             candidates.append((
@@ -452,6 +529,64 @@ class ResponseBrain:
             return None, {}
 
         return candidates[0][1], candidates[0][2]
+
+    def choose_domain_result(self, report, results, user_text):
+
+        topic = str(report.get("main_topic", "")).lower()
+        intent = str(report.get("intent", "")).lower()
+        lowered = str(user_text).lower()
+
+        preferred = []
+
+        if topic == "math" or intent == "math" or (
+            re.search(r"\d|\bx\b", lowered)
+            and (
+                "=" in lowered
+                or "^" in lowered
+                or "**" in lowered
+                or any(term in lowered for term in ["solve", "calculate", "step by step"])
+            )
+        ):
+            preferred.append("Math_brain")
+
+        if intent in {"question", "research"}:
+            preferred.extend(["Research_brain", "Reasoning_brain"])
+
+        if intent in {"code_generation", "code_analysis"} or (
+            topic == "code"
+            and intent not in {"question", "research"}
+        ):
+            preferred.append("Code_brain")
+
+        if topic == "story" or intent == "story_creation":
+            preferred.extend(["Story_brain", "Creative_brain"])
+
+        if topic == "language" or intent in {"translation", "correction"}:
+            preferred.append("Language_brain")
+
+        domain_map = {
+            "science": "Science_brain",
+            "technology": "Technology_brain",
+            "geography": "Geography_brain",
+            "history": "History_brain",
+            "game": "Game_brain",
+            "vision": "Vision_brain",
+            "voice": "Voice_brain",
+        }
+
+        if topic in domain_map:
+            preferred.append(domain_map[topic])
+
+        for brain_name in list(dict.fromkeys(preferred)):
+            result = results.get(brain_name)
+            if not isinstance(result, dict):
+                continue
+            if result.get("error") or result.get("skipped"):
+                continue
+            if self.text_from_result(brain_name, result):
+                return brain_name, result
+
+        return None, {}
 
     # ---------- formatting ----------
 
@@ -765,9 +900,13 @@ class ResponseBrain:
             return self.format_steps(result["steps"])
 
         if result.get("facts"):
+            facts = self.rank_items_by_focus(
+                self.as_list(result["facts"])[:8],
+                getattr(self, "_active_focus_terms", [])
+            )
             return self.format_list(
                 "מצאתי את העובדות האלה:",
-                self.as_list(result["facts"])[:8]
+                facts
             )
 
         if result.get("local_matches"):
@@ -962,6 +1101,7 @@ class ResponseBrain:
         results = self.get_results(data)
         dictionary = self.get_dictionary_context(data)
         user_text = self.extract_user_text(data, report)
+        self._active_focus_terms = self.user_focus_terms(user_text)
         safety = self.safety_status(results)
 
         if safety["blocked"]:
@@ -979,15 +1119,28 @@ class ResponseBrain:
             display_text = self.capability_answer()
             primary_brain = "Response_brain"
             confidence = 95
-        elif not self.is_action_request(report) and self.dictionary_answer(user_text, dictionary):
+        elif (
+            (
+                not self.is_action_request(report)
+                or self.is_definition_or_explanation_request(user_text, report)
+            )
+            and not any(
+                marker in user_text.lower()
+                for marker in ["reliable", "fact check", "check if", "local knowledge", "use local knowledge"]
+            )
+            and self.dictionary_answer(user_text, dictionary)
+        ):
             display_text = self.dictionary_answer(user_text, dictionary)
             primary_brain = "Dictionary_context"
             confidence = 88
         else:
             code_result = results.get("Code_brain", {})
             is_code_request = (
-                str(report.get("main_topic", "")).lower() == "code"
-                or str(report.get("intent", "")).lower() == "code_generation"
+                str(report.get("intent", "")).lower() in {"code_generation", "code_analysis"}
+                or (
+                    str(report.get("main_topic", "")).lower() == "code"
+                    and str(report.get("intent", "")).lower() not in {"question", "research"}
+                )
             )
 
             if (
@@ -997,7 +1150,13 @@ class ResponseBrain:
             ):
                 primary_brain, primary_result = "Code_brain", code_result
             else:
-                primary_brain, primary_result = self.choose_primary_result(results)
+                primary_brain, primary_result = self.choose_domain_result(
+                    report,
+                    results,
+                    user_text
+                )
+                if not primary_brain:
+                    primary_brain, primary_result = self.choose_primary_result(results, report)
 
             if primary_brain:
                 display_text = self.text_from_result(primary_brain, primary_result)
