@@ -88,6 +88,7 @@ DOMAIN_RULES = {
         "antonym", "word", "sentence", "שפה", "תרגם", "תרגום", "דקדוק"
     ],
     "math": [
+        "solve", "step by step", "x^2", "x**2",
         "math", "calculate", "equation", "number", "algebra", "geometry",
         "probability", "מתמטיקה", "חשב", "משוואה", "מספר"
     ],
@@ -194,7 +195,9 @@ ACTION_COMMANDS = {
     "give": "provide",
     "help": "help",
     "analyze": "analyze",
-    "review": "analyze"
+    "review": "analyze",
+    "solve": "solve",
+    "calculate": "solve"
 }
 
 DICTIONARY_QUERY_MARKERS = {
@@ -823,7 +826,7 @@ class UnderstandingBrain:
                     if keyword_lower in lowered:
                         score += 5
                         matched.append(keyword)
-                elif keyword_lower in word_set or keyword_lower in lowered:
+                elif keyword_lower in word_set:
                     score += 3
                     matched.append(keyword)
 
@@ -838,6 +841,18 @@ class UnderstandingBrain:
         scores, hits = self.score_rules(text, words, DOMAIN_RULES)
         lowered = text.lower()
         word_set = set(words)
+
+        if (
+            re.search(r"\d|\bx\b", lowered)
+            and (
+                "=" in lowered
+                or "^" in lowered
+                or "**" in lowered
+                or any(term in lowered for term in ["solve", "calculate", "step by step"])
+            )
+        ):
+            scores["math"] = scores.get("math", 0) + 18
+            hits.setdefault("math", []).append("math_expression")
 
         if self.has_code_payload(text):
             scores["code"] = scores.get("code", 0) + 14
@@ -905,7 +920,10 @@ class UnderstandingBrain:
         ):
             scores["code_generation"] = scores.get("code_generation", 0) + 8
 
-        if main_topic == "code" and any(
+        if main_topic == "code" and (
+            self.has_code_payload(text)
+            or any(term in lowered for term in ["this code", "the code", "pasted code", "following code"])
+        ) and any(
             term in lowered
             for term in ["analyze", "explain", "review", "what does this code"]
         ):
@@ -970,6 +988,9 @@ class UnderstandingBrain:
         if action_word in {"translate"}:
             return "translation"
 
+        if action_word in {"solve", "calculate"}:
+            return "math"
+
         if action_word in {"analyze", "review"}:
             if has_code or self.has_code_payload(text):
                 return "code_analysis"
@@ -984,7 +1005,10 @@ class UnderstandingBrain:
             return "request"
 
         if action_word in {"explain", "tell", "show", "give", "help"}:
-            if has_code or self.has_code_payload(text):
+            if self.has_code_payload(text) or any(
+                marker in lowered
+                for marker in ["this code", "the code", "pasted code", "following code"]
+            ):
                 return "code_analysis"
             return "question"
 
@@ -1342,6 +1366,8 @@ class UnderstandingBrain:
                 main_topic = "code"
             elif intent == "translation":
                 main_topic = "language"
+            elif intent == "math":
+                main_topic = "math"
 
         tasks = self.possible_tasks(
             main_topic,

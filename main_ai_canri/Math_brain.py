@@ -359,13 +359,9 @@ class MathBrain:
         if "x**2" not in cleaned or "=" not in cleaned:
             return None
 
-        left, right = cleaned.split("=", 1)
-        if right not in {"0", "0.0"}:
-            return None
-
         match = re.search(
-            r"([+-]?\d*(?:\.\d+)?)x\*\*2([+-]\d*(?:\.\d+)?)x([+-]\d+(?:\.\d+)?)",
-            left
+            r"([+-]?\d*(?:\.\d+)?)x\*\*2([+-]\d*(?:\.\d+)?)x([+-]\d+(?:\.\d+)?)=0(?:\.0)?",
+            cleaned
         )
         if not match:
             return None

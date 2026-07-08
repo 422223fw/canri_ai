@@ -453,7 +453,7 @@ class ManagerBrain:
             ("geography", ["geography", "country", "city", "capital", "map", "gps", "river", "mountain"]),
             ("technology", ["technology", "hardware", "computer", "cpu", "gpu", "robot", "server"]),
             ("history", ["history", "historical", "empire", "war", "ancient"]),
-            ("math", ["math", "number", "equation", "calculate", "algebra"]),
+            ("math", ["math", "number", "equation", "calculate", "solve", "step by step", "algebra", "x^2", "x**2"]),
             ("security", ["security", "password", "token", "encrypt", "danger", "bomb", "suicide"]),
             ("vision", ["vision", "image", "photo", "picture", "video", "file", "attachment", "pdf", "png", "jpg", "mp4"]),
             ("voice", ["voice", "audio", "sound", "recording", "microphone", "speech", "transcribe", "wav", "mp3", "m4a"]),
@@ -468,6 +468,17 @@ class ManagerBrain:
 
         if intent in {"code_generation", "code_analysis"}:
             domains.append("code")
+
+        if intent == "math" or (
+            re.search(r"\d|\bx\b", raw_text)
+            and (
+                "=" in raw_text
+                or "^" in raw_text
+                or "**" in raw_text
+                or any(term in raw_text for term in ["solve", "calculate", "step by step"])
+            )
+        ):
+            domains.append("math")
 
         if intent in ["question", "research"]:
             domains.append("research")
