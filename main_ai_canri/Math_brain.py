@@ -216,6 +216,8 @@ class MathBrain:
         raise ValueError("Unsupported expression")
 
     def format_number(self, value):
+        if isinstance(value, list):
+            return ", ".join(self.format_number(item) for item in value)
         if isinstance(value, float):
             if math.isfinite(value) and value.is_integer():
                 return str(int(value))
@@ -350,6 +352,99 @@ class MathBrain:
                 f"x = {self.format_number(answer)}"
             ],
             "confidence": 96
+        }
+
+    def solve_quadratic_equation(self, text):
+        cleaned = self.normalize_expression(text).replace(" ", "")
+        if "x**2" not in cleaned or "=" not in cleaned:
+            return None
+
+        left, right = cleaned.split("=", 1)
+        if right not in {"0", "0.0"}:
+            return None
+
+        match = re.search(
+            r"([+-]?\d*(?:\.\d+)?)x\*\*2([+-]\d*(?:\.\d+)?)x([+-]\d+(?:\.\d+)?)",
+            left
+        )
+        if not match:
+            return None
+
+        a_text, b_text, c_text = match.groups()
+        a = 1.0 if a_text in ["", "+"] else -1.0 if a_text == "-" else float(a_text)
+        b = 1.0 if b_text == "+" else -1.0 if b_text == "-" else float(b_text)
+        c = float(c_text)
+        discriminant = b * b - 4 * a * c
+
+        if discriminant < 0:
+            return {
+                "type": "quadratic_equation",
+                "answer": "no real solutions",
+                "steps": [
+                    f"a={self.format_number(a)}, b={self.format_number(b)}, c={self.format_number(c)}",
+                    f"discriminant = b^2 - 4ac = {self.format_number(discriminant)}",
+                    "The discriminant is negative, so there are no real solutions."
+                ],
+                "confidence": 92
+            }
+
+        root = math.sqrt(discriminant)
+        x1 = (-b + root) / (2 * a)
+        x2 = (-b - root) / (2 * a)
+        answer = [x1, x2] if x1 != x2 else [x1]
+        return {
+            "type": "quadratic_equation",
+            "answer": answer,
+            "steps": [
+                f"a={self.format_number(a)}, b={self.format_number(b)}, c={self.format_number(c)}",
+                f"discriminant = {self.format_number(discriminant)}",
+                "x = (-b +/- sqrt(discriminant)) / 2a",
+                "solutions = " + ", ".join(self.format_number(value) for value in answer)
+            ],
+            "confidence": 92
+        }
+
+    def solve_ratio(self, text):
+        lowered = text.lower()
+        match = re.search(
+            r"(-?\d+(?:\.\d+)?)\s*:\s*(-?\d+(?:\.\d+)?)\s*=\s*(-?\d+(?:\.\d+)?)\s*:\s*x",
+            lowered
+        )
+        if not match:
+            return None
+
+        a, b, c = [float(value) for value in match.groups()]
+        if a == 0:
+            return None
+        x = b * c / a
+        return {
+            "type": "ratio",
+            "answer": x,
+            "steps": [
+                f"{self.format_number(a)}:{self.format_number(b)} = {self.format_number(c)}:x",
+                f"x = {self.format_number(b)} * {self.format_number(c)} / {self.format_number(a)}",
+                f"x = {self.format_number(x)}"
+            ],
+            "confidence": 92
+        }
+
+    def solve_pythagorean(self, text):
+        lowered = text.lower()
+        nums = self.numbers(text)
+        if len(nums) < 2 or not any(word in lowered for word in ["pythagorean", "hypotenuse", "right triangle"]):
+            return None
+
+        a, b = nums[:2]
+        c = math.sqrt(a * a + b * b)
+        return {
+            "type": "pythagorean",
+            "answer": c,
+            "steps": [
+                f"c^2 = {self.format_number(a)}^2 + {self.format_number(b)}^2",
+                f"c = sqrt({self.format_number(a*a + b*b)})",
+                f"c = {self.format_number(c)}"
+            ],
+            "confidence": 93
         }
 
     def solve_geometry(self, text):
@@ -491,7 +586,10 @@ class MathBrain:
         solvers = [
             self.solve_percentage,
             self.solve_average,
+            self.solve_quadratic_equation,
+            self.solve_ratio,
             self.solve_linear_equation,
+            self.solve_pythagorean,
             self.solve_geometry,
             self.solve_unit_conversion,
             self.solve_expression,

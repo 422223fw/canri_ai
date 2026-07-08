@@ -495,6 +495,32 @@ class VisionBrain:
             "needs_security": needs_security
         }
 
+    def build_human_summary(self, analyzed_files, summary):
+        if not analyzed_files:
+            return "No visual or file attachments were found to inspect."
+
+        lines = [
+            f"Detected {summary.get('total_files', 0)} file(s).",
+            f"Categories: {summary.get('categories', {})}.",
+            f"Highest risk: {summary.get('max_risk_level')}."
+        ]
+
+        for file_info in analyzed_files[:6]:
+            detail = f"- {file_info.get('path')}: {file_info.get('category')} ({file_info.get('extension') or 'no extension'})"
+            dimensions = file_info.get("dimensions") or {}
+            if dimensions.get("width") and dimensions.get("height"):
+                detail += f", {dimensions['width']}x{dimensions['height']}"
+            if file_info.get("magic_signature"):
+                detail += f", signature: {file_info['magic_signature']}"
+            if file_info.get("warnings"):
+                detail += f", warning: {file_info['warnings'][0]}"
+            lines.append(detail)
+
+        if summary.get("needs_security"):
+            lines.append("Security review is recommended before opening, extracting, or executing anything.")
+
+        return "\n".join(lines)
+
     def update_statistics(self, summary):
 
         stats = self.statistics.get("Vision_brain", {})
@@ -531,6 +557,7 @@ class VisionBrain:
         ]
 
         summary = self.summarize_files(analyzed_files)
+        human_summary = self.build_human_summary(analyzed_files, summary)
         self.update_statistics(summary)
 
         suggested_next = []
@@ -558,6 +585,8 @@ class VisionBrain:
             "text_used": text,
             "files_detected": len(analyzed_files),
             "summary": summary,
+            "answer": human_summary,
+            "final_output": human_summary,
             "files": analyzed_files,
             "confidence": min(confidence, 100),
             "needs_security": summary["needs_security"],

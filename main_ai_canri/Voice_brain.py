@@ -454,6 +454,36 @@ class VoiceBrain:
             "needs_video_audio_extraction": needs_extraction
         }
 
+    def build_human_summary(self, analyzed_media, summary):
+        if not analyzed_media:
+            return "No audio or video media was found to inspect."
+
+        lines = [
+            f"Detected {summary.get('total_media', 0)} media file(s).",
+            f"Categories: {summary.get('categories', {})}.",
+            f"Highest risk: {summary.get('max_risk_level')}."
+        ]
+
+        for media in analyzed_media[:6]:
+            detail = f"- {media.get('path')}: {media.get('category')} ({media.get('extension') or 'no extension'})"
+            metadata = media.get("metadata") or {}
+            if metadata.get("duration_seconds") is not None:
+                detail += f", duration: {metadata['duration_seconds']}s"
+            if metadata.get("sample_rate"):
+                detail += f", sample rate: {metadata['sample_rate']} Hz"
+            if media.get("requested_tasks"):
+                detail += f", tasks: {', '.join(media['requested_tasks'][:5])}"
+            lines.append(detail)
+
+        if summary.get("needs_transcription_engine"):
+            lines.append("A real transcription engine is required before I can know what the speaker says.")
+        if summary.get("needs_video_audio_extraction"):
+            lines.append("Video files need audio extraction before transcription.")
+        if summary.get("needs_security"):
+            lines.append("Audio may contain private speech, so handle it carefully.")
+
+        return "\n".join(lines)
+
     def update_statistics(self, summary):
 
         stats = self.statistics.get("Voice_brain", {})
@@ -490,6 +520,7 @@ class VoiceBrain:
         ]
 
         summary = self.summarize_media(analyzed_media)
+        human_summary = self.build_human_summary(analyzed_media, summary)
         self.update_statistics(summary)
 
         suggested_next = []
@@ -523,6 +554,8 @@ class VoiceBrain:
             "text_used": text,
             "media_detected": len(analyzed_media),
             "summary": summary,
+            "answer": human_summary,
+            "final_output": human_summary,
             "media": analyzed_media,
             "confidence": min(confidence, 100),
             "needs_security": summary["needs_security"],
