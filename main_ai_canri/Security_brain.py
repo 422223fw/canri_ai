@@ -3,16 +3,29 @@ Security_brain.py
 Canri AI
 """
 
+import json
 import re
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+DATA_DIR = Path(__file__).parent / "data"
+STATS_FILE = DATA_DIR / "Security_statistics.json"
 
 
 class SecurityBrain:
 
     def __init__(self):
 
+        self.statistics = self.load_json(
+            STATS_FILE,
+            {}
+        )
+
         self.danger_patterns = [
             {
                 "name": "recursive_delete",
+                "category": "destructive_code",
                 "level": 100,
                 "patterns": [
                     r"rm\s+-rf\s+/",
@@ -26,6 +39,7 @@ class SecurityBrain:
             },
             {
                 "name": "shell_execution",
+                "category": "code_execution",
                 "level": 80,
                 "patterns": [
                     r"os\.system",
@@ -37,6 +51,7 @@ class SecurityBrain:
             },
             {
                 "name": "sensitive_file_access",
+                "category": "privacy",
                 "level": 70,
                 "patterns": [
                     r"password",
@@ -50,6 +65,7 @@ class SecurityBrain:
             },
             {
                 "name": "network_download",
+                "category": "network",
                 "level": 60,
                 "patterns": [
                     r"curl\s+",
@@ -61,6 +77,7 @@ class SecurityBrain:
             },
             {
                 "name": "infinite_loop",
+                "category": "resource_abuse",
                 "level": 50,
                 "patterns": [
                     r"while\s+true\s*:",
@@ -70,6 +87,7 @@ class SecurityBrain:
             },
             {
                 "name": "prompt_injection",
+                "category": "prompt_attack",
                 "level": 75,
                 "patterns": [
                     r"ignore\s+previous\s+instructions",
@@ -82,6 +100,7 @@ class SecurityBrain:
             },
             {
                 "name": "self_harm",
+                "category": "self_harm",
                 "level": 100,
                 "patterns": [
                     r"\bsuicide\b",
@@ -102,6 +121,7 @@ class SecurityBrain:
             },
             {
                 "name": "weapons_or_explosives",
+                "category": "weapons",
                 "level": 100,
                 "patterns": [
                     r"\bmake\s+(a\s+)?bomb\b",
@@ -123,6 +143,7 @@ class SecurityBrain:
             },
             {
                 "name": "illegal_activity",
+                "category": "illegal_abuse",
                 "level": 90,
                 "patterns": [
                     r"\bhack\s+into\b",
@@ -143,6 +164,7 @@ class SecurityBrain:
             },
             {
                 "name": "dangerous_medical_or_false_claim",
+                "category": "medical_safety",
                 "level": 80,
                 "patterns": [
                     r"\bstop\s+taking\s+medicine\b",
@@ -160,6 +182,43 @@ class SecurityBrain:
         ]
 
         print("Security Brain Loaded")
+
+    def load_json(
+        self,
+        path,
+        default
+    ):
+
+        if not path.exists():
+            return default
+
+        try:
+            with path.open(
+                "r",
+                encoding="utf-8"
+            ) as file:
+                return json.load(file)
+        except (OSError, json.JSONDecodeError):
+            return default
+
+    def save_statistics(self):
+
+        DATA_DIR.mkdir(
+            parents=True,
+            exist_ok=True
+        )
+
+        with STATS_FILE.open(
+            "w",
+            encoding="utf-8"
+        ) as file:
+            json.dump(
+                self.statistics,
+                file,
+                ensure_ascii=False,
+                indent=2
+            )
+            file.write("\n")
 
     def extract_text(
         self,
@@ -249,6 +308,8 @@ class SecurityBrain:
 
         warnings = []
         blocked_items = []
+        categories = []
+        matches = []
         risk_level = 0
 
         lowered = text.lower()
@@ -270,6 +331,24 @@ class SecurityBrain:
                         danger["name"]
                     )
 
+                    categories.append(
+                        danger.get(
+                            "category",
+                            "general"
+                        )
+                    )
+
+                    matches.append({
+                        "name": danger["name"],
+                        "category": danger.get(
+                            "category",
+                            "general"
+                        ),
+                        "risk": danger["level"],
+                        "warning": danger["warning"],
+                        "matched_pattern": pattern
+                    })
+
                     risk_level = max(
                         risk_level,
                         danger["level"]
@@ -280,7 +359,9 @@ class SecurityBrain:
         return {
             "risk_level": risk_level,
             "warnings": list(dict.fromkeys(warnings)),
-            "blocked_items": list(dict.fromkeys(blocked_items))
+            "blocked_items": list(dict.fromkeys(blocked_items)),
+            "categories": list(dict.fromkeys(categories)),
+            "matches": matches
         }
 
     def calculate_safe(
@@ -289,6 +370,106 @@ class SecurityBrain:
     ):
 
         return risk_level < 70
+
+    def risk_label(
+        self,
+        risk_level
+    ):
+
+        if risk_level >= 90:
+            return "critical"
+        if risk_level >= 70:
+            return "high"
+        if risk_level >= 40:
+            return "medium"
+        if risk_level > 0:
+            return "low"
+        return "none"
+
+    def recommended_action(
+        self,
+        safe,
+        scan
+    ):
+
+        categories = set(
+            scan.get(
+                "categories",
+                []
+            )
+        )
+
+        if "self_harm" in categories:
+            return "block_harmful_details_and_provide_crisis_support"
+        if categories & {"weapons", "illegal_abuse"}:
+            return "block_operational_instructions_and_offer_safe_alternative"
+        if categories & {"destructive_code", "code_execution"}:
+            return "require_review_before_execution"
+        if categories & {"medical_safety"}:
+            return "avoid_medical_certainty_and_recommend_professional_help"
+        if not safe:
+            return "block_or_rewrite_safely"
+        if scan.get("risk_level", 0) > 0:
+            return "answer_with_caution"
+        return "allow"
+
+    def calculate_confidence(
+        self,
+        text,
+        scan
+    ):
+
+        if not text.strip():
+            return 40
+
+        if scan.get("matches"):
+            return min(
+                98,
+                72 + len(scan["matches"]) * 6 + scan.get("risk_level", 0) * 0.15
+            )
+
+        return 82
+
+    def update_statistics(
+        self,
+        safe,
+        risk_level,
+        confidence
+    ):
+
+        stats = self.statistics.get(
+            "Security_brain",
+            {}
+        )
+
+        uses = stats.get(
+            "uses",
+            0
+        )
+
+        stats["uses"] = uses + 1
+        stats["blocked"] = stats.get(
+            "blocked",
+            0
+        ) + (0 if safe else 1)
+        stats["last_risk_level"] = risk_level
+        stats["last_confidence"] = round(
+            confidence,
+            2
+        )
+        stats["average_confidence"] = round(
+            (
+                stats.get("average_confidence", 0) * uses
+                + confidence
+            ) / max(stats["uses"], 1),
+            2
+        )
+        stats["last_used_utc"] = datetime.now(
+            timezone.utc
+        ).isoformat()
+
+        self.statistics["Security_brain"] = stats
+        self.save_statistics()
 
     def process(
         self,
@@ -307,13 +488,52 @@ class SecurityBrain:
             scan["risk_level"]
         )
 
+        confidence = self.calculate_confidence(
+            text,
+            scan
+        )
+
+        risk_label = self.risk_label(
+            scan["risk_level"]
+        )
+
+        action = self.recommended_action(
+            safe,
+            scan
+        )
+
+        self.update_statistics(
+            safe,
+            scan["risk_level"],
+            confidence
+        )
+
         return {
             "brain": "Security_brain",
             "safe": safe,
             "risk_level": scan["risk_level"],
+            "risk_label": risk_label,
             "warnings": scan["warnings"],
             "blocked_items": scan["blocked_items"],
-            "checked_text_length": len(text)
+            "risk_categories": scan["categories"],
+            "matches": scan["matches"][:20],
+            "recommended_action": action,
+            "checked_text_length": len(text),
+            "confidence": round(confidence, 2),
+            "suggested_next_brains": [
+                brain_name
+                for brain_name, enabled in [
+                    ("Response_brain", True),
+                    ("Fact_Check_brain", "medical_safety" in scan["categories"])
+                ]
+                if enabled
+            ],
+            "rules": [
+                "Block self-harm, weapon, illegal, and destructive operational details.",
+                "Allow safe technical and educational content with caution when risk is low.",
+                "Return confidence so Learning_brain can measure security reliability.",
+                "Prefer safe alternatives instead of only refusing."
+            ]
         }
 
 

@@ -247,6 +247,38 @@ class ResponseBrain:
 
         return None
 
+    def is_action_request(self, report):
+
+        if not isinstance(report, dict):
+            return False
+
+        requested_action = report.get(
+            "requested_action",
+            {}
+        )
+
+        if isinstance(requested_action, dict) and requested_action.get("is_action_request"):
+            return True
+
+        intent = str(
+            report.get(
+                "intent",
+                ""
+            )
+        ).lower()
+
+        return intent in {
+            "code_generation",
+            "code_analysis",
+            "story_creation",
+            "creative_generation",
+            "game_design",
+            "planning",
+            "translation",
+            "correction",
+            "request"
+        }
+
     def is_greeting(self, text):
 
         lowered = str(text).strip().lower()
@@ -477,7 +509,17 @@ class ResponseBrain:
 
     def format_code_result(self, result):
 
+        if result.get("mode") == "code_analysis":
+            return str(
+                result.get("answer")
+                or result.get("summary")
+                or "I analyzed the code."
+            ).strip()
+
         code = result.get("generated_code", "")
+
+        if not code and result.get("answer"):
+            return str(result.get("answer")).strip()
 
         if result.get("output_mode") == "code_only" and code:
             return self.format_code_block(
@@ -795,7 +837,7 @@ class ResponseBrain:
         keys = [key for key in preferred if key in value]
         safe_extra_keys = [
             "generated_code", "plan", "steps", "best_idea",
-            "translated_text", "facts"
+            "translated_text", "facts", "code_explanation"
         ]
         keys.extend(key for key in safe_extra_keys if key in value and key not in keys)
 
@@ -827,6 +869,7 @@ class ResponseBrain:
             topic in {"code", "game", "story", "creative"}
             or intent in {
                 "code_generation",
+                "code_analysis",
                 "game_design",
                 "story_creation",
                 "creative_generation",
@@ -936,7 +979,7 @@ class ResponseBrain:
             display_text = self.capability_answer()
             primary_brain = "Response_brain"
             confidence = 95
-        elif self.dictionary_answer(user_text, dictionary):
+        elif not self.is_action_request(report) and self.dictionary_answer(user_text, dictionary):
             display_text = self.dictionary_answer(user_text, dictionary)
             primary_brain = "Dictionary_context"
             confidence = 88

@@ -59,6 +59,7 @@ DOMAIN_RULES = {
     "code": [
         "code", "python", "javascript", "java", "function", "class", "api",
         "json", "program", "script", "bug", "debug", "working code",
+        "analyze code", "explain code", "review code", "what this code does",
         "קוד", "פייתון", "פונקציה", "מחלקה"
     ],
     "game": [
@@ -110,6 +111,11 @@ DOMAIN_RULES = {
         "creative", "idea", "invent", "brainstorm", "original", "stuck",
         "יצירתי", "רעיון", "להמציא"
     ],
+    "code_analysis": [
+        "analyze code", "analyze this code", "explain code", "explain this code",
+        "what this code does", "what does this code do", "review this code",
+        "walk me through this code"
+    ],
     "planning": [
         "plan", "steps", "roadmap", "structure", "architecture",
         "תוכנית", "שלבים", "מבנה", "תכנון"
@@ -155,13 +161,50 @@ INTENT_RULES = {
 
 OUTPUT_RULES = {
     "code_generation": "code",
+    "code_analysis": "code_explanation",
     "planning": "plan",
     "question": "answer",
     "translation": "translation",
     "correction": "corrected_text",
     "research": "sourced_summary",
     "story_creation": "story",
-    "game_design": "game_plan"
+    "game_design": "game_plan",
+    "creative_generation": "creative_result"
+}
+
+ACTION_COMMANDS = {
+    "write": "generate",
+    "create": "generate",
+    "make": "generate",
+    "generate": "generate",
+    "build": "build",
+    "implement": "build",
+    "invent": "creative_generate",
+    "continue": "continue",
+    "add": "modify",
+    "improve": "modify",
+    "upgrade": "modify",
+    "fix": "modify",
+    "correct": "modify",
+    "translate": "translate",
+    "plan": "plan",
+    "explain": "explain",
+    "tell": "explain",
+    "show": "show",
+    "give": "provide",
+    "help": "help",
+    "analyze": "analyze",
+    "review": "analyze"
+}
+
+DICTIONARY_QUERY_MARKERS = {
+    "what is",
+    "what are",
+    "define",
+    "definition",
+    "meaning of",
+    "means",
+    "mean"
 }
 
 
@@ -229,6 +272,38 @@ class UnderstandingBrain:
             return "en"
 
         return "unknown"
+
+    def has_code_payload(self, text):
+
+        text = str(text or "")
+        lowered = text.lower()
+
+        code_signals = [
+            "```",
+            "def ",
+            "class ",
+            "import ",
+            "from ",
+            "if __name__",
+            "return ",
+            "console.log",
+            "function ",
+            "public static",
+            "#include",
+            "</",
+            "{",
+            "};"
+        ]
+
+        if any(signal in lowered for signal in code_signals):
+            return True
+
+        punctuation_score = sum(
+            text.count(mark)
+            for mark in ["(", ")", "{", "}", "[", "]", ";", "=", ":"]
+        )
+
+        return punctuation_score >= 6 and "\n" in text
 
     # ---------- word analysis ----------
 
@@ -311,6 +386,134 @@ class UnderstandingBrain:
 
         return tokens
 
+    def normalize_word_type(self, token):
+
+        token_type = str(
+            token.get(
+                "type",
+                ""
+            )
+        ).lower()
+
+        if token.get("is_question_word"):
+            return "question_word"
+
+        if token.get("is_preposition"):
+            return "preposition"
+
+        if token.get("is_possessive"):
+            return "possessive"
+
+        if token.get("is_pronoun"):
+            return "pronoun"
+
+        if "adverb" in token_type:
+            return "adverb"
+
+        if "adjective" in token_type:
+            return "adjective"
+
+        if "verb" in token_type or self.is_verb_like(token):
+            return "verb"
+
+        if "noun" in token_type:
+            return "noun"
+
+        if "number" in token_type:
+            return "number"
+
+        if token.get("is_stop_word"):
+            return "stop_word"
+
+        return "unknown"
+
+    def build_syntax_profile(self, tokens, subject, main_action, object_token):
+
+        groups = {
+            "verbs": [],
+            "nouns": [],
+            "adjectives": [],
+            "adverbs": [],
+            "prepositions": [],
+            "pronouns": [],
+            "question_words": [],
+            "unknown": []
+        }
+
+        syntax_tokens = []
+
+        for token in tokens:
+            normalized_type = self.normalize_word_type(
+                token
+            )
+            word = token.get(
+                "word"
+            )
+
+            if normalized_type == "verb":
+                groups["verbs"].append(word)
+            elif normalized_type == "noun":
+                groups["nouns"].append(word)
+            elif normalized_type == "adjective":
+                groups["adjectives"].append(word)
+            elif normalized_type == "adverb":
+                groups["adverbs"].append(word)
+            elif normalized_type == "preposition":
+                groups["prepositions"].append(word)
+            elif normalized_type == "pronoun":
+                groups["pronouns"].append(word)
+            elif normalized_type == "question_word":
+                groups["question_words"].append(word)
+            elif normalized_type == "unknown" and not token.get("is_stop_word"):
+                groups["unknown"].append(word)
+
+            roles = []
+            if subject and token["id"] == subject["id"]:
+                roles.append("subject")
+            if main_action and token["id"] == main_action["id"]:
+                roles.append("action")
+            if object_token and token["id"] == object_token["id"]:
+                roles.append("object")
+            if self.is_modifier_like(token):
+                roles.append("modifier")
+            if token.get("is_preposition"):
+                roles.append("relation")
+            if token.get("is_question_word"):
+                roles.append("question_focus")
+
+            syntax_tokens.append({
+                "word": word,
+                "raw_type": token.get("type"),
+                "normalized_type": normalized_type,
+                "roles": roles,
+                "tense": token.get("tense"),
+                "known_word": token.get("exists")
+            })
+
+        for key, values in groups.items():
+            groups[key] = list(dict.fromkeys(
+                value
+                for value in values
+                if value
+            ))
+
+        return {
+            "groups": groups,
+            "tokens": syntax_tokens[:80],
+            "main_subject": subject.get("word") if subject else None,
+            "main_action": main_action.get("word") if main_action else None,
+            "main_object": object_token.get("word") if object_token else None,
+            "has_action": bool(main_action),
+            "has_object": bool(object_token),
+            "rules": [
+                "Use word type from UnderstandingDk, not only word meaning.",
+                "Treat verbs as actions the user may want performed.",
+                "Use nouns as likely subjects, objects, and requested targets.",
+                "Use adjectives and adverbs as constraints or style modifiers.",
+                "Use prepositions to connect objects, locations, and relations."
+            ]
+        }
+
     def is_noun_like(self, token):
 
         token_type = str(token.get("type", "")).lower()
@@ -327,7 +530,11 @@ class UnderstandingBrain:
 
         word = token.get("word", "")
         token_type = str(token.get("type", "")).lower()
-        if "adverb" in token_type or token.get("is_preposition"):
+        if (
+            "adverb" in token_type
+            or token.get("is_preposition")
+            or (word.endswith("ly") and len(word) > 4)
+        ):
             return False
         if (
             "adjective" in token_type
@@ -336,22 +543,28 @@ class UnderstandingBrain:
         ):
             return False
 
-        base_guess = None
+        base_guesses = []
         if word.endswith("ies") and len(word) > 3:
-            base_guess = word[:-3] + "y"
+            base_guesses.append(word[:-3] + "y")
         elif word.endswith("es") and len(word) > 3:
-            base_guess = word[:-2]
+            base_guesses.extend([
+                word[:-1],
+                word[:-2]
+            ])
         elif word.endswith("s") and len(word) > 3:
-            base_guess = word[:-1]
+            base_guesses.append(word[:-1])
 
         base_is_verb = False
-        if base_guess and dk:
-            entries = dk.search_word(base_guess)
-            base_is_verb = any(
-                "verb" in str(entry.get("type", "")).lower()
-                for entry in entries
-                if isinstance(entry, dict)
-            )
+        if base_guesses and dk:
+            for base_guess in base_guesses:
+                entries = dk.search_word(base_guess)
+                if any(
+                    "verb" in str(entry.get("type", "")).lower()
+                    for entry in entries
+                    if isinstance(entry, dict)
+                ):
+                    base_is_verb = True
+                    break
 
         return (
             "verb" in token_type
@@ -525,7 +738,7 @@ class UnderstandingBrain:
 
         question_focus = None
         for token in tokens:
-            if token.get("is_question_word"):
+            if token.get("is_question_word") and token.get("index", 99) <= 2:
                 question_focus = token.get("word")
                 break
 
@@ -545,6 +758,13 @@ class UnderstandingBrain:
         elif len(content_tokens) >= 2:
             graph_confidence = 60
 
+        syntax_profile = self.build_syntax_profile(
+            tokens,
+            subject,
+            main_action,
+            object_token
+        )
+
         return {
             "nodes": [
                 {
@@ -552,6 +772,7 @@ class UnderstandingBrain:
                     "word": token["word"],
                     "index": token["index"],
                     "type": token["type"],
+                    "normalized_type": self.normalize_word_type(token),
                     "exists": token["exists"],
                     "roles": [
                         role
@@ -570,6 +791,7 @@ class UnderstandingBrain:
             ],
             "edges": edges[:120],
             "meaning_frame": meaning_frame,
+            "syntax_profile": syntax_profile,
             "confidence": graph_confidence,
             "rules": [
                 "Connect sentence order for content words.",
@@ -577,7 +799,8 @@ class UnderstandingBrain:
                 "Connect modifiers to nearby nouns.",
                 "Connect noun compounds and joined noun lists.",
                 "Connect prepositional phrases as relation edges.",
-                "Add semantic edges when two sentence words are connected in UnderstandingDk."
+                "Add semantic edges when two sentence words are connected in UnderstandingDk.",
+                "Use word types from the dictionary to separate actions, objects, modifiers, and relations."
             ]
         }
 
@@ -616,6 +839,10 @@ class UnderstandingBrain:
         lowered = text.lower()
         word_set = set(words)
 
+        if self.has_code_payload(text):
+            scores["code"] = scores.get("code", 0) + 14
+            hits.setdefault("code", []).append("code_payload")
+
         if (
             "capital" in word_set
             or "located" in word_set
@@ -652,6 +879,20 @@ class UnderstandingBrain:
         scores, hits = self.score_rules(text, words, INTENT_RULES)
         lowered = text.lower().strip()
 
+        code_analysis_markers = [
+            "analyze this code",
+            "analyze code",
+            "explain this code",
+            "explain code",
+            "what does this code do",
+            "what this code does",
+            "review this code"
+        ]
+
+        if self.has_code_payload(text) and any(marker in lowered for marker in code_analysis_markers):
+            scores["code_analysis"] = scores.get("code_analysis", 0) + 18
+            hits.setdefault("code_analysis", []).append("code_payload_analysis_request")
+
         if lowered in {"hello", "hi", "hey", "shalom", "שלום", "היי", "הי"}:
             scores["greeting"] = scores.get("greeting", 0) + 10
 
@@ -663,6 +904,12 @@ class UnderstandingBrain:
             for term in ["code", "working", "implement", "function", "class", "version"]
         ):
             scores["code_generation"] = scores.get("code_generation", 0) + 8
+
+        if main_topic == "code" and any(
+            term in lowered
+            for term in ["analyze", "explain", "review", "what does this code"]
+        ):
+            scores["code_analysis"] = scores.get("code_analysis", 0) + 10
 
         if main_topic == "game" and "code" not in lowered:
             scores["game_design"] = scores.get("game_design", 0) + 4
@@ -676,6 +923,219 @@ class UnderstandingBrain:
         confidence = round((sorted_scores[0][1] / total) * 100, 2)
 
         return intent, confidence, hits
+
+    def is_dictionary_query(self, text):
+
+        lowered = text.lower()
+
+        for marker in DICTIONARY_QUERY_MARKERS:
+            if " " in marker:
+                pattern = r"(?<![a-z0-9])" + re.escape(marker) + r"(?![a-z0-9])"
+            else:
+                pattern = r"(?<![a-z0-9])" + re.escape(marker) + r"(?![a-z0-9])"
+
+            if re.search(pattern, lowered):
+                return True
+
+        return False
+
+    def infer_action_intent(
+        self,
+        action_word,
+        text,
+        words,
+        main_topic,
+        current_intent
+    ):
+
+        lowered = text.lower()
+        word_set = set(words)
+
+        story_terms = {
+            "story", "stories", "chapter", "character", "plot",
+            "scene", "dialogue", "sentences", "sentence"
+        }
+        code_terms = {
+            "code", "program", "python", "javascript", "java",
+            "function", "class", "api", "terminal", "runnable"
+        }
+        game_terms = {
+            "game", "rpg", "player", "enemy", "inventory", "combat"
+        }
+
+        has_story = main_topic == "story" or bool(story_terms & word_set)
+        has_code = main_topic == "code" or bool(code_terms & word_set)
+        has_game = main_topic == "game" or bool(game_terms & word_set)
+
+        if action_word in {"translate"}:
+            return "translation"
+
+        if action_word in {"analyze", "review"}:
+            if has_code or self.has_code_payload(text):
+                return "code_analysis"
+            return "question"
+
+        if action_word in {"plan"}:
+            return "planning"
+
+        if action_word in {"fix", "correct", "improve", "upgrade", "add"}:
+            if has_code:
+                return "code_generation"
+            return "request"
+
+        if action_word in {"explain", "tell", "show", "give", "help"}:
+            if has_code or self.has_code_payload(text):
+                return "code_analysis"
+            return "question"
+
+        if action_word in {"write", "create", "make", "generate", "invent", "continue"}:
+            if has_code:
+                return "code_generation"
+            if has_game and any(term in lowered for term in ["code", "program", "python"]):
+                return "code_generation"
+            if has_story or action_word == "continue":
+                return "story_creation"
+            if has_game:
+                return "game_design"
+            return "creative_generation"
+
+        if action_word in {"build", "implement"}:
+            if has_code or has_game:
+                return "code_generation"
+            return "planning"
+
+        return current_intent
+
+    def detect_requested_action(
+        self,
+        text,
+        words,
+        word_reports,
+        sentence_graph,
+        main_topic,
+        current_intent
+    ):
+
+        lowered = text.lower().strip()
+        dictionary_query = self.is_dictionary_query(text)
+
+        tokens = sentence_graph.get(
+            "nodes",
+            []
+        )
+        meaning_frame = sentence_graph.get(
+            "meaning_frame",
+            {}
+        )
+
+        action_word = meaning_frame.get(
+            "action"
+        )
+
+        if not action_word:
+            report_by_word = {
+                report.get("word"): report
+                for report in word_reports
+                if isinstance(report, dict)
+            }
+
+            for word in words[:16]:
+                token_type = str(
+                    report_by_word.get(
+                        word,
+                        {}
+                    ).get(
+                        "type",
+                        ""
+                    )
+                ).lower()
+
+                if word in ACTION_COMMANDS or "verb" in token_type:
+                    action_word = word
+                    break
+
+        if not action_word:
+            for token in tokens[:16]:
+                word = token.get(
+                    "word"
+                )
+                if word in ACTION_COMMANDS or "action" in token.get("roles", []):
+                    action_word = word
+                    break
+
+        if not action_word:
+            return {
+                "is_action_request": False,
+                "dictionary_query": dictionary_query,
+                "action_word": None,
+                "action_kind": None,
+                "target": None,
+                "intent_override": None,
+                "confidence": 35
+            }
+
+        action_word = str(action_word).lower()
+        action_kind = ACTION_COMMANDS.get(
+            action_word
+        )
+
+        if not action_kind:
+            report_by_word = {
+                report.get("word"): report
+                for report in word_reports
+                if isinstance(report, dict)
+            }
+            report = report_by_word.get(action_word, {})
+            token_type = str(report.get("type", "")).lower()
+            if "verb" in token_type:
+                action_kind = "perform"
+
+        if not action_kind:
+            return {
+                "is_action_request": False,
+                "dictionary_query": dictionary_query,
+                "action_word": action_word,
+                "action_kind": None,
+                "target": meaning_frame.get("object"),
+                "intent_override": None,
+                "confidence": 45
+            }
+
+        intent_override = self.infer_action_intent(
+            action_word,
+            text,
+            words,
+            main_topic,
+            current_intent
+        )
+
+        if action_kind == "perform" and intent_override == current_intent:
+            if current_intent in {"question", "request"}:
+                intent_override = "request"
+
+        is_action_request = not dictionary_query or lowered.startswith(action_word)
+
+        confidence = 78
+        if lowered.startswith(action_word):
+            confidence += 12
+        if meaning_frame.get("object"):
+            confidence += 6
+        if dictionary_query and not lowered.startswith(action_word):
+            confidence -= 35
+
+        return {
+            "is_action_request": is_action_request,
+            "dictionary_query": dictionary_query,
+            "action_word": action_word,
+            "action_kind": action_kind,
+            "target": meaning_frame.get("object"),
+            "intent_override": intent_override if is_action_request else None,
+            "confidence": max(
+                35,
+                min(confidence, 96)
+            ),
+            "rule": "A dictionary verb in an imperative/request sentence is treated as an action to perform, not as a word to define."
+        }
 
     # ---------- tasks/entities ----------
 
@@ -742,15 +1202,26 @@ class UnderstandingBrain:
 
         return features
 
-    def possible_tasks(self, main_topic, intent, features):
+    def possible_tasks(self, main_topic, intent, features, requested_action=None):
 
         tasks = [intent]
+
+        if isinstance(requested_action, dict) and requested_action.get("is_action_request"):
+            action_word = requested_action.get("action_word")
+            if action_word:
+                tasks.append(f"perform_action_{action_word}")
 
         if main_topic not in {"general", "unknown"}:
             tasks.append(f"{main_topic}_analysis")
 
         if intent == "code_generation":
             tasks.extend(["plan_code_structure", "generate_code", "review_code"])
+
+        if intent == "code_analysis":
+            tasks.extend(["extract_code", "explain_code", "review_code"])
+
+        if intent in {"story_creation", "creative_generation"}:
+            tasks.extend(["generate_final_content", "avoid_dictionary_definition"])
 
         if "planning_first" in features:
             tasks.append("build_plan_first")
@@ -770,7 +1241,7 @@ class UnderstandingBrain:
         if intent in {"question", "research"}:
             route.extend(["Research_brain", "Reasoning_brain"])
 
-        if intent == "code_generation" or main_topic == "code":
+        if intent in {"code_generation", "code_analysis"} or main_topic == "code":
             route.extend(["Planner_brain", "Code_brain", "Security_brain"])
 
         if main_topic == "game":
@@ -778,7 +1249,15 @@ class UnderstandingBrain:
             if intent == "code_generation":
                 route.append("Code_brain")
 
-        if main_topic == "creative" or intent in {"story_creation", "game_design"}:
+        if main_topic == "story" or intent == "story_creation":
+            route.extend([
+                "Creative_brain",
+                "Story_brain",
+                "Character_brain",
+                "World_brain"
+            ])
+
+        if main_topic == "creative" or intent in {"game_design", "creative_generation"}:
             route.append("Creative_brain")
 
         if main_topic in {
@@ -831,7 +1310,45 @@ class UnderstandingBrain:
         key_terms = self.extract_key_terms(words, word_reports)
         entities = self.extract_entities(original_text)
         sentence_graph = self.build_sentence_graph(words, word_reports)
-        tasks = self.possible_tasks(main_topic, intent, features)
+        syntax_profile = sentence_graph.get(
+            "syntax_profile",
+            {}
+        )
+
+        requested_action = self.detect_requested_action(
+            text,
+            words,
+            word_reports,
+            sentence_graph,
+            main_topic,
+            intent
+        )
+
+        if requested_action.get("is_action_request") and requested_action.get("intent_override"):
+            intent = requested_action["intent_override"]
+            intent_confidence = max(
+                intent_confidence,
+                requested_action.get(
+                    "confidence",
+                    60
+                )
+            )
+
+            if intent == "story_creation":
+                main_topic = "story"
+            elif intent == "code_generation":
+                main_topic = "code"
+            elif intent == "code_analysis":
+                main_topic = "code"
+            elif intent == "translation":
+                main_topic = "language"
+
+        tasks = self.possible_tasks(
+            main_topic,
+            intent,
+            features,
+            requested_action
+        )
         output_format = OUTPUT_RULES.get(intent, "answer")
         routes = self.routing_hints(main_topic, intent, features)
         confidence = self.estimate_confidence(
@@ -856,8 +1373,14 @@ class UnderstandingBrain:
             "key_terms": key_terms,
             "features": features,
             "entities": entities,
+            "requested_action": requested_action,
             "sentence_graph": sentence_graph,
             "meaning_frame": sentence_graph.get("meaning_frame", {}),
+            "syntax_profile": syntax_profile,
+            "word_type_groups": syntax_profile.get(
+                "groups",
+                {}
+            ),
             "graph_confidence": sentence_graph.get("confidence"),
             "words": word_reports,
             "possible_tasks": tasks,
@@ -869,7 +1392,10 @@ class UnderstandingBrain:
             "rules": [
                 "Use corrected_text as the main input when available.",
                 "Use UnderstandingDk for word existence, meanings, grammar, and connections.",
+                "Use dictionary word types to understand grammar, not only definitions.",
                 "Build a sentence relation graph so words are connected by meaning, not only split apart.",
+                "Treat verbs as requested actions unless the user explicitly asks for a definition.",
+                "Use nouns as targets and adjectives/adverbs as constraints or style.",
                 "Return a structured report that every specialist brain can consume.",
                 "Keep intent, topic, requested features, and routing hints explicit."
             ]
