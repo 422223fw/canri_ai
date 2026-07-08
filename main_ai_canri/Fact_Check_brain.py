@@ -12,6 +12,11 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
+try:
+    from Data_context import best_data_sources
+except ImportError:
+    best_data_sources = None
+
 
 DATA_DIR = Path(__file__).parent / "data"
 RULES_FILE = DATA_DIR / "Fact_check_rules.json"
@@ -248,6 +253,48 @@ class FactCheckBrain:
                 self.collect_evidence_from_result(brain_name, result, evidence)
 
         return evidence[:120]
+
+    def collect_local_data_evidence(self, text, report, claims):
+
+        if best_data_sources is None:
+            return []
+
+        query_parts = [text]
+
+        for key in ["main_topic", "intent", "summary", "corrected_text", "original_text"]:
+            value = report.get(key) if isinstance(report, dict) else None
+            if value:
+                query_parts.append(str(value))
+
+        for claim in claims[:8]:
+            claim_text = claim.get("text")
+            if claim_text:
+                query_parts.append(claim_text)
+
+        query = " ".join(query_parts).strip()
+        if not query:
+            return []
+
+        local_sources = []
+        for source in best_data_sources(query, limit=8):
+            trust_score = source.get("trust_score", 55)
+            try:
+                trust_score = float(trust_score)
+            except (TypeError, ValueError):
+                trust_score = 55
+
+            local_sources.append({
+                "source_brain": "Data_context",
+                "name": source.get("name", "local data"),
+                "url": "",
+                "source_type": "local_data_json",
+                "trust_score": max(0, min(round(trust_score, 2), 85)),
+                "supports": source.get("supports", []),
+                "notes": source.get("notes", ""),
+                "sample": source.get("sample", [])[:5]
+            })
+
+        return local_sources
 
     def collect_evidence_from_result(self, brain_name, result, evidence):
 
@@ -488,6 +535,8 @@ class FactCheckBrain:
         text = self.extract_text(data)
         claims = self.collect_claims(data, results)
         evidence = self.collect_evidence(data, results)
+        local_data_evidence = self.collect_local_data_evidence(text, report, claims)
+        evidence.extend(local_data_evidence)
         conflicts = self.detect_conflicts(claims)
         topic_risk = self.detect_topic_risk(text, report)
         warnings = self.detect_warnings(claims, evidence, conflicts, topic_risk)
@@ -515,6 +564,7 @@ class FactCheckBrain:
             "claims_checked": claims[:20],
             "evidence_count": len(evidence),
             "evidence_score": self.evidence_score(evidence),
+            "local_data_evidence": local_data_evidence,
             "strongest_sources": sorted(
                 evidence,
                 key=lambda item: item.get("trust_score", 0),

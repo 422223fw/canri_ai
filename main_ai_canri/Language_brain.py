@@ -7,6 +7,7 @@ Receives the report from Understanding_brain and manages all language modules.
 """
 
 from pathlib import Path
+import re
 
 
 # =========================
@@ -140,6 +141,83 @@ class LanguageBrain:
                 "module": module.__class__.__name__
             }
 
+    def detect_basic_language(self, text):
+        hebrew = len(re.findall(r"[\u0590-\u05FF]", str(text)))
+        latin = len(re.findall(r"[A-Za-z]", str(text)))
+
+        if hebrew and latin:
+            return "mixed"
+        if hebrew:
+            return "he"
+        if latin:
+            return "en"
+        return "unknown"
+
+    def build_unified_report(self, raw_report, final_report):
+        text = raw_report.get("input_text", "")
+        analysis = raw_report.get("analysis") if isinstance(raw_report.get("analysis"), dict) else {}
+        grammar = raw_report.get("grammar") if isinstance(raw_report.get("grammar"), dict) else {}
+        translation = raw_report.get("translation") if isinstance(raw_report.get("translation"), dict) else {}
+        dictionary = raw_report.get("dictionary") if isinstance(raw_report.get("dictionary"), dict) else {}
+        expressions = raw_report.get("expressions") if isinstance(raw_report.get("expressions"), dict) else {}
+
+        detected_language = (
+            analysis.get("detected_language")
+            or analysis.get("language")
+            or self.detect_basic_language(text)
+        )
+
+        direction = "rtl" if detected_language == "he" else "ltr"
+        if detected_language == "mixed":
+            direction = "mixed"
+
+        confidence_values = []
+        for part in [analysis, grammar, translation, dictionary, expressions, final_report]:
+            if isinstance(part, dict) and isinstance(part.get("confidence"), (int, float)):
+                confidence_values.append(float(part["confidence"]))
+
+        confidence = round(sum(confidence_values) / len(confidence_values), 2) if confidence_values else 68
+
+        answer_parts = []
+        if translation.get("translated_text"):
+            answer_parts.append(f"Translation: {translation['translated_text']}")
+        if grammar.get("corrected_text"):
+            answer_parts.append(f"Grammar: {grammar['corrected_text']}")
+        if dictionary.get("answer"):
+            answer_parts.append(str(dictionary["answer"]))
+        if expressions.get("answer"):
+            answer_parts.append(str(expressions["answer"]))
+
+        if not answer_parts:
+            answer_parts.append(
+                f"Language detected: {detected_language}. Direction: {direction}."
+            )
+
+        unified = dict(final_report) if isinstance(final_report, dict) else {}
+        unified.update({
+            "brain": "Language_brain",
+            "input_text": text,
+            "detected_language": detected_language,
+            "direction": direction,
+            "confidence": confidence,
+            "answer": "\n".join(answer_parts),
+            "final_output": "\n".join(answer_parts),
+            "modules_used": {
+                "loader": raw_report.get("language_data_loaded", False),
+                "analysis": bool(analysis),
+                "grammar": bool(grammar),
+                "translation": bool(translation),
+                "dictionary": bool(dictionary),
+                "expressions": bool(expressions)
+            },
+            "analysis": analysis,
+            "grammar": grammar,
+            "translation": translation,
+            "dictionary": dictionary,
+            "expressions": expressions
+        })
+        return unified
+
     # =========================
     # MAIN PROCESS
     # =========================
@@ -244,7 +322,7 @@ class LanguageBrain:
             default=raw_report
         )
 
-        return final_report
+        return self.build_unified_report(raw_report, final_report)
 
 
 brain = LanguageBrain()

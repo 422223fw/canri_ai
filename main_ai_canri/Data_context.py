@@ -18,6 +18,7 @@ DATA_DIR = Path(__file__).parent / "data"
 
 MAX_FULL_READ_BYTES = 2_000_000
 MAX_SAMPLE_BYTES = 220_000
+MAX_VALUE_MATCHES = 8
 SKIP_EXTENSIONS = {".jsonl", ".pyc"}
 
 _DATA_PROFILE_CACHE = None
@@ -122,6 +123,57 @@ def compact_json_summary(data):
     }
 
 
+def iter_json_text_values(data, path="", limit=500):
+    found = []
+
+    def visit(value, current_path):
+        if len(found) >= limit:
+            return
+
+        if isinstance(value, dict):
+            for key, item in list(value.items())[:80]:
+                next_path = f"{current_path}.{key}" if current_path else str(key)
+                visit(item, next_path)
+        elif isinstance(value, list):
+            for index, item in enumerate(value[:80]):
+                visit(item, f"{current_path}[{index}]")
+        elif isinstance(value, (str, int, float, bool)):
+            text = str(value)
+            if text.strip():
+                found.append({
+                    "path": current_path,
+                    "text": text[:600]
+                })
+
+    visit(data, path)
+    return found
+
+
+def search_json_values(data, query_terms, limit=MAX_VALUE_MATCHES):
+    matches = []
+
+    for item in iter_json_text_values(data):
+        normalized = normalize_text(item["text"])
+        score = 0
+        matched = []
+
+        for term in query_terms:
+            if term in normalized:
+                score += 4
+                matched.append(term)
+
+        if score:
+            matches.append({
+                "path": item["path"],
+                "score": score,
+                "matched_terms": matched[:8],
+                "text": item["text"]
+            })
+
+    matches.sort(key=lambda item: item["score"], reverse=True)
+    return matches[:limit]
+
+
 def profile_file(path):
     stat = path.stat()
     profile = {
@@ -165,6 +217,18 @@ def profile_file(path):
 
     profile["terms"] = list(dict.fromkeys(profile["terms"]))[:160]
     return profile
+
+
+def load_json_for_search(file_name):
+    path = DATA_DIR / file_name
+    if not path.exists() or path.suffix.lower() != ".json":
+        return None
+    if path.stat().st_size > MAX_FULL_READ_BYTES:
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        return None
 
 
 def build_data_profile(force=False):
@@ -221,6 +285,14 @@ def search_data_context(query, limit=10):
             continue
 
         summary = profile.get("summary", {})
+        value_matches = []
+        if score > 0:
+            data = load_json_for_search(profile.get("file", ""))
+            if data is not None:
+                value_matches = search_json_values(data, query_terms)
+                if value_matches:
+                    score += min(sum(item["score"] for item in value_matches), 25)
+
         scored.append({
             "file": profile.get("file"),
             "bytes": profile.get("bytes"),
@@ -233,6 +305,7 @@ def search_data_context(query, limit=10):
                 if term in file_terms or term in file_name
             ][:12],
             "sample": summary.get("sample", [])[:20],
+            "value_matches": value_matches,
         })
 
     scored.sort(key=lambda item: (item["score"], item.get("bytes", 0)), reverse=True)
@@ -244,3 +317,18 @@ def search_data_context(query, limit=10):
         "profiled_files": len(profiles),
         "total_profiled_bytes": sum(item.get("bytes", 0) for item in profiles),
     }
+
+
+def best_data_sources(query, limit=5):
+    context = search_data_context(query, limit=limit)
+    return [
+        {
+            "name": match["file"],
+            "source_type": "local_data_json",
+            "trust_score": min(85, 55 + match.get("score", 0)),
+            "supports": match.get("matched_terms", []),
+            "notes": f"Local Canri data file. Shape: {match.get('shape')}, items: {match.get('items')}",
+            "sample": match.get("value_matches") or match.get("sample", [])
+        }
+        for match in context.get("matches", [])[:limit]
+    ]
