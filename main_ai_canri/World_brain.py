@@ -91,7 +91,73 @@ class WorldBrain:
                 best = template
         return best or {}
 
-    def build_world(self, template):
+    def extract_requested_world(self, text):
+        lowered = text.lower()
+
+        if "under his bed" in lowered or "tiny door" in lowered or "glowing city" in lowered:
+            return {
+                "name": "The Glowing City Under The Bed",
+                "world_type": "hidden_magic_city",
+                "genre": "magical_realism",
+                "tone": "quiet_wonder",
+                "central_conflict": "whether hidden magic should be disturbed",
+                "systems": ["tiny doors", "sleeping citizens", "glowing streets"],
+                "hooks": ["a city beneath a bedroom", "a door too small for adults", "a sleeping secret"]
+            }
+
+        if "park" in lowered:
+            return {
+                "name": "The Quiet Park",
+                "world_type": "ordinary_place_with_secret",
+                "genre": "magical_realism",
+                "tone": "gentle_mystery",
+                "central_conflict": "an ordinary walk reveals an impossible secret",
+                "systems": ["hidden paths", "weathered trees", "small magical objects"],
+                "hooks": ["a discovery under a tree", "a path that changes at dusk"]
+            }
+
+        if "patient" in lowered or "hospital" in lowered or "ward" in lowered or "meeting" in lowered:
+            return {
+                "name": "North Ward",
+                "world_type": "hospital_mystery",
+                "genre": "mystery",
+                "tone": "tense_and_human",
+                "central_conflict": "a missing patient returns with impossible knowledge",
+                "systems": ["case meetings", "medical records", "unanswered disappearances"],
+                "hooks": ["a final meeting", "a returned patient", "a notebook of unknown names"]
+            }
+
+        if "forest" in lowered:
+            return {
+                "name": "The Old Forest",
+                "world_type": "enchanted_forest",
+                "genre": "fantasy",
+                "tone": "mysterious",
+                "central_conflict": "the forest tests anyone who enters",
+                "systems": ["living paths", "old trees", "hidden signs"],
+                "hooks": ["a path that remembers footsteps", "a light between trees"]
+            }
+
+        return {}
+
+    def build_world(self, template, requested=None):
+        requested = requested or {}
+        if requested:
+            return {
+                "name": requested.get("name"),
+                "world_type": requested.get("world_type"),
+                "genre": requested.get("genre"),
+                "tone": requested.get("tone"),
+                "central_conflict": requested.get("central_conflict"),
+                "systems": requested.get("systems", []),
+                "hooks": requested.get("hooks", []),
+                "laws": [
+                    "Every major world detail should affect plot or character choice.",
+                    "Power, magic, technology, or politics must have limits.",
+                    "Travel, resources, and danger should stay consistent."
+                ]
+            }
+
         world_type = template.get("world_type", "unknown_world")
         return {
             "name": world_type.replace("_", " ").title(),
@@ -128,7 +194,8 @@ class WorldBrain:
         text = self.extract_text(data, report)
         terms = self.collect_terms(report, text)
         template = self.choose_template(terms)
-        world = self.build_world(template)
+        requested_world = self.extract_requested_world(text)
+        world = self.build_world(template, requested_world)
         confidence = min(100, template.get("confidence", 70) + (10 if terms else 0))
         self.update_statistics(confidence)
         return {

@@ -205,10 +205,104 @@ class StoryBrain:
 
         return " ".join(clean[:count])
 
+    def extract_story_requirements(self, text):
+        lowered = text.lower()
+
+        name_match = re.search(r"\b(?:named|called)\s+([A-Z][a-zA-Z]+)\b", text)
+        name = name_match.group(1) if name_match else None
+
+        role = "character"
+        for role_name in ["patient", "boy", "girl", "hero", "doctor", "student", "detective", "inventor", "child"]:
+            if role_name in lowered:
+                role = role_name
+                break
+
+        setting = "an ordinary place"
+        if "park" in lowered:
+            setting = "the park"
+        elif "hospital" in lowered or "patient" in lowered:
+            setting = "a quiet hospital ward"
+        elif "under his bed" in lowered or "tiny door" in lowered:
+            setting = "the tiny glowing city under the bed"
+        elif "forest" in lowered:
+            setting = "the old forest"
+        elif "city" in lowered:
+            setting = "the city"
+
+        trait = None
+        for trait_name in ["quiet", "shy", "brave", "careful", "curious", "honest", "stubborn", "kind", "patient"]:
+            if trait_name in lowered:
+                trait = trait_name
+                break
+
+        if not trait and "extraordinary human trait" in lowered:
+            trait = "patience"
+
+        conflict = "a hidden problem forces a choice"
+        if "disappeared" in lowered or "vanished" in lowered:
+            conflict = "someone returns after disappearing and changes what everyone believes"
+        elif "injured" in lowered or "hurt" in lowered:
+            conflict = "an injury turns the first step into a test"
+        elif "wake" in lowered and "city" in lowered:
+            conflict = "the hero must decide whether to wake a sleeping city"
+        elif "trait" in lowered:
+            conflict = "the hero must rely on an ordinary trait that others overlook"
+
+        required_beats = {
+            "defining_moment": "defining moment" in lowered or "discovers this trait" in lowered,
+            "central_conflict": "central conflict" in lowered or "conflict" in lowered,
+            "pivotal_decision": "pivotal decision" in lowered or "decision" in lowered,
+            "growth_ending": "grown" in lowered or "transformed" in lowered or "ending" in lowered
+        }
+
+        return {
+            "name": name,
+            "role": role,
+            "setting": setting,
+            "trait": trait,
+            "conflict": conflict,
+            "required_beats": required_beats
+        }
+
+    def build_requirement_story(self, requirements, count):
+        role = requirements.get("role") or "character"
+        name = requirements.get("name") or (
+            "Daniel" if role == "patient" else
+            "Leo" if role == "boy" else
+            "Maya" if role == "girl" else
+            "Ari"
+        )
+        setting = requirements.get("setting") or "an ordinary place"
+        trait = requirements.get("trait") or "patience"
+        conflict = requirements.get("conflict") or "a hidden problem forces a choice"
+
+        if role == "patient":
+            sentences = [
+                f"{name} had been missing for six months when he walked into the final meeting at North Ward",
+                "The doctors stopped speaking because he looked tired, calm, and strangely certain of why he had returned",
+                "He placed a worn notebook on the table and said the missing months had taught him to listen to silences no machine could measure",
+                "When the committee demanded answers, Daniel chose to tell the truth slowly instead of protecting himself with another disappearance",
+                "Page by page, the notebook revealed that several forgotten patients had left clues inside their own records",
+                "By the end of the meeting, Daniel was no longer just the case everyone wanted to close, but the witness who reopened every question"
+            ]
+            return self.clean_sentence_list(sentences, count)
+
+        sentences = [
+            f"{name}, a {role} whose greatest trait was {trait}, lived near {setting} and was often underestimated because nothing about them looked extraordinary",
+            f"The defining moment came when {name} noticed a small detail everyone else ignored and realized that {trait} could be a kind of strength",
+            f"Soon after, {conflict}, and the people around {name} wanted a faster, louder answer",
+            f"{name} almost followed them, but chose instead to trust the quiet habit that had always made them different",
+            "That decision changed the story, because the solution appeared only when someone was willing to slow down and see the pattern clearly",
+            f"When it was over, {name} had not become powerful in a magical way, but had grown into someone who understood the worth of their own nature"
+        ]
+
+        return self.clean_sentence_list(sentences, count)
+
     def build_final_story(self, text, length, outline, character, world, creative):
 
         lowered = text.lower()
         count = self.requested_sentence_count(text)
+        requirements = self.extract_story_requirements(text)
 
         is_park_story = "park" in lowered or "walk" in lowered
         is_leo_tiny_door_story = (
@@ -239,6 +333,15 @@ class StoryBrain:
             and any(word in lowered for word in ["disappeared", "missing", "vanished"])
             and any(phrase in lowered for phrase in ["six months", "6 months", "half a year"])
             and "meeting" in lowered
+        )
+        trait_hero_story = (
+            "hero" in lowered
+            and (
+                "trait" in lowered
+                or "natural ability" in lowered
+                or "flaw" in lowered
+                or "habit" in lowered
+            )
         )
 
         if is_leo_tiny_door_story and is_story_continuation:
@@ -288,22 +391,23 @@ class StoryBrain:
             return self.clean_sentence_list(sentences, count)
 
         if patient_return_story:
-            sentences = [
-                "For six months, everyone at North Ward spoke about Daniel Vale in careful whispers, because one evening he had walked out of his hospital room and vanished",
-                "His file stayed on the final meeting table every Friday, untouched except for a growing stack of unanswered questions",
-                "Some people believed he had run away, while others thought he had been hiding from a truth only he understood",
-                "On the last day of the review, just as the doctors were about to close his case, Daniel stepped through the door wearing the same gray coat he had disappeared in",
-                "He looked thinner and older, but his eyes were clear, and in his hand he carried a notebook filled with names no one in the room had ever told him",
-                "The meeting fell silent as Daniel placed the notebook on the table and said he had not been lost, but called somewhere he could not explain",
-                "By the time the clock struck noon, everyone understood that Daniel had returned not to answer the final question, but to ask a much stranger one"
-            ]
-            return self.clean_sentence_list(sentences, count)
+            return self.build_requirement_story(requirements, count)
+
+        if trait_hero_story:
+            return self.build_requirement_story(requirements, count)
 
         char = character.get("character", {})
         world_data = world.get("world", {})
         idea = creative.get("best_idea", {})
-        name = char.get("name") or "Ari"
-        setting = world_data.get("name") or "a quiet town"
+        name = char.get("name") or requirements.get("name") or "Ari"
+        if "Concept" in str(name):
+            name = requirements.get("name") or (
+                "Daniel" if requirements.get("role") == "patient" else
+                "Leo" if requirements.get("role") == "boy" else
+                "Maya" if requirements.get("role") == "girl" else
+                "Ari"
+            )
+        setting = world_data.get("name") or requirements.get("setting") or "a quiet town"
         goal = char.get("goal") or "find the truth"
         flaw = char.get("flaw") or "doubted every brave thought"
         concept = idea.get("concept") or "a secret waiting in an ordinary place"
