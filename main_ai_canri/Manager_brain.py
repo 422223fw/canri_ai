@@ -153,6 +153,23 @@ class ManagerBrain:
         for task in report.get("possible_tasks", []):
             terms.append(str(task).replace("_", " ").lower())
 
+        requested_action = report.get("requested_action", {})
+        if isinstance(requested_action, dict):
+            for key in ["action_word", "action_kind", "target", "intent_override"]:
+                value = requested_action.get(key)
+                if value:
+                    terms.append(str(value).replace("_", " ").lower())
+
+        word_type_groups = report.get("word_type_groups", {})
+        if isinstance(word_type_groups, dict):
+            for group_name, group_words in word_type_groups.items():
+                if group_name in {"verbs", "nouns", "adjectives", "adverbs"}:
+                    terms.append(str(group_name).replace("_", " ").lower())
+                    terms.extend(
+                        str(word).lower()
+                        for word in group_words[:12]
+                    )
+
         for word_data in report.get("words", []):
             if not isinstance(word_data, dict):
                 continue
@@ -449,7 +466,7 @@ class ManagerBrain:
             if topic == domain or intent == domain or any(keyword in term_text for keyword in keywords):
                 domains.append(domain)
 
-        if intent == "code_generation":
+        if intent in {"code_generation", "code_analysis"}:
             domains.append("code")
 
         if intent in ["question", "research"]:

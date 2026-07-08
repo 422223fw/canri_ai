@@ -51,6 +51,18 @@ SOFTENERS = {
     "מעט": -8
 }
 
+EMOTION_VALENCE = {
+    "joy": "positive",
+    "curiosity": "positive",
+    "confusion": "uncertain",
+    "urgency": "activated",
+    "sadness": "negative",
+    "anger": "negative",
+    "fear": "negative",
+    "self_harm_distress": "crisis",
+    "neutral": "neutral"
+}
+
 
 class EmotionBrain:
 
@@ -251,6 +263,79 @@ class EmotionBrain:
             terms.append(
                 str(topic)
             )
+
+        meaning_frame = report.get(
+            "meaning_frame",
+            {}
+        )
+
+        if isinstance(
+            meaning_frame,
+            dict
+        ):
+
+            for key in [
+                "subject",
+                "action",
+                "object",
+                "question_focus"
+            ]:
+
+                value = meaning_frame.get(
+                    key
+                )
+
+                if value:
+                    terms.append(
+                        str(value)
+                    )
+
+            for value in meaning_frame.get(
+                "content_terms",
+                []
+            )[:30]:
+                terms.append(
+                    str(value)
+                )
+
+        sentence_graph = report.get(
+            "sentence_graph",
+            {}
+        )
+
+        if isinstance(
+            sentence_graph,
+            dict
+        ):
+
+            for edge in sentence_graph.get(
+                "edges",
+                []
+            )[:30]:
+
+                if not isinstance(
+                    edge,
+                    dict
+                ):
+                    continue
+
+                for key in [
+                    "from_word",
+                    "relation",
+                    "to_word"
+                ]:
+
+                    value = edge.get(
+                        key
+                    )
+
+                    if value:
+                        terms.append(
+                            str(value).replace(
+                                "_",
+                                " "
+                            )
+                        )
 
         for task in report.get(
             "possible_tasks",
@@ -469,7 +554,14 @@ class EmotionBrain:
                 "primary_emotion": "neutral",
                 "emotions": {},
                 "evidence": {},
-                "intensity": 0
+                "intensity": 0,
+                "mixed_emotions": [],
+                "confidence": self.calculate_emotion_confidence(
+                    text,
+                    {},
+                    {},
+                    0
+                )
             }
 
         primary = max(
@@ -507,12 +599,66 @@ class EmotionBrain:
             for emotion, score in scores.items()
         }
 
+        mixed_emotions = [
+            emotion
+            for emotion, score in sorted(
+                normalized.items(),
+                key=lambda item: item[1],
+                reverse=True
+            )[1:4]
+            if score >= 35
+        ]
+
+        confidence = self.calculate_emotion_confidence(
+            text,
+            normalized,
+            evidence,
+            intensity
+        )
+
         return {
             "primary_emotion": primary,
             "emotions": normalized,
             "evidence": evidence,
-            "intensity": intensity
+            "intensity": intensity,
+            "mixed_emotions": mixed_emotions,
+            "confidence": confidence
         }
+
+    def calculate_emotion_confidence(
+        self,
+        text,
+        emotions,
+        evidence,
+        intensity
+    ):
+
+        if not str(text).strip():
+            return 35
+
+        if not emotions:
+            return 72
+
+        evidence_count = sum(
+            len(items)
+            for items in evidence.values()
+            if isinstance(items, list)
+        )
+
+        confidence = 55
+        confidence += min(evidence_count * 8, 28)
+        confidence += min(intensity * 0.18, 18)
+
+        if len(emotions) > 2:
+            confidence -= 5
+
+        return round(
+            max(
+                35,
+                min(confidence, 96)
+            ),
+            2
+        )
 
     def classify_tone(
         self,
@@ -529,6 +675,35 @@ class EmotionBrain:
             "tone",
             "neutral"
         )
+
+    def emotional_state(
+        self,
+        primary_emotion,
+        intensity,
+        sensitivity
+    ):
+
+        valence = EMOTION_VALENCE.get(
+            primary_emotion,
+            "neutral"
+        )
+
+        if sensitivity == "crisis":
+            arousal = "crisis"
+        elif intensity >= 75:
+            arousal = "high"
+        elif intensity >= 40:
+            arousal = "medium"
+        else:
+            arousal = "low"
+
+        return {
+            "valence": valence,
+            "arousal": arousal,
+            "needs_gentle_tone": valence in {"negative", "crisis"},
+            "needs_fast_answer": primary_emotion == "urgency" or arousal == "high",
+            "avoid_overexplaining": primary_emotion in {"anger", "urgency"}
+        }
 
     def get_style(
         self,
@@ -563,7 +738,8 @@ class EmotionBrain:
     def update_statistics(
         self,
         primary_emotion,
-        intensity
+        intensity,
+        confidence
     ):
 
         stats = self.statistics.get(
@@ -578,6 +754,15 @@ class EmotionBrain:
 
         stats["last_primary_emotion"] = primary_emotion
         stats["last_intensity"] = intensity
+        stats["last_confidence"] = confidence
+        stats["average_confidence"] = round(
+            (
+                stats.get("average_confidence", 0)
+                * (stats["uses"] - 1)
+                + confidence
+            ) / max(stats["uses"], 1),
+            2
+        )
         stats["last_used_utc"] = datetime.now(
             timezone.utc
         ).isoformat()
@@ -614,6 +799,10 @@ class EmotionBrain:
 
         primary_emotion = detected["primary_emotion"]
         intensity = detected["intensity"]
+        confidence = detected.get(
+            "confidence",
+            60
+        )
         tone = self.classify_tone(
             primary_emotion
         )
@@ -627,6 +816,12 @@ class EmotionBrain:
             intensity
         )
 
+        emotional_state = self.emotional_state(
+            primary_emotion,
+            intensity,
+            sensitivity
+        )
+
         needs_security = (
             primary_emotion == "self_harm_distress"
             or sensitivity == "crisis"
@@ -634,7 +829,8 @@ class EmotionBrain:
 
         self.update_statistics(
             primary_emotion,
-            intensity
+            intensity,
+            confidence
         )
 
         return {
@@ -642,9 +838,14 @@ class EmotionBrain:
             "used_understanding_report": bool(report),
             "primary_emotion": primary_emotion,
             "emotions": detected["emotions"],
+            "mixed_emotions": detected.get(
+                "mixed_emotions",
+                []
+            ),
             "tone": tone,
             "intensity": intensity,
             "sensitivity": sensitivity,
+            "emotional_state": emotional_state,
             "evidence": detected["evidence"],
             "response_style": style.get(
                 "response_style",
@@ -655,6 +856,7 @@ class EmotionBrain:
                 []
             ),
             "needs_security": needs_security,
+            "confidence": confidence,
             "suggested_next_brains": [
                 brain_name
                 for brain_name, enabled in [
@@ -664,9 +866,21 @@ class EmotionBrain:
                 if enabled
             ],
             "terms_used": terms[:30],
+            "response_adjustments": {
+                "tone": tone,
+                "style": style.get(
+                    "response_style",
+                    "normal_helpful"
+                ),
+                "be_brief": emotional_state["avoid_overexplaining"],
+                "be_gentle": emotional_state["needs_gentle_tone"],
+                "lead_with_action": emotional_state["needs_fast_answer"]
+            },
             "rules": [
                 "Use the Understanding_brain report as the main input.",
                 "Detect emotion but do not overreact to weak signals.",
+                "Return confidence so Learning_brain can measure emotional reliability.",
+                "Use emotion to adapt tone, pacing, and structure.",
                 "Adapt response tone, not facts.",
                 "Route crisis or self-harm distress to Security_brain.",
                 "Keep technical answers clear even when emotion is present."

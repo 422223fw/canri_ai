@@ -205,6 +205,300 @@ class CodeSelfReviewer:
         }
 
 
+class CodeExplainer:
+
+    def extract_code_block(self, text):
+
+        text = str(text or "")
+        fenced = re.search(
+            r"```(?:python|py|javascript|js|java|html|css|sql)?\s*(.*?)```",
+            text,
+            re.IGNORECASE | re.DOTALL
+        )
+
+        if fenced:
+            return fenced.group(1).strip()
+
+        lines = text.splitlines()
+        code_lines = []
+        code_started = False
+
+        code_markers = (
+            "def ",
+            "class ",
+            "import ",
+            "from ",
+            "return ",
+            "if ",
+            "for ",
+            "while ",
+            "print(",
+            "=",
+            "{",
+            "}",
+            ";"
+        )
+
+        for line in lines:
+            stripped = line.strip()
+            lowered = stripped.lower()
+
+            if not stripped and code_started:
+                code_lines.append(line)
+                continue
+
+            looks_like_code = (
+                stripped.startswith(code_markers)
+                or lowered.startswith("elif ")
+                or lowered.startswith("else:")
+                or lowered.startswith("try:")
+                or lowered.startswith("except ")
+                or line.startswith((" ", "\t")) and code_started
+            )
+
+            if looks_like_code:
+                code_started = True
+                code_lines.append(line)
+
+        if code_lines:
+            return "\n".join(code_lines).strip()
+
+        return text.strip()
+
+    def detect_language(self, code, surrounding_text=""):
+
+        lowered = f"{surrounding_text}\n{code}".lower()
+
+        if "def " in code or "import " in code or "print(" in code:
+            return "python"
+        if "function " in lowered or "console.log" in lowered:
+            return "javascript"
+        if "<html" in lowered or "</" in lowered:
+            return "html"
+        if "public static" in lowered or "system.out.println" in lowered:
+            return "java"
+        if "#include" in lowered:
+            return "c_cpp"
+
+        return "unknown"
+
+    def explain_python(self, code):
+
+        try:
+            tree = ast.parse(code)
+        except SyntaxError as error:
+            return {
+                "valid": False,
+                "summary": "This looks like Python code, but it has a syntax error.",
+                "syntax_error": {
+                    "line": error.lineno,
+                    "message": error.msg
+                },
+                "imports": [],
+                "functions": [],
+                "classes": [],
+                "control_flow": [],
+                "variables": [],
+                "calls": [],
+                "line_by_line": []
+            }
+
+        imports = []
+        functions = []
+        classes = []
+        control_flow = []
+        variables = []
+        calls = []
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imports.extend(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom):
+                module = node.module or ""
+                imports.extend(f"{module}.{alias.name}".strip(".") for alias in node.names)
+            elif isinstance(node, ast.FunctionDef):
+                functions.append({
+                    "name": node.name,
+                    "args": [arg.arg for arg in node.args.args],
+                    "line": node.lineno,
+                    "returns_value": any(isinstance(child, ast.Return) and child.value is not None for child in ast.walk(node))
+                })
+            elif isinstance(node, ast.ClassDef):
+                classes.append({
+                    "name": node.name,
+                    "line": node.lineno,
+                    "methods": [
+                        child.name
+                        for child in node.body
+                        if isinstance(child, ast.FunctionDef)
+                    ]
+                })
+            elif isinstance(node, ast.If):
+                control_flow.append({"type": "if", "line": node.lineno})
+            elif isinstance(node, ast.For):
+                control_flow.append({"type": "for_loop", "line": node.lineno})
+            elif isinstance(node, ast.While):
+                control_flow.append({"type": "while_loop", "line": node.lineno})
+            elif isinstance(node, ast.Try):
+                control_flow.append({"type": "try_except", "line": node.lineno})
+            elif isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        variables.append(target.id)
+            elif isinstance(node, ast.Call):
+                func = node.func
+                if isinstance(func, ast.Name):
+                    calls.append(func.id)
+                elif isinstance(func, ast.Attribute):
+                    calls.append(func.attr)
+
+        line_by_line = []
+        for number, line in enumerate(code.splitlines(), start=1):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            explanation = "Runs a Python statement."
+            if stripped.startswith("import ") or stripped.startswith("from "):
+                explanation = "Loads external or standard-library code."
+            elif stripped.startswith("def "):
+                explanation = "Defines a reusable function."
+            elif stripped.startswith("class "):
+                explanation = "Defines a class/object structure."
+            elif stripped.startswith("if "):
+                explanation = "Checks a condition and chooses a branch."
+            elif stripped.startswith(("for ", "while ")):
+                explanation = "Starts a loop."
+            elif stripped.startswith("return"):
+                explanation = "Sends a value back from a function."
+            elif "=" in stripped and "==" not in stripped:
+                explanation = "Stores or updates a value."
+            elif stripped.startswith("print("):
+                explanation = "Prints information to the screen."
+
+            line_by_line.append({
+                "line": number,
+                "code": stripped,
+                "meaning": explanation
+            })
+
+        summary_parts = []
+        if functions:
+            summary_parts.append(f"defines {len(functions)} function(s)")
+        if classes:
+            summary_parts.append(f"defines {len(classes)} class(es)")
+        if imports:
+            summary_parts.append(f"uses {len(imports)} import(s)")
+        if control_flow:
+            summary_parts.append("uses control flow")
+
+        summary = "This Python code "
+        summary += ", ".join(summary_parts) if summary_parts else "runs simple statements"
+        summary += "."
+
+        return {
+            "valid": True,
+            "summary": summary,
+            "imports": list(dict.fromkeys(imports)),
+            "functions": functions,
+            "classes": classes,
+            "control_flow": control_flow,
+            "variables": list(dict.fromkeys(variables)),
+            "calls": list(dict.fromkeys(calls)),
+            "line_by_line": line_by_line[:80]
+        }
+
+    def explain_generic(self, code, language):
+
+        lines = [
+            line.strip()
+            for line in str(code).splitlines()
+            if line.strip()
+        ]
+
+        return {
+            "valid": True,
+            "summary": f"This looks like {language} code with {len(lines)} non-empty line(s).",
+            "imports": [],
+            "functions": [],
+            "classes": [],
+            "control_flow": [],
+            "variables": [],
+            "calls": [],
+            "line_by_line": [
+                {
+                    "line": index,
+                    "code": line,
+                    "meaning": "Code line detected; detailed analysis is strongest for Python right now."
+                }
+                for index, line in enumerate(lines[:80], start=1)
+            ]
+        }
+
+    def format_answer(self, explanation):
+
+        lines = [
+            explanation.get("summary", "I analyzed the code.")
+        ]
+
+        if explanation.get("syntax_error"):
+            error = explanation["syntax_error"]
+            lines.append(f"Syntax issue: line {error.get('line')}: {error.get('message')}")
+
+        if explanation.get("imports"):
+            lines.append("Imports: " + ", ".join(explanation["imports"][:10]))
+
+        if explanation.get("functions"):
+            lines.append("Functions:")
+            for function in explanation["functions"][:12]:
+                args = ", ".join(function.get("args", []))
+                lines.append(f"- {function['name']}({args}) on line {function.get('line')}")
+
+        if explanation.get("classes"):
+            lines.append("Classes:")
+            for class_data in explanation["classes"][:8]:
+                methods = ", ".join(class_data.get("methods", [])[:8])
+                suffix = f" with methods: {methods}" if methods else ""
+                lines.append(f"- {class_data['name']} on line {class_data.get('line')}{suffix}")
+
+        if explanation.get("variables"):
+            lines.append("Main variables: " + ", ".join(explanation["variables"][:12]))
+
+        if explanation.get("control_flow"):
+            flow = ", ".join(
+                f"{item['type']} line {item['line']}"
+                for item in explanation["control_flow"][:12]
+            )
+            lines.append("Control flow: " + flow)
+
+        if explanation.get("line_by_line"):
+            lines.append("Line-by-line:")
+            for item in explanation["line_by_line"][:20]:
+                lines.append(f"- Line {item['line']}: {item['meaning']} `{item['code']}`")
+
+        return "\n".join(lines)
+
+    def explain(self, text, existing_code="", language=None):
+
+        code = existing_code or self.extract_code_block(text)
+        detected_language = language or self.detect_language(code, text)
+
+        if detected_language == "python":
+            details = self.explain_python(code)
+        else:
+            details = self.explain_generic(code, detected_language)
+
+        answer = self.format_answer(details)
+
+        return {
+            "language": detected_language,
+            "code_analyzed": code,
+            "explanation": details,
+            "answer": answer,
+            "summary": details.get("summary"),
+            "confidence": 88 if details.get("valid") else 62
+        }
+
+
 class CodeBrain:
 
     def __init__(self):
@@ -216,6 +510,7 @@ class CodeBrain:
         self.assembly_patterns = {}
         self.code_by_id = {}
         self.self_reviewer = CodeSelfReviewer()
+        self.code_explainer = CodeExplainer()
 
         self.load_data()
 
@@ -517,6 +812,101 @@ class CodeBrain:
                 return str(value)
 
         return ""
+
+    def is_code_analysis_request(
+        self,
+        text,
+        report
+    ):
+
+        lowered = str(text).lower()
+        intent = str(
+            report.get(
+                "intent",
+                ""
+            )
+        ).lower()
+
+        requested_action = report.get(
+            "requested_action",
+            {}
+        )
+
+        if intent == "code_analysis":
+            return True
+
+        if isinstance(requested_action, dict) and requested_action.get("intent_override") == "code_analysis":
+            return True
+
+        markers = [
+            "analyze this code",
+            "analyze code",
+            "explain this code",
+            "explain code",
+            "what does this code do",
+            "what this code does",
+            "review this code"
+        ]
+
+        has_marker = any(
+            marker in lowered
+            for marker in markers
+        )
+
+        has_code_signal = any(
+            signal in lowered
+            for signal in [
+                "```",
+                "def ",
+                "class ",
+                "import ",
+                "return ",
+                "print(",
+                "function ",
+                "console.log",
+                "{",
+                "};"
+            ]
+        )
+
+        return has_marker and has_code_signal
+
+    def extract_analysis_source_text(
+        self,
+        data,
+        report,
+        fallback
+    ):
+
+        if isinstance(
+            data,
+            dict
+        ):
+            for key in [
+                "original_text",
+                "corrected_text",
+                "user_message",
+                "question",
+                "text",
+                "prompt"
+            ]:
+                value = data.get(
+                    key
+                )
+                if value:
+                    return str(value)
+
+        for key in [
+            "original_text",
+            "corrected_text"
+        ]:
+            value = report.get(
+                key
+            )
+            if value:
+                return str(value)
+
+        return str(fallback or "")
 
     def extract_text(
         self,
@@ -866,7 +1256,16 @@ class CodeBrain:
 
         for language, names in aliases.items():
             for name in names:
-                if name in terms or name in lowered:
+                if name in terms:
+                    return language
+
+                if len(name) <= 2:
+                    pattern = r"(?<![a-z0-9])" + re.escape(name) + r"(?![a-z0-9])"
+                    if re.search(pattern, lowered):
+                        return language
+                    continue
+
+                if name in lowered:
                     return language
 
         return None
@@ -2899,6 +3298,45 @@ if __name__ == "__main__":
             terms,
             text
         )
+
+        if self.is_code_analysis_request(
+            text,
+            report
+        ):
+
+            analysis_text = self.extract_analysis_source_text(
+                data,
+                report,
+                text
+            )
+
+            explanation = self.code_explainer.explain(
+                analysis_text,
+                existing_code,
+                language
+            )
+
+            return {
+                "brain": "Code_brain",
+                "used_understanding_report": bool(report),
+                "mode": "code_analysis",
+                "language": explanation.get("language"),
+                "task_type": "code_analysis",
+                "confidence": explanation.get("confidence", 80),
+                "code_analyzed": explanation.get("code_analyzed"),
+                "code_explanation": explanation.get("explanation"),
+                "summary": explanation.get("summary"),
+                "answer": explanation.get("answer"),
+                "needs_security": False,
+                "suggested_next_brains": [
+                    "Response_brain"
+                ],
+                "rules": [
+                    "When the user asks to analyze code, explain the pasted code instead of generating new code.",
+                    "Use AST-based explanation for Python when possible.",
+                    "Return a screen-ready answer plus structured code_explanation."
+                ]
+            }
 
         code_only = self.is_code_only_request(
             text
