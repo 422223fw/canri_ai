@@ -109,6 +109,11 @@ DOMAIN_RULES = {
         "security", "password", "hack", "malware", "token", "encrypt",
         "suicide", "bomb", "אבטחה", "סיסמה", "פצצה", "התאבד"
     ],
+    "image_generation": [
+        "generate image", "create image", "make image", "draw image",
+        "draw", "illustration", "poster", "logo", "icon", "concept art",
+        "image prompt", "visual design", "picture of", "image of"
+    ],
     "vision": [
         "image", "photo", "picture", "video", "file", "pdf", "png", "jpg",
         "תמונה", "וידאו", "קובץ"
@@ -162,6 +167,10 @@ INTENT_RULES = {
     "story_creation": [
         "write a story", "story", "character", "plot", "סיפור", "דמות"
     ],
+    "image_generation": [
+        "generate image", "create image", "make image", "draw", "illustration",
+        "poster", "logo", "icon", "concept art", "image prompt"
+    ],
     "game_design": [
         "game design", "rpg", "game", "player", "enemy", "משחק"
     ],
@@ -182,6 +191,7 @@ OUTPUT_RULES = {
     "correction": "corrected_text",
     "research": "sourced_summary",
     "story_creation": "story",
+    "image_generation": "image_asset",
     "game_design": "game_plan",
     "creative_generation": "creative_result"
 }
@@ -192,6 +202,7 @@ ACTION_COMMANDS = {
     "create": "generate",
     "make": "generate",
     "generate": "generate",
+    "draw": "generate",
     "build": "build",
     "implement": "build",
     "invent": "creative_generate",
@@ -1001,10 +1012,15 @@ class UnderstandingBrain:
         game_terms = {
             "game", "rpg", "player", "enemy", "inventory", "combat"
         }
+        image_terms = {
+            "image", "picture", "photo", "illustration", "poster",
+            "logo", "icon", "draw", "concept", "visual", "art"
+        }
 
         has_story = main_topic == "story" or bool(story_terms & word_set)
         has_code = main_topic == "code" or bool(code_terms & word_set)
         has_game = main_topic == "game" or bool(game_terms & word_set)
+        has_image = main_topic == "image_generation" or bool(image_terms & word_set)
 
         if action_word in {"translate"}:
             return "translation"
@@ -1015,6 +1031,8 @@ class UnderstandingBrain:
         if action_word == "do":
             if has_code:
                 return "code_generation"
+            if has_image:
+                return "image_generation"
             if has_story:
                 return "story_creation"
             if has_game:
@@ -1043,6 +1061,8 @@ class UnderstandingBrain:
             return "question"
 
         if action_word in {"write", "create", "make", "generate", "invent", "continue"}:
+            if has_image and action_word in {"create", "make", "generate", "invent"}:
+                return "image_generation"
             if has_code:
                 return "code_generation"
             if has_game and any(term in lowered for term in ["code", "program", "python"]):
@@ -1052,6 +1072,9 @@ class UnderstandingBrain:
             if has_game:
                 return "game_design"
             return "creative_generation"
+
+        if action_word in {"draw"}:
+            return "image_generation"
 
         if action_word in {"build", "implement"}:
             if has_code or has_game:
@@ -1575,6 +1598,9 @@ class UnderstandingBrain:
         if intent in {"story_creation", "creative_generation"}:
             tasks.extend(["generate_final_content", "avoid_dictionary_definition"])
 
+        if intent == "image_generation":
+            tasks.extend(["build_image_prompt", "create_image_asset", "check_visual_safety"])
+
         if "planning_first" in features:
             tasks.append("build_plan_first")
 
@@ -1611,6 +1637,9 @@ class UnderstandingBrain:
 
         if main_topic == "creative" or intent in {"game_design", "creative_generation"}:
             route.append("Creative_brain")
+
+        if main_topic == "image_generation" or intent == "image_generation":
+            route.extend(["Image_brain", "Creative_brain", "Security_brain"])
 
         if main_topic in {
             "science", "technology", "geography", "history", "language", "math", "security"
@@ -1696,6 +1725,8 @@ class UnderstandingBrain:
                 main_topic = "language"
             elif intent == "math":
                 main_topic = "math"
+            elif intent == "image_generation":
+                main_topic = "image_generation"
 
         advanced_understanding = self.build_advanced_understanding(
             text,
