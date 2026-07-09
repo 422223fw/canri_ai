@@ -334,12 +334,53 @@ class ImageBrain:
         if quality:
             prompt = f"{prompt}, {quality}"
 
+        detail_pack = [
+            "clear main subject",
+            "coherent lighting",
+            "balanced composition",
+            "professional finish"
+        ]
+
+        if subject_id in {"character", "robot", "creature"}:
+            detail_pack.extend(["expressive pose", "readable silhouette", "appealing design"])
+        if composition_id in {"poster", "centered_icon"}:
+            detail_pack.extend(["clean negative space", "strong focal point"])
+
+        prompt = f"{prompt}, {', '.join(detail_pack)}"
+
         negative_prompt = self.prompt_templates.get(
             "negative_prompt",
             "low quality, blurry, distorted, extra text, watermark"
         )
 
         return prompt, negative_prompt
+
+    def prompt_quality_report(self, prompt, subject_terms, style_id, composition_id):
+
+        score = 50
+        checks = []
+
+        if subject_terms:
+            score += 15
+            checks.append("subject_terms_present")
+        if style_id:
+            score += 10
+            checks.append("style_selected")
+        if composition_id:
+            score += 10
+            checks.append("composition_selected")
+        if len(prompt.split(",")) >= 5:
+            score += 10
+            checks.append("rich_prompt")
+        if "low quality" not in prompt.lower():
+            score += 5
+
+        return {
+            "score": min(score, 100),
+            "checks": checks,
+            "needs_real_image_model": True,
+            "note": "Image_brain builds a strong prompt and SVG preview; photoreal raster generation needs an image model."
+        }
 
     # ---------- local SVG preview ----------
 
@@ -392,6 +433,22 @@ class ImageBrain:
   <circle cx="374" cy="200" r="8" fill="{p0}"/>
   <circle cx="426" cy="200" r="8" fill="{p0}"/>
   <text x="400" y="92" text-anchor="middle" class="title">{label}</text>'''
+
+        if subject_id == "robot" or "robot" in subject:
+            return f'''
+  <ellipse cx="400" cy="520" rx="240" ry="34" fill="{p0}" opacity="0.25"/>
+  <rect x="275" y="210" width="250" height="210" rx="42" fill="{p2}" opacity="0.94"/>
+  <rect x="315" y="248" width="170" height="74" rx="24" fill="{p0}" opacity="0.88"/>
+  <circle cx="365" cy="285" r="16" fill="{p3}"/>
+  <circle cx="435" cy="285" r="16" fill="{p3}"/>
+  <path d="M350 350 C380 378 420 378 450 350" fill="none" stroke="{p1}" stroke-width="11" stroke-linecap="round"/>
+  <path d="M275 285 L215 240" stroke="{p2}" stroke-width="24" stroke-linecap="round"/>
+  <path d="M525 285 L585 240" stroke="{p2}" stroke-width="24" stroke-linecap="round"/>
+  <circle cx="205" cy="233" r="22" fill="{p3}"/>
+  <circle cx="595" cy="233" r="22" fill="{p3}"/>
+  <path d="M360 210 L335 155" stroke="{p2}" stroke-width="12" stroke-linecap="round"/>
+  <circle cx="330" cy="145" r="16" fill="{p3}"/>
+  <text x="400" y="105" text-anchor="middle" class="title">{label}</text>'''
 
         if subject_id == "space" or any(term in subject for term in ["space", "planet", "star", "galaxy"]):
             return f'''
@@ -515,6 +572,12 @@ class ImageBrain:
             composition_id,
             composition
         )
+        quality_report = self.prompt_quality_report(
+            prompt,
+            subject_terms,
+            style_id,
+            composition_id
+        )
         image_file = self.create_svg(
             subject_id,
             subject_terms,
@@ -546,15 +609,17 @@ class ImageBrain:
                 "width": composition.get("width", 800),
                 "height": composition.get("height", 600)
             },
+            "quality_report": quality_report,
             "safety": safety,
-            "confidence": 82,
+            "confidence": max(82, quality_report["score"]),
             "answer": (
                 "Created an SVG image preview.\n"
                 f"File: {image_file}\n\n"
                 "Image prompt:\n"
                 f"{prompt}\n\n"
                 "Negative prompt:\n"
-                f"{negative_prompt}"
+                f"{negative_prompt}\n\n"
+                f"Prompt quality: {quality_report['score']}/100"
             ),
             "rules": [
                 "Use Understanding_brain semantic targets as the image subject.",

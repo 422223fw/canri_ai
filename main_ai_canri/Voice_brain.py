@@ -260,6 +260,87 @@ class VoiceBrain:
         except (wave.Error, OSError, EOFError):
             return {}
 
+    def assess_audio_quality(self, metadata, size):
+
+        if not metadata:
+            return {
+                "available": False,
+                "rating": "unknown",
+                "notes": ["Detailed quality assessment needs readable WAV metadata."]
+            }
+
+        notes = []
+        score = 70
+        sample_rate = metadata.get("sample_rate", 0)
+        bit_depth = metadata.get("bit_depth", 0)
+        channels = metadata.get("channels", 0)
+        duration = metadata.get("duration_seconds", 0)
+
+        if sample_rate >= 44100:
+            score += 10
+            notes.append("High sample rate.")
+        elif sample_rate and sample_rate < 16000:
+            score -= 20
+            notes.append("Low sample rate can hurt transcription quality.")
+
+        if bit_depth >= 16:
+            score += 5
+        elif bit_depth:
+            score -= 10
+            notes.append("Low bit depth can reduce clarity.")
+
+        if channels == 1:
+            notes.append("Mono audio is usually fine for speech.")
+        elif channels >= 2:
+            notes.append("Stereo/multi-channel audio detected.")
+
+        if duration and duration < 0.5:
+            score -= 15
+            notes.append("Very short audio may not contain enough speech.")
+        elif duration and duration > 1800:
+            score -= 10
+            notes.append("Long audio should be chunked before transcription.")
+
+        if size and duration:
+            bitrate = round((size * 8) / max(duration, 0.001))
+            metadata["approx_bitrate_bps"] = bitrate
+
+        score = max(0, min(score, 100))
+        if score >= 85:
+            rating = "good"
+        elif score >= 60:
+            rating = "usable"
+        else:
+            rating = "weak"
+
+        return {
+            "available": True,
+            "rating": rating,
+            "score": score,
+            "notes": notes or ["No major quality issues detected from metadata."]
+        }
+
+    def build_processing_plan(self, category, tasks, quality):
+
+        steps = ["Identify media type and inspect metadata safely."]
+
+        if category == "video" or "extract_audio_from_video" in tasks:
+            steps.append("Extract audio track with a trusted tool before transcription.")
+
+        if "speech_to_text" in tasks:
+            steps.append("Run a real speech-to-text engine; do not invent transcript text.")
+
+        if "language_detection" in tasks:
+            steps.append("Send transcript text to Language_brain for language detection/translation.")
+
+        if "summarize_audio" in tasks:
+            steps.append("Summarize only after transcript text exists.")
+
+        if quality.get("rating") == "weak":
+            steps.append("Improve audio quality or ask for a cleaner recording before final transcription.")
+
+        return steps
+
     # ---------- task/profile ----------
 
     def infer_requested_tasks(self, text, category):
@@ -357,6 +438,8 @@ class VoiceBrain:
         if extension == "wav" and is_file:
             metadata = self.wav_metadata(path)
 
+        audio_quality = self.assess_audio_quality(metadata, size)
+
         needs_transcription = any(task in tasks for task in ["speech_to_text", "summarize_audio", "language_detection"])
         needs_extraction = category == "video" or "extract_audio_from_video" in tasks
         needs_security = risk_score >= 40 or needs_transcription or context in ["attachment", "unknown_source"]
@@ -388,8 +471,10 @@ class VoiceBrain:
             "magic_signature": magic.get("signature") if magic else None,
             "size_bytes": size,
             "metadata": metadata,
+            "audio_quality": audio_quality,
             "requested_tasks": tasks,
             "task_capabilities": self.task_capabilities(tasks),
+            "processing_plan": self.build_processing_plan(category, tasks, audio_quality),
             "needs_transcription_engine": needs_transcription,
             "needs_video_audio_extraction": needs_extraction,
             "transcript": None,
@@ -473,6 +558,9 @@ class VoiceBrain:
                 detail += f", sample rate: {metadata['sample_rate']} Hz"
             if media.get("requested_tasks"):
                 detail += f", tasks: {', '.join(media['requested_tasks'][:5])}"
+            quality = media.get("audio_quality") or {}
+            if quality.get("rating") and quality.get("rating") != "unknown":
+                detail += f", quality: {quality['rating']}"
             lines.append(detail)
 
         if summary.get("needs_transcription_engine"):

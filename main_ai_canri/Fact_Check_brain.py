@@ -350,6 +350,92 @@ class FactCheckBrain:
 
         return min(100, round(average + diversity_bonus + strong_count * 2, 2))
 
+    def claim_terms(self, text):
+
+        stop_words = {
+            "the", "and", "that", "this", "with", "from", "have", "has",
+            "are", "was", "were", "can", "will", "would", "should", "about",
+            "into", "what", "when", "where", "which", "there"
+        }
+
+        return {
+            word
+            for word in re.findall(r"[a-zA-Z\u0590-\u05FF][a-zA-Z0-9\u0590-\u05FF-]{2,}", str(text).lower())
+            if word not in stop_words
+        }
+
+    def evidence_terms(self, evidence_item):
+
+        parts = [
+            evidence_item.get("name", ""),
+            evidence_item.get("source_type", ""),
+            evidence_item.get("notes", ""),
+            " ".join(map(str, evidence_item.get("supports", []))),
+        ]
+
+        sample = evidence_item.get("sample", [])
+        if isinstance(sample, list):
+            for item in sample[:6]:
+                if isinstance(item, dict):
+                    parts.append(str(item.get("text", "")))
+                    parts.append(str(item.get("path", "")))
+                else:
+                    parts.append(str(item))
+
+        return self.claim_terms(" ".join(parts))
+
+    def link_claims_to_evidence(self, claims, evidence):
+
+        links = []
+
+        for claim in claims[:20]:
+            claim_text = claim.get("text", "")
+            terms = self.claim_terms(claim_text)
+            matches = []
+
+            for item in evidence[:40]:
+                overlap = terms.intersection(self.evidence_terms(item))
+                if not overlap:
+                    continue
+
+                trust = item.get("trust_score", 0)
+                score = len(overlap) * 10 + trust * 0.4
+                matches.append({
+                    "source": item.get("name", "unknown source"),
+                    "source_type": item.get("source_type", "unknown"),
+                    "trust_score": trust,
+                    "matched_terms": sorted(overlap)[:10],
+                    "support_score": round(score, 2)
+                })
+
+            matches.sort(key=lambda value: value["support_score"], reverse=True)
+            links.append({
+                "claim": claim_text,
+                "source_brain": claim.get("source_brain"),
+                "matches": matches[:5],
+                "best_support_score": matches[0]["support_score"] if matches else 0
+            })
+
+        return links
+
+    def build_fact_summary(self, verdict, confidence, claims, evidence, warnings, claim_evidence_links):
+
+        lines = [
+            f"Verdict: {verdict}",
+            f"Confidence: {confidence}%",
+            f"Claims checked: {len(claims)}",
+            f"Evidence sources: {len(evidence)}"
+        ]
+
+        supported = sum(1 for link in claim_evidence_links if link.get("best_support_score", 0) > 0)
+        if claims:
+            lines.append(f"Claims with local/source support: {supported}/{len(claims[:20])}")
+
+        if warnings:
+            lines.append("Warnings: " + "; ".join(warnings[:4]))
+
+        return "\n".join(lines)
+
     # ---------- risk and conflicts ----------
 
     def detect_topic_risk(self, text, report):
@@ -540,6 +626,7 @@ class FactCheckBrain:
         conflicts = self.detect_conflicts(claims)
         topic_risk = self.detect_topic_risk(text, report)
         warnings = self.detect_warnings(claims, evidence, conflicts, topic_risk)
+        claim_evidence_links = self.link_claims_to_evidence(claims, evidence)
         confidence = self.calculate_confidence(
             claims,
             evidence,
@@ -552,6 +639,14 @@ class FactCheckBrain:
         verdict = self.verdict_from_confidence(confidence, conflicts, topic_risk)
         verified = verdict in {"verified", "likely_true"} and not conflicts
         recommendations = self.build_recommendations(verdict, warnings, topic_risk)
+        final_output = self.build_fact_summary(
+            verdict,
+            confidence,
+            claims,
+            evidence,
+            warnings,
+            claim_evidence_links
+        )
 
         self.update_statistics(verdict, confidence)
 
@@ -565,6 +660,7 @@ class FactCheckBrain:
             "evidence_count": len(evidence),
             "evidence_score": self.evidence_score(evidence),
             "local_data_evidence": local_data_evidence,
+            "claim_evidence_links": claim_evidence_links,
             "strongest_sources": sorted(
                 evidence,
                 key=lambda item: item.get("trust_score", 0),
@@ -585,6 +681,8 @@ class FactCheckBrain:
                 if brain_name
             ],
             "recommendations": recommendations,
+            "answer": final_output,
+            "final_output": final_output,
             "rules": [
                 "Do not mark claims verified without evidence.",
                 "High-stakes topics require stronger sources.",
