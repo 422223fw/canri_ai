@@ -1082,6 +1082,102 @@ class CodeBrain:
                     str(value)
                 )
 
+        semantic_frame = report.get(
+            "semantic_frame",
+            {}
+        )
+
+        if isinstance(
+            semantic_frame,
+            dict
+        ):
+
+            for key in [
+                "main_action",
+                "main_target",
+                "subject",
+                "question_focus"
+            ]:
+
+                value = semantic_frame.get(
+                    key
+                )
+
+                if value:
+                    terms.append(
+                        str(value)
+                    )
+
+            for list_key in [
+                "targets",
+                "modifiers",
+                "relations"
+            ]:
+
+                values = semantic_frame.get(
+                    list_key,
+                    []
+                )
+
+                if isinstance(
+                    values,
+                    list
+                ):
+                    terms.extend(
+                        str(value)
+                        for value in values[:20]
+                    )
+
+            for action in semantic_frame.get(
+                "actions",
+                []
+            )[:12]:
+                if isinstance(action, dict) and action.get("word"):
+                    terms.append(
+                        str(action.get("word"))
+                    )
+
+            for chunk in semantic_frame.get(
+                "phrase_chunks",
+                []
+            )[:15]:
+                if isinstance(chunk, dict):
+                    if chunk.get("text"):
+                        terms.append(
+                            str(chunk.get("text"))
+                        )
+                    if chunk.get("head"):
+                        terms.append(
+                            str(chunk.get("head"))
+                        )
+
+        for tag in report.get(
+            "advanced_word_tags",
+            []
+        )[:60]:
+
+            if not isinstance(tag, dict):
+                continue
+
+            word = tag.get(
+                "word"
+            )
+
+            if word:
+                terms.append(
+                    str(word)
+                )
+
+            if tag.get("semantic_tag") in {
+                "action_command",
+                "action",
+                "target_or_concept",
+                "proper_or_technical_name"
+            }:
+                terms.append(
+                    str(tag.get("semantic_tag")).replace("_", " ")
+                )
+
         sentence_graph = report.get(
             "sentence_graph",
             {}
@@ -1249,7 +1345,7 @@ class CodeBrain:
             "cpp": ["c++", "cpp"],
             "c": [" c ", "clang"],
             "php": ["php"],
-            "sql": ["sql", "database"]
+            "sql": ["sql"]
         }
 
         lowered = f" {text.lower()} "
@@ -1553,6 +1649,7 @@ class CodeBrain:
         lowered = str(text).lower()
 
         code_only_signals = [
+            "only output the final working python code",
             "actual python code",
             "actual code",
             "real python code",
@@ -1579,6 +1676,49 @@ class CodeBrain:
             for signal in code_only_signals
         )
 
+    def is_direct_runnable_python_request(self, text, report=None):
+
+        lowered = str(text or "").lower()
+        report = report or {}
+        intent = str(report.get("intent", "")).lower()
+
+        if "python" not in lowered and "py " not in lowered:
+            return False
+
+        direct_markers = [
+            "real runnable",
+            "runnable",
+            "working code",
+            "final working code",
+            "final working python code",
+            "only output code",
+            "only output the final working python code",
+            "do not output a plan",
+            "do not output modules",
+            "do not output placeholders",
+            "do not output draft structures"
+        ]
+
+        program_markers = [
+            "program",
+            "app",
+            "tool",
+            "terminal",
+            "command-line",
+            "command line",
+            "cli",
+            "script"
+        ]
+
+        return (
+            intent == "code_generation"
+            or self.is_code_only_request(lowered)
+            or (
+                any(marker in lowered for marker in direct_markers)
+                and any(marker in lowered for marker in program_markers)
+            )
+        )
+
     def is_skeleton_request(self, text):
 
         lowered = str(text).lower()
@@ -1598,6 +1738,22 @@ class CodeBrain:
         if any(
             signal in lowered
             for signal in negated_skeleton_signals
+        ):
+            return False
+
+        if (
+            "do not output" in lowered
+            and any(
+                signal in lowered
+                for signal in [
+                    "modules",
+                    "variants",
+                    "helpers",
+                    "placeholders",
+                    "draft structures",
+                    "planning structures"
+                ]
+            )
         ):
             return False
 
@@ -2301,23 +2457,77 @@ def list_notes(notes):
         print(f"{index}. {note['title']} ({note['created_at']})")
 
 
-def view_note(notes, raw_index):
+def get_note_index(notes, raw_index):
     try:
         index = int(raw_index) - 1
-        note = notes[index]
-    except (ValueError, IndexError):
-        print("Invalid note number.")
+    except ValueError:
+        print("Please enter a valid note number.")
+        return None
+
+    if index < 0 or index >= len(notes):
+        print("Note number is out of range.")
+        return None
+
+    return index
+
+
+def view_note(notes, raw_index):
+    index = get_note_index(notes, raw_index)
+    if index is None:
         return
 
+    note = notes[index]
     print(f"\\n{note['title']}")
     print("-" * len(note["title"]))
     print(note["body"])
 
 
+def search_notes(notes, keyword):
+    keyword = keyword.strip().lower()
+    if not keyword:
+        print("Search keyword cannot be empty.")
+        return
+
+    matches = [
+        (index, note)
+        for index, note in enumerate(notes, start=1)
+        if keyword in note.get("title", "").lower()
+        or keyword in note.get("body", "").lower()
+    ]
+
+    if not matches:
+        print("No matching notes found.")
+        return
+
+    for index, note in matches:
+        print(f"{index}. {note['title']} ({note['created_at']})")
+
+
+def delete_note(notes, raw_index):
+    index = get_note_index(notes, raw_index)
+    if index is None:
+        return
+
+    removed = notes.pop(index)
+    save_notes(notes)
+    print(f"Deleted note: {removed['title']}")
+
+
+def print_help():
+    print("Commands:")
+    print("  add                Add a new note")
+    print("  list               List all notes")
+    print("  view <number>      View a note")
+    print("  search <keyword>   Search notes")
+    print("  delete <number>    Delete a note")
+    print("  help               Show commands")
+    print("  quit               Save and exit")
+
+
 def main():
     notes = load_notes()
     print("Notes App")
-    print("Commands: add, list, view <number>, quit")
+    print_help()
 
     while True:
         command = input("> ").strip()
@@ -2329,6 +2539,12 @@ def main():
             list_notes(notes)
         elif lower.startswith("view "):
             view_note(notes, command[5:].strip())
+        elif lower.startswith("search "):
+            search_notes(notes, command[7:].strip())
+        elif lower.startswith("delete "):
+            delete_note(notes, command[7:].strip())
+        elif lower == "help":
+            print_help()
         elif lower == "quit":
             save_notes(notes)
             break
@@ -3402,6 +3618,11 @@ if __name__ == "__main__":
             text
         )
 
+        direct_python_requested = self.is_direct_runnable_python_request(
+            text,
+            report
+        )
+
         skeleton_requested = self.is_skeleton_request(
             text
         )
@@ -3421,9 +3642,13 @@ if __name__ == "__main__":
 
         if (
             not skeleton_requested
-            and language in [None, "python"]
+            and (
+                direct_python_requested
+                or language in [None, "python"]
+            )
             and (
                 code_only
+                or direct_python_requested
                 or "python" in str(text).lower()
                 or report.get("intent") == "code_generation"
             )
