@@ -40,6 +40,7 @@ class MemoryBrain:
 
         self.database = {
             "episodes": [],
+            "conversations": {},
             "semantic_memory": {
                 "topics": {},
                 "intents": {},
@@ -89,6 +90,7 @@ class MemoryBrain:
         if isinstance(loaded, dict):
             self.database.update(loaded)
             self.database.setdefault("episodes", [])
+            self.database.setdefault("conversations", {})
             self.database.setdefault("semantic_memory", {})
             for key in ["topics", "intents", "keywords", "tasks"]:
                 self.database["semantic_memory"].setdefault(key, {})
@@ -162,6 +164,20 @@ class MemoryBrain:
 
         return DEFAULT_SESSION_ID
 
+    def get_chat_title(self, data, text=None):
+
+        if isinstance(data, dict):
+            for key in ["chat_title", "conversation_title", "title"]:
+                value = data.get(key)
+                if value:
+                    return str(value)[:80]
+
+        text = str(text or "").strip()
+        if text:
+            return text[:60]
+
+        return "Canri chat"
+
     def extract_text(self, report):
 
         parts = []
@@ -182,6 +198,22 @@ class MemoryBrain:
                 parts.append(str(value))
 
         return " ".join(parts).strip()
+
+    def extract_user_turn_text(self, report):
+
+        for key in [
+            "original_text",
+            "corrected_text",
+            "user_message",
+            "question",
+            "query",
+            "text"
+        ]:
+            value = report.get(key)
+            if value:
+                return str(value).strip()
+
+        return self.extract_text(report)
 
     def extract_keywords(self, report, text):
 
@@ -408,6 +440,165 @@ class MemoryBrain:
 
         return episode
 
+    # ---------- conversation memory ----------
+
+    def conversation_bucket(self, session_id, title=None):
+
+        conversations = self.database.setdefault("conversations", {})
+        bucket = conversations.get(session_id)
+
+        if not isinstance(bucket, dict):
+            now = datetime.now(timezone.utc).isoformat()
+            bucket = {
+                "session_id": session_id,
+                "title": title or "Canri chat",
+                "created_utc": now,
+                "updated_utc": now,
+                "turns": [],
+                "summary": "",
+                "keywords": [],
+                "open_threads": []
+            }
+            conversations[session_id] = bucket
+
+        if title and (not bucket.get("title") or bucket.get("title") == "Canri chat"):
+            bucket["title"] = title
+
+        return bucket
+
+    def summarize_conversation(self, turns):
+
+        recent = turns[-6:]
+        parts = []
+
+        for turn in recent:
+            user_text = str(turn.get("user", "")).strip()
+            canri_text = str(turn.get("canri", "")).strip()
+            if user_text:
+                parts.append("User: " + user_text[:140])
+            if canri_text:
+                parts.append("Canri: " + canri_text[:140])
+
+        return " | ".join(parts)[-1400:]
+
+    def conversation_keywords(self, turns):
+
+        counter = Counter()
+
+        for turn in turns[-20:]:
+            text = f"{turn.get('user', '')} {turn.get('canri', '')}"
+            for word in re.findall(r"[a-zA-Z\u0590-\u05FF][a-zA-Z0-9_\-\u0590-\u05FF]{2,}", text.lower()):
+                if word not in STOP_WORDS:
+                    counter[word] += 1
+
+        return [word for word, _ in counter.most_common(30)]
+
+    def add_user_turn(self, session_id, user_text, understanding_report, episode_id=None, data=None):
+
+        title = self.get_chat_title(data, user_text)
+        bucket = self.conversation_bucket(session_id, title)
+        now = datetime.now(timezone.utc).isoformat()
+        turn_id = "turn_" + str(abs(hash(f"{session_id}|{user_text[:120]}|{episode_id}")))
+
+        for turn in bucket.get("turns", []):
+            if turn.get("id") == turn_id:
+                return turn
+
+        turn = {
+            "id": turn_id,
+            "created_utc": now,
+            "updated_utc": now,
+            "episode_id": episode_id,
+            "user": user_text,
+            "canri": "",
+            "main_topic": understanding_report.get("main_topic", "unknown"),
+            "intent": understanding_report.get("intent", "unknown"),
+            "keywords": self.extract_keywords(understanding_report, user_text)[:30],
+            "quality": {}
+        }
+
+        bucket.setdefault("turns", []).append(turn)
+        bucket["turns"] = bucket["turns"][-300:]
+        bucket["updated_utc"] = now
+        bucket["summary"] = self.summarize_conversation(bucket["turns"])
+        bucket["keywords"] = self.conversation_keywords(bucket["turns"])
+        return turn
+
+    def store_response(self, session_id, user_text, canri_text, response_result=None, manager_result=None):
+
+        bucket = self.conversation_bucket(session_id)
+        turns = bucket.setdefault("turns", [])
+        now = datetime.now(timezone.utc).isoformat()
+        target = None
+
+        for turn in reversed(turns):
+            if str(turn.get("user", "")).strip() == str(user_text).strip() and not turn.get("canri"):
+                target = turn
+                break
+
+        if target is None:
+            target = {
+                "id": "turn_" + str(abs(hash(f"{session_id}|{user_text[:120]}|response"))),
+                "created_utc": now,
+                "episode_id": None,
+                "user": user_text,
+                "main_topic": "unknown",
+                "intent": "unknown",
+                "keywords": [],
+                "quality": {}
+            }
+            turns.append(target)
+
+        target["canri"] = str(canri_text or "")
+        target["updated_utc"] = now
+
+        if isinstance(response_result, dict):
+            target["response"] = {
+                "primary_brain": response_result.get("primary_brain"),
+                "confidence": response_result.get("confidence"),
+                "blocked": response_result.get("blocked")
+            }
+
+        if isinstance(manager_result, dict):
+            quality = manager_result.get("results", {}).get("Quality_Control_brain", {})
+            if isinstance(quality, dict):
+                target["quality"] = {
+                    "passed": quality.get("passed"),
+                    "quality_score": quality.get("quality_score"),
+                    "needs_retry": quality.get("needs_retry")
+                }
+
+        bucket["turns"] = turns[-300:]
+        bucket["updated_utc"] = now
+        bucket["summary"] = self.summarize_conversation(bucket["turns"])
+        bucket["keywords"] = self.conversation_keywords(bucket["turns"])
+        self.save_memory()
+        return target
+
+    def build_conversation_report(self, session_id):
+
+        bucket = self.conversation_bucket(session_id)
+        turns = bucket.get("turns", [])
+
+        return {
+            "session_id": session_id,
+            "title": bucket.get("title"),
+            "turn_count": len(turns),
+            "summary": bucket.get("summary", ""),
+            "keywords": bucket.get("keywords", [])[:30],
+            "recent_turns": [
+                {
+                    "user": turn.get("user", "")[:500],
+                    "canri": turn.get("canri", "")[:700],
+                    "main_topic": turn.get("main_topic"),
+                    "intent": turn.get("intent"),
+                    "quality": turn.get("quality", {})
+                }
+                for turn in turns[-8:]
+            ],
+            "session_isolation": True
+        }
+
     # ---------- search ----------
 
     def same_session(self, episode, session_id):
@@ -598,6 +789,7 @@ class MemoryBrain:
         understanding_report = self.get_understanding_report(data)
         session_id = self.get_session_id(data)
         text = self.extract_text(understanding_report)
+        user_turn_text = self.extract_user_turn_text(understanding_report)
         keywords = self.extract_keywords(understanding_report, text)
 
         topic = understanding_report.get("main_topic", "unknown")
@@ -621,6 +813,7 @@ class MemoryBrain:
             "memory_found": len(ranked_matches),
             "session_id": session_id,
             "session_isolation": True,
+            "conversation": self.build_conversation_report(session_id),
             "ranked_matches": ranked_matches,
             "topic_matches": topic_matches,
             "intent_matches": intent_matches,
@@ -638,8 +831,17 @@ class MemoryBrain:
         }
 
         stored_episode = self.add_memory(understanding_report, session_id)
+        user_turn = self.add_user_turn(
+            session_id,
+            user_turn_text,
+            understanding_report,
+            stored_episode.get("id"),
+            data
+        )
 
         memory_report["stored_episode_id"] = stored_episode["id"]
+        memory_report["stored_turn_id"] = user_turn.get("id")
+        memory_report["conversation"] = self.build_conversation_report(session_id)
         memory_report["memory_depth"] = {
             "episodes": len(self.database.get("episodes", [])),
             "session_episodes": len(self.session_episodes(session_id)),

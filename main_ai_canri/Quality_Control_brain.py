@@ -73,6 +73,57 @@ class QualityControlBrain:
 
         return merged
 
+    def get_data_context(self, data):
+
+        if not isinstance(data, dict):
+            return {}
+
+        data_context = data.get("data_context")
+        if isinstance(data_context, dict):
+            return data_context
+
+        manager_context = data.get("manager_context", {})
+        if isinstance(manager_context, dict):
+            data_context = manager_context.get("data_context")
+            if isinstance(data_context, dict):
+                return data_context
+
+        return {}
+
+    def get_knowledge_context(self, data):
+
+        if not isinstance(data, dict):
+            return {}
+
+        knowledge = data.get("knowledge")
+        if isinstance(knowledge, dict):
+            return knowledge
+
+        manager_context = data.get("manager_context", {})
+        if isinstance(manager_context, dict):
+            knowledge = manager_context.get("knowledge")
+            if isinstance(knowledge, dict):
+                return knowledge
+
+        return {}
+
+    def get_shared_context(self, data):
+
+        if not isinstance(data, dict):
+            return {}
+
+        shared = data.get("shared_context")
+        if isinstance(shared, dict):
+            return shared
+
+        manager_context = data.get("manager_context", {})
+        if isinstance(manager_context, dict):
+            shared = manager_context.get("shared_context")
+            if isinstance(shared, dict):
+                return shared
+
+        return {}
+
     def extract_text(self, data, report):
         if isinstance(data, str):
             return data
@@ -127,6 +178,32 @@ class QualityControlBrain:
             "wants_percentages": "percentage" in lowered or "percentages" in lowered or "percent" in lowered,
             "wants_history": "history" in lowered,
             "wants_steps": "step by step" in lowered or "steps" in lowered,
+            "needs_local_data": any(
+                marker in lowered
+                for marker in [
+                    "local knowledge",
+                    "use local",
+                    "from data",
+                    "from the dictionaries",
+                    "reliable",
+                    "verify",
+                    "fact check",
+                    "what is",
+                    "explain"
+                ]
+            ),
+            "is_image_request": topic == "image_generation" or intent == "image_generation" or any(
+                marker in lowered
+                for marker in ["create image", "generate image", "draw", "illustration", "logo", "poster"]
+            ),
+            "is_voice_request": topic == "voice" or any(
+                marker in lowered
+                for marker in ["audio", "voice", "recording", "transcribe"]
+            ),
+            "is_vision_request": topic == "vision" or any(
+                marker in lowered
+                for marker in ["image file", "photo", "video", "attachment", ".png", ".jpg", ".mp4", ".json"]
+            ),
         }
 
         return requirements
@@ -153,6 +230,12 @@ class QualityControlBrain:
             expected.extend(["Story_brain", "Creative_brain"])
         if requirements["is_reliability_request"]:
             expected.extend(["Research_brain", "Fact_Check_brain"])
+        if requirements.get("is_image_request"):
+            expected.append("Image_brain")
+        if requirements.get("is_voice_request"):
+            expected.append("Voice_brain")
+        if requirements.get("is_vision_request"):
+            expected.append("Vision_brain")
 
         if not expected:
             expected.extend(["Reasoning_brain"])
@@ -411,6 +494,190 @@ class QualityControlBrain:
                 "Show the final result, not internal creative report fields."
             )
 
+    def text_from_result(self, result):
+
+        if not isinstance(result, dict):
+            return str(result)
+
+        parts = []
+        for key in [
+            "display_text",
+            "answer",
+            "final_output",
+            "story",
+            "draft",
+            "summary",
+            "generated_code",
+            "result",
+            "best_answer"
+        ]:
+            value = result.get(key)
+            if value:
+                parts.append(str(value))
+
+        creative_help = result.get("creative_help") or result.get("creative_fallback")
+        if isinstance(creative_help, dict):
+            for key in ["answer", "final_output", "story", "generated_code", "concept", "title"]:
+                value = creative_help.get(key)
+                if value:
+                    parts.append(str(value))
+
+        return "\n".join(parts)
+
+    def looks_like_internal_report(self, text):
+
+        lowered = str(text).lower()
+        markers = [
+            "goal:",
+            "core idea:",
+            "novel twist:",
+            "validation:",
+            "tradeoff:",
+            "implementation:",
+            "direction:"
+        ]
+        return sum(1 for marker in markers if marker in lowered) >= 3
+
+    def looks_like_story_template(self, text):
+
+        lowered = str(text).lower()
+        story_markers = [
+            " lived in ",
+            " wanted to ",
+            "one morning",
+            "felt nervous",
+            "opened the door",
+            "next chapter"
+        ]
+        return sum(1 for marker in story_markers if marker in lowered) >= 3
+
+    def code_has_real_structure(self, text):
+
+        code = str(text)
+        lowered = code.lower()
+        if not code.strip():
+            return False
+        if "```python" in lowered:
+            return True
+        if re.search(r"\b(import|from|def|class)\s+[a-zA-Z_]", code):
+            return True
+        if 'if __name__ == "__main__"' in code:
+            return True
+        return False
+
+    def audit_domain_mismatch(self, results, requirements, issues):
+
+        response = results.get("Response_brain", {})
+        response_text = self.text_from_result(response)
+
+        if requirements["is_code_request"]:
+            code = self.text_from_result(results.get("Code_brain", {}))
+            if not self.code_has_real_structure(code):
+                self.add_issue(
+                    issues,
+                    "Code_brain",
+                    "high",
+                    "Code request did not produce a real code structure.",
+                    "Return actual runnable code or a concrete code analysis result, not a story or abstract concept."
+                )
+
+            if self.looks_like_story_template(response_text):
+                self.add_issue(
+                    issues,
+                    "Response_brain",
+                    "high",
+                    "Final response looks like a story even though the user asked for code.",
+                    "Select Code_brain output and return code only when requested."
+                )
+
+        if requirements["is_story_request"]:
+            story_text = self.text_from_result(results.get("Story_brain", {}))
+            creative_text = self.text_from_result(results.get("Creative_brain", {}))
+            combined = f"{story_text}\n{creative_text}\n{response_text}"
+
+            if self.code_has_real_structure(response_text) and not story_text.strip():
+                self.add_issue(
+                    issues,
+                    "Response_brain",
+                    "high",
+                    "Final response looks like code even though the user asked for a story.",
+                    "Select Story_brain or Creative_brain final story output."
+                )
+
+            if self.looks_like_internal_report(combined):
+                self.add_issue(
+                    issues,
+                    "Story_brain",
+                    "high",
+                    "Story flow is exposing internal creative planning fields.",
+                    "Return only the final story text."
+                )
+
+        if requirements["is_reliability_request"] and self.looks_like_story_template(response_text):
+            self.add_issue(
+                issues,
+                "Response_brain",
+                "high",
+                "Final response looks fictional even though the user asked for reliable information.",
+                "Select Research_brain or Fact_Check_brain evidence-based output."
+            )
+
+    def audit_context_usage(self, data, requirements, issues):
+
+        if not requirements.get("needs_local_data"):
+            return
+
+        data_context = self.get_data_context(data)
+        knowledge = self.get_knowledge_context(data)
+        shared_context = self.get_shared_context(data)
+
+        has_data = bool(data_context.get("available") or data_context.get("matches"))
+        has_knowledge = bool(knowledge.get("available") or knowledge.get("matches"))
+        has_shared = bool(
+            shared_context.get("local_data", {}).get("available")
+            or shared_context.get("dictionary", {}).get("available")
+            or shared_context.get("knowledge", {}).get("available")
+        )
+
+        if not has_data and not has_knowledge and not has_shared:
+            self.add_issue(
+                issues,
+                "Manager_brain",
+                "medium",
+                "The request needs local/reliable context, but no DATA or knowledge context was available.",
+                "Attach Data_context and Knowledge_context to the specialist brains before final response."
+            )
+
+    def audit_internal_report_leakage(self, results, requirements, issues):
+
+        bad_markers = [
+            "goal:",
+            "core idea:",
+            "novel twist:",
+            "validation:",
+            "tradeoff:",
+            "direction:"
+        ]
+
+        for brain_name, result in results.items():
+            if not isinstance(result, dict):
+                continue
+
+            text = " ".join(
+                str(result.get(key, ""))
+                for key in ["answer", "final_output", "story", "draft", "summary"]
+            ).lower()
+
+            if text and sum(1 for marker in bad_markers if marker in text) >= 3:
+                target = brain_name
+                self.add_issue(
+                    issues,
+                    target,
+                    "high",
+                    f"{brain_name} appears to expose an internal simulation/report instead of the final user-facing result.",
+                    "Return the final user-facing result only; keep internal planning inside thinking_trace."
+                )
+
     # ---------- output ----------
 
     def build_retry_requests(self, issues):
@@ -467,6 +734,9 @@ class QualityControlBrain:
         self.audit_reliability(results, requirements, issues)
         self.audit_story(results, requirements, issues)
         self.audit_response_risk(results, requirements, issues)
+        self.audit_domain_mismatch(results, requirements, issues)
+        self.audit_context_usage(data, requirements, issues)
+        self.audit_internal_report_leakage(results, requirements, issues)
 
         retry_requests = self.build_retry_requests(issues)
         score = self.quality_score(issues)
