@@ -216,6 +216,11 @@ class MathBrain:
         raise ValueError("Unsupported expression")
 
     def format_number(self, value):
+        if isinstance(value, dict):
+            return ", ".join(
+                f"{key}={self.format_number(item)}"
+                for key, item in value.items()
+            )
         if isinstance(value, list):
             return ", ".join(self.format_number(item) for item in value)
         if isinstance(value, float):
@@ -530,6 +535,179 @@ class MathBrain:
             "confidence": 94
         }
 
+    def parse_linear_xy_side(self, side):
+        side = side.replace(" ", "").replace("*", "")
+        if not side:
+            return 0.0, 0.0, 0.0
+
+        if side[0] not in "+-":
+            side = "+" + side
+
+        x_coeff = 0.0
+        y_coeff = 0.0
+        constant = 0.0
+
+        for term in re.findall(r"[+-][^+-]+", side):
+            sign = -1.0 if term.startswith("-") else 1.0
+            body = term[1:]
+
+            if "x" in body:
+                coeff = body.replace("x", "")
+                x_coeff += sign * (float(coeff) if coeff else 1.0)
+            elif "y" in body:
+                coeff = body.replace("y", "")
+                y_coeff += sign * (float(coeff) if coeff else 1.0)
+            else:
+                constant += sign * float(body)
+
+        return x_coeff, y_coeff, constant
+
+    def parse_linear_xy_equation(self, equation):
+        if "=" not in equation:
+            return None
+
+        left, right = equation.split("=", 1)
+        lx, ly, lc = self.parse_linear_xy_side(left)
+        rx, ry, rc = self.parse_linear_xy_side(right)
+        return lx - rx, ly - ry, lc - rc
+
+    def solve_system_equations(self, text):
+        normalized = self.normalize_expression(text).replace("**", "^")
+        if "x" not in normalized or "y" not in normalized or "=" not in normalized:
+            return None
+
+        normalized = re.sub(r"\band\b", ";", normalized)
+        normalized = re.sub(r"\b(?!x\b|y\b)[a-zA-Z]+\b", " ", normalized)
+        normalized = re.sub(r"\s+", " ", normalized).strip()
+
+        pieces = [
+            piece.strip()
+            for piece in re.split(r"\band\b|;|\n", normalized)
+            if "=" in piece and ("x" in piece or "y" in piece)
+        ]
+
+        if len(pieces) < 2:
+            return None
+
+        eq1 = self.parse_linear_xy_equation(pieces[0])
+        eq2 = self.parse_linear_xy_equation(pieces[1])
+
+        if not eq1 or not eq2:
+            return None
+
+        a, b, c = eq1
+        d, e, f = eq2
+        determinant = a * e - d * b
+
+        if determinant == 0:
+            return {
+                "type": "linear_system",
+                "answer": "no unique solution",
+                "steps": [
+                    f"Equation 1: {self.format_number(a)}x + {self.format_number(b)}y + {self.format_number(c)} = 0",
+                    f"Equation 2: {self.format_number(d)}x + {self.format_number(e)}y + {self.format_number(f)} = 0",
+                    "The determinant is 0, so there is no unique solution."
+                ],
+                "confidence": 88
+            }
+
+        x = (b * f - c * e) / determinant
+        y = (c * d - a * f) / determinant
+
+        return {
+            "type": "linear_system",
+            "answer": {"x": x, "y": y},
+            "steps": [
+                f"Equation 1: {self.format_number(a)}x + {self.format_number(b)}y = {self.format_number(-c)}",
+                f"Equation 2: {self.format_number(d)}x + {self.format_number(e)}y = {self.format_number(-f)}",
+                f"determinant = {self.format_number(determinant)}",
+                f"x = {self.format_number(x)}",
+                f"y = {self.format_number(y)}"
+            ],
+            "confidence": 92
+        }
+
+    def parse_polynomial_terms(self, expression):
+        expression = expression.replace(" ", "").replace("^", "**")
+        expression = expression.replace("*x", "x")
+
+        if expression.startswith("-"):
+            normalized = expression
+        else:
+            normalized = "+" + expression
+
+        coefficients = {}
+
+        for term in re.findall(r"[+-][^+-]+", normalized):
+            sign = -1.0 if term.startswith("-") else 1.0
+            body = term[1:]
+
+            if "x**" in body:
+                coeff, power = body.split("x**", 1)
+                coeff_value = float(coeff) if coeff else 1.0
+                power_value = int(float(power))
+            elif body.endswith("x"):
+                coeff = body[:-1]
+                coeff_value = float(coeff) if coeff else 1.0
+                power_value = 1
+            else:
+                coeff_value = float(body)
+                power_value = 0
+
+            coefficients[power_value] = coefficients.get(power_value, 0.0) + sign * coeff_value
+
+        return coefficients
+
+    def solve_derivative(self, text):
+        lowered = self.normalize_expression(text)
+        if "derivative" not in lowered and "differentiate" not in lowered and "d/dx" not in lowered:
+            return None
+
+        expression = lowered
+        for marker in ["derivative of", "differentiate", "d/dx"]:
+            if marker in expression:
+                expression = expression.split(marker, 1)[1].strip()
+                break
+
+        expression = expression.split("=")[0].strip()
+        if "x" not in expression:
+            return None
+
+        try:
+            coefficients = self.parse_polynomial_terms(expression)
+        except (ValueError, TypeError):
+            return None
+
+        derivative_terms = []
+        derivative_coefficients = {}
+
+        for power, coeff in sorted(coefficients.items(), reverse=True):
+            if power == 0:
+                continue
+            new_power = power - 1
+            new_coeff = coeff * power
+            derivative_coefficients[new_power] = new_coeff
+
+            if new_power == 0:
+                derivative_terms.append(self.format_number(new_coeff))
+            elif new_power == 1:
+                derivative_terms.append(f"{self.format_number(new_coeff)}x")
+            else:
+                derivative_terms.append(f"{self.format_number(new_coeff)}x^{new_power}")
+
+        answer = " + ".join(derivative_terms).replace("+ -", "- ") or "0"
+
+        return {
+            "type": "derivative",
+            "answer": answer,
+            "steps": [
+                f"Original polynomial: {expression}",
+                "Use power rule: d/dx(a*x^n) = a*n*x^(n-1)",
+                f"Derivative: {answer}"
+            ],
+            "confidence": 90
+        }
+
     def solve_expression(self, text):
         expression = self.extract_math_expression(text)
         if not expression:
@@ -583,6 +761,8 @@ class MathBrain:
             self.solve_percentage,
             self.solve_average,
             self.solve_quadratic_equation,
+            self.solve_system_equations,
+            self.solve_derivative,
             self.solve_ratio,
             self.solve_linear_equation,
             self.solve_pythagorean,

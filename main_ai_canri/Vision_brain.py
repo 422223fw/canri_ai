@@ -28,6 +28,7 @@ RISK_FILE = DATA_DIR / "Vision_risk_rules.json"
 STATS_FILE = DATA_DIR / "Vision_statistics.json"
 
 MAX_HEADER_BYTES = 128
+MAX_TEXT_PREVIEW_BYTES = 32_000
 
 IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "gif", "webp", "bmp", "tiff", "svg", "ico", "heic"}
 VIDEO_EXTENSIONS = {"mp4", "mov", "avi", "mkv", "webm", "wmv", "flv", "mpeg", "mpg", "m4v"}
@@ -38,6 +39,8 @@ CONFIG_EXTENSIONS = {"json", "yaml", "yml", "toml", "ini", "env", "xml", "lock",
 ARCHIVE_EXTENSIONS = {"zip", "rar", "7z", "tar", "gz", "bz2", "xz", "jar", "war", "apk"}
 EXECUTABLE_EXTENSIONS = {"exe", "dll", "msi", "bat", "cmd", "ps1", "sh", "app", "scr", "com"}
 MODEL_EXTENSIONS = {"onnx", "pt", "pth", "h5", "tflite", "pb", "safetensors", "gguf", "bin", "pkl"}
+TEXT_LIKE_CATEGORIES = {"code", "config", "document"}
+TEXT_PREVIEW_EXTENSIONS = {"txt", "md", "py", "js", "ts", "html", "css", "json", "yaml", "yml", "toml", "ini", "xml", "csv", "log"}
 
 
 class VisionBrain:
@@ -295,6 +298,19 @@ class VisionBrain:
             if extension == "webp" and b"WEBP" in header[:16]:
                 return {"method": "webp_detected", "note": "WebP detected; dimensions need deeper parsing."}
 
+            if extension == "svg" and path and path.exists():
+                text = path.read_text(encoding="utf-8", errors="replace")[:4000]
+                width = re.search(r'\bwidth=["\']?(\d+(?:\.\d+)?)', text)
+                height = re.search(r'\bheight=["\']?(\d+(?:\.\d+)?)', text)
+                viewbox = re.search(r'\bviewBox=["\']([^"\']+)', text)
+                result = {"method": "svg_text_header"}
+                if width and height:
+                    result["width"] = float(width.group(1))
+                    result["height"] = float(height.group(1))
+                if viewbox:
+                    result["viewBox"] = viewbox.group(1)
+                return result
+
             if extension in ["jpg", "jpeg"] and path and path.exists():
                 return self.get_jpeg_dimensions(path)
 
@@ -302,6 +318,73 @@ class VisionBrain:
             return {}
 
         return {}
+
+    def analyze_text_content(self, extension, category, path, is_file, size):
+
+        if not is_file or extension not in TEXT_PREVIEW_EXTENSIONS:
+            return {}
+
+        if size and size > MAX_TEXT_PREVIEW_BYTES:
+            return {
+                "read": False,
+                "reason": "file_too_large_for_preview",
+                "max_preview_bytes": MAX_TEXT_PREVIEW_BYTES
+            }
+
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return {
+                "read": False,
+                "reason": "read_failed"
+            }
+
+        lines = text.splitlines()
+        preview = "\n".join(lines[:12])[:1200]
+        analysis = {
+            "read": True,
+            "line_count": len(lines),
+            "char_count": len(text),
+            "preview": preview,
+            "contains_code_block": "```" in text,
+            "contains_urls": bool(re.search(r"https?://", text)),
+            "contains_possible_secret": bool(re.search(r"(api[_-]?key|secret|password|token)\s*[:=]", text, re.I))
+        }
+
+        if extension == "json":
+            try:
+                parsed = json.loads(text)
+                analysis["json_valid"] = True
+                analysis["json_shape"] = "object" if isinstance(parsed, dict) else "array" if isinstance(parsed, list) else type(parsed).__name__
+                analysis["json_items"] = len(parsed) if isinstance(parsed, (dict, list)) else 1
+            except json.JSONDecodeError as error:
+                analysis["json_valid"] = False
+                analysis["json_error"] = str(error)
+
+        if category == "code":
+            analysis["code_signals"] = {
+                "functions": len(re.findall(r"\bdef\s+\w+|\bfunction\s+\w+", text)),
+                "classes": len(re.findall(r"\bclass\s+\w+", text)),
+                "imports": len(re.findall(r"^\s*(import|from|const|let|var|using)\b", text, re.M))
+            }
+
+        return analysis
+
+    def build_file_capability_summary(self, category, content_analysis):
+
+        if category == "image":
+            return "Can inspect file type, dimensions for common formats, and safety risk."
+        if category == "video":
+            return "Can identify video files and route audio/visual work; deep frame analysis needs a video model."
+        if category == "audio":
+            return "Can identify audio and route sound work to Voice_brain."
+        if category == "code":
+            return "Can preview small code files and route code understanding to Code_brain."
+        if content_analysis.get("json_valid") is True:
+            return "Can validate JSON structure and preview safe metadata."
+        if category == "document":
+            return "Can preview small text documents; PDFs/Office files need a document parser for full text."
+        return "Can identify file type, risk, and recommended next brain."
 
     def get_jpeg_dimensions(self, path):
 
@@ -417,6 +500,14 @@ class VisionBrain:
         if category == "image":
             dimensions = self.get_image_dimensions(extension, header, path)
 
+        content_analysis = self.analyze_text_content(
+            extension,
+            category,
+            path,
+            is_file,
+            size
+        )
+
         warnings = []
 
         if not exists and path_value:
@@ -431,6 +522,9 @@ class VisionBrain:
         if risk_rule.get("warning"):
             warnings.append(risk_rule["warning"])
 
+        if content_analysis.get("contains_possible_secret"):
+            warnings.append("Text preview contains possible secret/token/password wording.")
+
         return {
             "path": str(path_value) if path_value else None,
             "exists": exists,
@@ -441,6 +535,8 @@ class VisionBrain:
             "magic_signature": magic.get("signature") if magic else None,
             "size_bytes": size,
             "dimensions": dimensions,
+            "content_analysis": content_analysis,
+            "capability_summary": self.build_file_capability_summary(category, content_analysis),
             "risk_score": risk_score,
             "risk_level": self.risk_level(risk_score),
             "safe_to_execute": False,
@@ -512,6 +608,11 @@ class VisionBrain:
                 detail += f", {dimensions['width']}x{dimensions['height']}"
             if file_info.get("magic_signature"):
                 detail += f", signature: {file_info['magic_signature']}"
+            content_analysis = file_info.get("content_analysis") or {}
+            if content_analysis.get("json_valid") is True:
+                detail += f", valid JSON ({content_analysis.get('json_shape')})"
+            if content_analysis.get("line_count") is not None:
+                detail += f", {content_analysis['line_count']} lines"
             if file_info.get("warnings"):
                 detail += f", warning: {file_info['warnings'][0]}"
             lines.append(detail)
