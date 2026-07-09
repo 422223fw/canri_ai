@@ -34,6 +34,7 @@ from Game_brain import brain as game_brain
 from Story_brain import brain as story_brain
 from Character_brain import brain as character_brain
 from World_brain import brain as world_brain
+from Image_brain import brain as image_brain
 
 from Learning_brain import brain as learning_brain
 from Fact_Check_brain import brain as fact_check_brain
@@ -141,6 +142,11 @@ def register_all_brains():
     )
 
     manager_brain.register_brain(
+        "Image_brain",
+        image_brain
+    )
+
+    manager_brain.register_brain(
         "Learning_brain",
         learning_brain
     )
@@ -186,6 +192,7 @@ def build_basic_understanding(message, corrected_text):
         ("history", ["history", "war", "empire", "ancient"]),
         ("math", ["math", "calculate", "equation", "number"]),
         ("security", ["security", "password", "hack", "bomb", "suicide"]),
+        ("image_generation", ["generate image", "create image", "make image", "draw", "illustration", "poster", "logo"]),
         ("vision", ["image", "photo", "picture", "video", "file"]),
         ("voice", ["audio", "voice", "sound", "recording"]),
         ("story", ["story", "character", "world", "plot"])

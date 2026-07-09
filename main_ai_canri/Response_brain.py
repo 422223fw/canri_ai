@@ -445,7 +445,7 @@ class ResponseBrain:
             "answer", "summary", "best_answer", "result", "generated_code",
             "plan", "steps", "best_idea", "facts", "articles", "local_matches",
             "game_design", "response", "translated_text", "story", "draft",
-            "final_output"
+            "final_output", "image_file", "generated_image_prompt"
         ]
 
         score += sum(5 for key in useful_keys if result.get(key))
@@ -460,6 +460,12 @@ class ResponseBrain:
         ):
             score += 55
 
+        if brain_name == "Image_brain" and (
+            result.get("image_file")
+            or result.get("generated_image_prompt")
+        ):
+            score += 45
+
         if result.get("generated_code"):
             score += 15
 
@@ -469,6 +475,7 @@ class ResponseBrain:
         priority = {
             "Code_brain": 24,
             "Game_brain": 13,
+            "Image_brain": 13,
             "Science_brain": 12,
             "Technology_brain": 12,
             "Geography_brain": 12,
@@ -496,7 +503,8 @@ class ResponseBrain:
         allow_creative = topic in {"story", "creative", "game"} or intent in {
             "story_creation",
             "creative_generation",
-            "game_design"
+            "game_design",
+            "image_generation"
         }
         allow_code = intent in {"code_generation", "code_analysis"} or (
             topic == "code"
@@ -561,6 +569,9 @@ class ResponseBrain:
         if topic == "story" or intent == "story_creation":
             preferred.extend(["Story_brain", "Creative_brain"])
 
+        if topic == "image_generation" or intent == "image_generation":
+            preferred.append("Image_brain")
+
         if topic == "language" or intent in {"translation", "correction"}:
             preferred.append("Language_brain")
 
@@ -570,6 +581,7 @@ class ResponseBrain:
             "geography": "Geography_brain",
             "history": "History_brain",
             "game": "Game_brain",
+            "image_generation": "Image_brain",
             "vision": "Vision_brain",
             "voice": "Voice_brain",
         }
@@ -831,6 +843,40 @@ class ResponseBrain:
 
         return "\n".join(line for line in lines if line.strip())
 
+    def format_image_result(self, result):
+
+        if result.get("safe") is False:
+            return str(
+                result.get("answer")
+                or "I cannot create that image request because it is unsafe."
+            )
+
+        lines = []
+
+        image_file = result.get("image_file")
+        if image_file:
+            lines.append("Created an image preview:")
+            lines.append(str(image_file))
+
+        prompt = result.get("generated_image_prompt")
+        if prompt:
+            lines.append("")
+            lines.append("Image prompt:")
+            lines.append(str(prompt))
+
+        negative_prompt = result.get("negative_prompt")
+        if negative_prompt:
+            lines.append("")
+            lines.append("Negative prompt:")
+            lines.append(str(negative_prompt))
+
+        style = result.get("style", {})
+        if isinstance(style, dict) and style.get("name"):
+            lines.append("")
+            lines.append(f"Style: {style['name']}")
+
+        return "\n".join(lines).strip() or str(result.get("answer", "")).strip()
+
     def text_from_result(self, brain_name, result):
 
         if not isinstance(result, dict):
@@ -841,6 +887,9 @@ class ResponseBrain:
 
         if brain_name == "Creative_brain":
             return self.format_creative_result(result)
+
+        if brain_name == "Image_brain":
+            return self.format_image_result(result)
 
         if brain_name == "Story_brain":
             for key in ["story", "final_output", "draft"]:
@@ -1005,13 +1054,14 @@ class ResponseBrain:
         intent = str(report.get("intent", "")).lower()
 
         creative_or_build_request = (
-            topic in {"code", "game", "story", "creative"}
+            topic in {"code", "game", "story", "creative", "image_generation"}
             or intent in {
                 "code_generation",
                 "code_analysis",
                 "game_design",
                 "story_creation",
                 "creative_generation",
+                "image_generation",
                 "request"
             }
             or primary_brain in {
@@ -1019,6 +1069,7 @@ class ResponseBrain:
                 "Game_brain",
                 "Creative_brain",
                 "Story_brain",
+                "Image_brain",
                 "Planner_brain"
             }
         )
