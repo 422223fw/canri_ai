@@ -562,6 +562,7 @@ class ManagerBrain:
                 "phase": "verification",
                 "brains": [
                     "Fact_Check_brain",
+                    "Quality_Control_brain",
                     "Learning_brain"
                 ]
             },
@@ -837,6 +838,7 @@ class ManagerBrain:
             "Security_brain",
             "Response_brain",
             "Fact_Check_brain",
+            "Quality_Control_brain",
             "Learning_brain"
         ]:
             return False
@@ -1005,7 +1007,172 @@ class ManagerBrain:
             if isinstance(memory_result, dict) and isinstance(memory_result.get("memory"), dict):
                 memory_report = memory_result["memory"]
 
+            quality_result = results.get("Quality_Control_brain")
+            if isinstance(quality_result, dict) and quality_result.get("needs_retry"):
+                retry_results = self.execute_quality_retry(
+                    data,
+                    report,
+                    memory_report,
+                    all_results,
+                    quality_result,
+                    shared_knowledge,
+                    shared_dictionary,
+                    shared_data_context
+                )
+
+                if retry_results:
+                    all_results.update(retry_results)
+                    phase_results.append({
+                        "phase": "quality_retry",
+                        "brains": list(retry_results.keys()),
+                        "results": retry_results,
+                        "quality_feedback": quality_result.get("retry_requests", [])
+                    })
+
+                    recheck_results = self.execute_quality_recheck(
+                        data,
+                        report,
+                        memory_report,
+                        all_results,
+                        shared_knowledge,
+                        shared_dictionary,
+                        shared_data_context
+                    )
+
+                    if recheck_results:
+                        all_results.update(recheck_results)
+                        phase_results.append({
+                            "phase": "quality_recheck",
+                            "brains": list(recheck_results.keys()),
+                            "results": recheck_results
+                        })
+
         return all_results, phase_results
+
+    def retry_brains_from_quality(self, quality_result):
+
+        retry_brains = []
+
+        for request in quality_result.get("retry_requests", []):
+            if not isinstance(request, dict):
+                continue
+
+            brain_name = request.get("target_brain")
+            if (
+                brain_name
+                and brain_name in self.brains
+                and brain_name not in {
+                    "Quality_Control_brain",
+                    "Response_brain",
+                    "Security_brain",
+                    "Learning_brain"
+                }
+                and brain_name not in retry_brains
+            ):
+                retry_brains.append(brain_name)
+
+        return retry_brains[:5]
+
+    def build_retry_context(
+        self,
+        data,
+        all_results,
+        shared_knowledge,
+        shared_dictionary,
+        shared_data_context,
+        quality_result
+    ):
+
+        if isinstance(data, dict):
+            retry_context = dict(data)
+        else:
+            retry_context = {
+                "original_text": str(data)
+            }
+
+        retry_context["results"] = all_results
+        retry_context["knowledge"] = shared_knowledge
+        retry_context["dictionary"] = shared_dictionary
+        retry_context["data_context"] = shared_data_context
+        retry_context["quality_feedback"] = quality_result
+
+        return retry_context
+
+    def execute_quality_retry(
+        self,
+        data,
+        report,
+        memory_report,
+        all_results,
+        quality_result,
+        shared_knowledge,
+        shared_dictionary,
+        shared_data_context
+    ):
+
+        retry_brains = self.retry_brains_from_quality(quality_result)
+
+        if not retry_brains:
+            return {}
+
+        retry_context = self.build_retry_context(
+            data,
+            all_results,
+            shared_knowledge,
+            shared_dictionary,
+            shared_data_context,
+            quality_result
+        )
+
+        self.emit_progress(
+            retry_context,
+            "quality_retry",
+            "Quality control requested a targeted retry",
+            "Quality_Control_brain",
+            "quality_retry",
+            quality_result
+        )
+
+        return self.execute(
+            retry_brains,
+            retry_context,
+            report,
+            memory_report,
+            "quality_retry"
+        )
+
+    def execute_quality_recheck(
+        self,
+        data,
+        report,
+        memory_report,
+        all_results,
+        shared_knowledge,
+        shared_dictionary,
+        shared_data_context
+    ):
+
+        if "Quality_Control_brain" not in self.brains:
+            return {}
+
+        recheck_context = self.build_retry_context(
+            data,
+            all_results,
+            shared_knowledge,
+            shared_dictionary,
+            shared_data_context,
+            {
+                "recheck": True
+            }
+        )
+
+        return self.execute(
+            ["Quality_Control_brain"],
+            recheck_context,
+            report,
+            memory_report,
+            "quality_recheck"
+        )
 
     # ---------- scoring ----------
 
