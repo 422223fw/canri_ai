@@ -38,6 +38,19 @@ POSSESSIVES = {
     "my", "your", "his", "her", "its", "our", "their"
 }
 
+DETERMINERS = {
+    "a", "an", "the", "this", "that", "these", "those", "each", "every",
+    "some", "any", "one", "two", "three"
+}
+
+CONJUNCTIONS = {
+    "and", "or", "but", "so", "because", "while", "although", "then"
+}
+
+NEGATIONS = {
+    "not", "no", "never", "dont", "don't", "cannot", "can't", "without"
+}
+
 PREPOSITIONS = {
     "in", "on", "under", "over", "above", "below", "inside", "outside",
     "near", "beside", "behind", "before", "after", "from", "to", "into",
@@ -174,6 +187,7 @@ OUTPUT_RULES = {
 }
 
 ACTION_COMMANDS = {
+    "do": "perform",
     "write": "generate",
     "create": "generate",
     "make": "generate",
@@ -670,7 +684,14 @@ class UnderstandingBrain:
         verbs = [
             token
             for token in tokens
-            if self.is_verb_like(token) and token.get("word") not in AUXILIARY_VERBS
+            if self.is_verb_like(token)
+            and (
+                token.get("word") not in AUXILIARY_VERBS
+                or (
+                    token.get("word") in ACTION_COMMANDS
+                    and token.get("index", 99) <= 3
+                )
+            )
         ]
         nouns = [
             token
@@ -916,7 +937,7 @@ class UnderstandingBrain:
 
         if main_topic == "code" and any(
             term in lowered
-            for term in ["code", "working", "implement", "function", "class", "version"]
+            for term in ["code", "program", "python", "runnable", "working", "implement", "function", "class", "version"]
         ):
             scores["code_generation"] = scores.get("code_generation", 0) + 8
 
@@ -990,6 +1011,15 @@ class UnderstandingBrain:
 
         if action_word in {"solve", "calculate"}:
             return "math"
+
+        if action_word == "do":
+            if has_code:
+                return "code_generation"
+            if has_story:
+                return "story_creation"
+            if has_game:
+                return "game_design"
+            return "request"
 
         if action_word in {"analyze", "review"}:
             if has_code or self.has_code_payload(text):
@@ -1159,6 +1189,304 @@ class UnderstandingBrain:
                 min(confidence, 96)
             ),
             "rule": "A dictionary verb in an imperative/request sentence is treated as an action to perform, not as a word to define."
+        }
+
+    # ---------- advanced whole-sentence tagging ----------
+
+    def extract_token_stream(self, text):
+
+        tokens = []
+
+        for index, match in enumerate(WORD_RE.finditer(text)):
+            raw = match.group(0).strip("'")
+            if not raw:
+                continue
+
+            tokens.append({
+                "id": f"t{index}",
+                "index": index,
+                "text": raw,
+                "word": raw.lower(),
+                "start": match.start(),
+                "end": match.end()
+            })
+
+        return tokens
+
+    def is_technical_name(self, raw, word):
+
+        if raw[:1].isupper() and word not in STOP_WORDS:
+            return True
+
+        return word in {
+            "python", "javascript", "java", "json", "api", "html", "css",
+            "sql", "github", "git", "canri", "ai", "cpu", "gpu", "ram"
+        }
+
+    def semantic_tag_for_token(self, stream_token, graph_node, word_report, requested_action):
+
+        word = stream_token.get("word", "")
+        raw = stream_token.get("text", word)
+        dictionary_type = str(word_report.get("type", "unknown") or "unknown").lower()
+        normalized_type = str(
+            (graph_node or {}).get("normalized_type")
+            or self.normalize_word_type({
+                "word": word,
+                "type": dictionary_type,
+                "is_question_word": word in QUESTION_WORDS,
+                "is_preposition": word in PREPOSITIONS,
+                "is_possessive": word in POSSESSIVES,
+                "is_pronoun": word in PRONOUNS,
+                "is_stop_word": word in STOP_WORDS,
+                "tense": word_report.get("tense")
+            })
+        )
+
+        roles = list((graph_node or {}).get("roles", []))
+        action_word = None
+        if isinstance(requested_action, dict):
+            action_word = requested_action.get("action_word")
+
+        if word in DETERMINERS:
+            semantic_tag = "determiner"
+            grammar_role = "specifier"
+        elif word in CONJUNCTIONS:
+            semantic_tag = "connector"
+            grammar_role = "joins_phrases"
+        elif word in NEGATIONS:
+            semantic_tag = "negation"
+            grammar_role = "constraint"
+        elif word in PREPOSITIONS:
+            semantic_tag = "relation_word"
+            grammar_role = "relation"
+        elif word in QUESTION_WORDS:
+            semantic_tag = "question_focus"
+            grammar_role = "question_word"
+        elif word in ACTION_COMMANDS:
+            semantic_tag = "action_command"
+            grammar_role = "requested_action"
+        elif "object" in roles:
+            semantic_tag = "target_or_concept"
+            grammar_role = "object"
+        elif normalized_type == "verb" or "verb" in dictionary_type:
+            semantic_tag = "action"
+            grammar_role = "verb"
+        elif self.is_technical_name(raw, word):
+            semantic_tag = "proper_or_technical_name"
+            grammar_role = "named_entity"
+        elif normalized_type == "noun":
+            semantic_tag = "target_or_concept"
+            grammar_role = "noun"
+        elif normalized_type == "adjective":
+            semantic_tag = "description"
+            grammar_role = "modifier"
+        elif normalized_type == "adverb":
+            semantic_tag = "action_modifier"
+            grammar_role = "modifier"
+        elif normalized_type == "pronoun":
+            semantic_tag = "participant_reference"
+            grammar_role = "pronoun"
+        elif normalized_type == "number":
+            semantic_tag = "quantity"
+            grammar_role = "number"
+        elif word in STOP_WORDS:
+            semantic_tag = "function_word"
+            grammar_role = "function"
+        else:
+            semantic_tag = "unknown_context_word"
+            grammar_role = "unknown"
+
+        is_dictionary_verb = "verb" in dictionary_type
+        can_be_user_action = (
+            semantic_tag in {"action_command", "action"}
+            or is_dictionary_verb
+        )
+        should_perform = (
+            bool(requested_action.get("is_action_request"))
+            if isinstance(requested_action, dict)
+            else False
+        ) and word == action_word
+
+        return {
+            "index": stream_token.get("index"),
+            "word": word,
+            "text": raw,
+            "dictionary_type": dictionary_type,
+            "normalized_type": normalized_type,
+            "semantic_tag": semantic_tag,
+            "grammar_role": grammar_role,
+            "sentence_roles": roles,
+            "known_word": bool(word_report.get("exists")),
+            "is_dictionary_verb": is_dictionary_verb,
+            "can_be_user_action": can_be_user_action,
+            "should_perform_as_command": should_perform,
+            "tense": word_report.get("tense"),
+            "definition_hint": (word_report.get("meanings") or [None])[0],
+            "connection_hints": word_report.get("connections", [])[:6]
+        }
+
+    def build_phrase_chunks(self, tags):
+
+        chunks = []
+        current = []
+
+        noun_phrase_tags = {
+            "determiner",
+            "description",
+            "proper_or_technical_name",
+            "target_or_concept",
+            "quantity"
+        }
+
+        def flush():
+            if not current:
+                return
+            words = [item["word"] for item in current]
+            head = None
+            for item in reversed(current):
+                if item["semantic_tag"] in {"target_or_concept", "proper_or_technical_name"}:
+                    head = item["word"]
+                    break
+            chunks.append({
+                "type": "noun_phrase",
+                "text": " ".join(words),
+                "head": head or words[-1],
+                "tokens": words,
+                "start_index": current[0]["index"],
+                "end_index": current[-1]["index"]
+            })
+            current.clear()
+
+        for tag in tags:
+            if tag["semantic_tag"] in noun_phrase_tags:
+                current.append(tag)
+            else:
+                flush()
+
+                if tag["semantic_tag"] in {"action_command", "action"}:
+                    chunks.append({
+                        "type": "action_phrase",
+                        "text": tag["word"],
+                        "head": tag["word"],
+                        "tokens": [tag["word"]],
+                        "start_index": tag["index"],
+                        "end_index": tag["index"]
+                    })
+
+        flush()
+
+        return chunks[:80]
+
+    def build_semantic_frame(self, tags, phrase_chunks, requested_action, sentence_graph):
+
+        actions = [
+            tag
+            for tag in tags
+            if tag.get("can_be_user_action")
+        ]
+        targets = [
+            tag
+            for tag in tags
+            if tag.get("semantic_tag") in {"target_or_concept", "proper_or_technical_name"}
+        ]
+        modifiers = [
+            tag
+            for tag in tags
+            if tag.get("semantic_tag") in {"description", "action_modifier", "quantity", "negation"}
+        ]
+        relations = [
+            tag
+            for tag in tags
+            if tag.get("semantic_tag") in {"relation_word", "connector"}
+        ]
+
+        meaning_frame = sentence_graph.get("meaning_frame", {})
+        requested = requested_action if isinstance(requested_action, dict) else {}
+
+        return {
+            "main_action": requested.get("action_word") or meaning_frame.get("action"),
+            "main_target": requested.get("target") or meaning_frame.get("object"),
+            "subject": meaning_frame.get("subject"),
+            "question_focus": meaning_frame.get("question_focus"),
+            "actions": [
+                {
+                    "word": tag["word"],
+                    "semantic_tag": tag["semantic_tag"],
+                    "should_perform": tag["should_perform_as_command"]
+                }
+                for tag in actions[:20]
+            ],
+            "targets": [tag["word"] for tag in targets[:30]],
+            "modifiers": [tag["word"] for tag in modifiers[:30]],
+            "relations": [tag["word"] for tag in relations[:30]],
+            "phrase_chunks": phrase_chunks[:40],
+            "command_interpretation": {
+                "is_action_request": requested.get("is_action_request", False),
+                "action_word": requested.get("action_word"),
+                "action_kind": requested.get("action_kind"),
+                "intent_override": requested.get("intent_override"),
+                "rule": "Any dictionary word with type verb can become a user action when the sentence context is a request."
+            }
+        }
+
+    def build_advanced_understanding(self, text, word_reports, sentence_graph, requested_action):
+
+        stream = self.extract_token_stream(text)
+        report_by_word = {
+            report.get("word"): report
+            for report in word_reports
+            if isinstance(report, dict)
+        }
+        node_by_index = {
+            node.get("index"): node
+            for node in sentence_graph.get("nodes", [])
+            if isinstance(node, dict)
+        }
+
+        tags = []
+        for stream_token in stream[:160]:
+            word = stream_token.get("word")
+            word_report = report_by_word.get(word) or self.analyze_word(word)
+            graph_node = node_by_index.get(stream_token.get("index"))
+            tags.append(
+                self.semantic_tag_for_token(
+                    stream_token,
+                    graph_node,
+                    word_report,
+                    requested_action
+                )
+            )
+
+        phrase_chunks = self.build_phrase_chunks(tags)
+        semantic_frame = self.build_semantic_frame(
+            tags,
+            phrase_chunks,
+            requested_action,
+            sentence_graph
+        )
+
+        return {
+            "tokens": tags,
+            "phrase_chunks": phrase_chunks,
+            "semantic_frame": semantic_frame,
+            "coverage": {
+                "tokens_seen": len(stream),
+                "tokens_tagged": len(tags),
+                "known_words": sum(1 for tag in tags if tag.get("known_word")),
+                "actions_found": sum(1 for tag in tags if tag.get("can_be_user_action")),
+                "targets_found": sum(
+                    1
+                    for tag in tags
+                    if tag.get("semantic_tag") in {"target_or_concept", "proper_or_technical_name"}
+                )
+            },
+            "rules": [
+                "Tag every word by dictionary type, grammar role, and sentence role.",
+                "Read the whole sentence before deciding what each word means.",
+                "Treat dictionary verbs as possible user actions.",
+                "Treat capitalized or technical words as names when context supports it.",
+                "Group nearby determiners, modifiers, and nouns into phrase chunks."
+            ]
         }
 
     # ---------- tasks/entities ----------
@@ -1369,6 +1697,13 @@ class UnderstandingBrain:
             elif intent == "math":
                 main_topic = "math"
 
+        advanced_understanding = self.build_advanced_understanding(
+            text,
+            word_reports,
+            sentence_graph,
+            requested_action
+        )
+
         tasks = self.possible_tasks(
             main_topic,
             intent,
@@ -1400,6 +1735,19 @@ class UnderstandingBrain:
             "features": features,
             "entities": entities,
             "requested_action": requested_action,
+            "advanced_word_tags": advanced_understanding.get(
+                "tokens",
+                []
+            ),
+            "phrase_chunks": advanced_understanding.get(
+                "phrase_chunks",
+                []
+            ),
+            "semantic_frame": advanced_understanding.get(
+                "semantic_frame",
+                {}
+            ),
+            "advanced_understanding": advanced_understanding,
             "sentence_graph": sentence_graph,
             "meaning_frame": sentence_graph.get("meaning_frame", {}),
             "syntax_profile": syntax_profile,
@@ -1419,6 +1767,7 @@ class UnderstandingBrain:
                 "Use corrected_text as the main input when available.",
                 "Use UnderstandingDk for word existence, meanings, grammar, and connections.",
                 "Use dictionary word types to understand grammar, not only definitions.",
+                "Tag every token with a context-aware grammar role and semantic role.",
                 "Build a sentence relation graph so words are connected by meaning, not only split apart.",
                 "Treat verbs as requested actions unless the user explicitly asks for a definition.",
                 "Use nouns as targets and adjectives/adverbs as constraints or style.",

@@ -192,6 +192,39 @@ class ManagerBrain:
                 for term in meaning_frame.get("content_terms", [])[:20]
             )
 
+        semantic_frame = report.get("semantic_frame", {})
+        if isinstance(semantic_frame, dict):
+            for key in ["main_action", "main_target", "subject", "question_focus"]:
+                value = semantic_frame.get(key)
+                if value:
+                    terms.append(str(value).lower())
+
+            for list_key in ["targets", "modifiers", "relations"]:
+                values = semantic_frame.get(list_key, [])
+                if isinstance(values, list):
+                    terms.extend(str(value).lower() for value in values[:20])
+
+            for action in semantic_frame.get("actions", [])[:12]:
+                if isinstance(action, dict) and action.get("word"):
+                    terms.append(str(action["word"]).lower())
+
+            for chunk in semantic_frame.get("phrase_chunks", [])[:15]:
+                if isinstance(chunk, dict):
+                    if chunk.get("text"):
+                        terms.append(str(chunk["text"]).lower())
+                    if chunk.get("head"):
+                        terms.append(str(chunk["head"]).lower())
+
+        for tag in report.get("advanced_word_tags", [])[:60]:
+            if not isinstance(tag, dict):
+                continue
+            word = tag.get("word")
+            if word:
+                terms.append(str(word).lower())
+            semantic_tag = tag.get("semantic_tag")
+            if semantic_tag in {"action_command", "action", "target_or_concept", "proper_or_technical_name"}:
+                terms.append(str(semantic_tag).replace("_", " ").lower())
+
         sentence_graph = report.get("sentence_graph", {})
         if isinstance(sentence_graph, dict):
             for edge in sentence_graph.get("edges", [])[:30]:
