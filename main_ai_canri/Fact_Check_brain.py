@@ -296,6 +296,95 @@ class FactCheckBrain:
 
         return local_sources
 
+    def collect_context_evidence(self, data):
+
+        if not isinstance(data, dict):
+            return []
+
+        evidence = []
+
+        shared = data.get("shared_context", {})
+        if not isinstance(shared, dict):
+            shared = data.get("manager_context", {}).get("shared_context", {})
+        if not isinstance(shared, dict):
+            shared = {}
+
+        data_context = data.get("data_context", {})
+        if not isinstance(data_context, dict):
+            data_context = data.get("manager_context", {}).get("data_context", {})
+        if not isinstance(data_context, dict):
+            data_context = {}
+
+        knowledge = data.get("knowledge", {})
+        if not isinstance(knowledge, dict):
+            knowledge = data.get("manager_context", {}).get("knowledge", {})
+        if not isinstance(knowledge, dict):
+            knowledge = {}
+
+        dictionary = data.get("dictionary", {})
+        if not isinstance(dictionary, dict):
+            dictionary = data.get("manager_context", {}).get("dictionary", {})
+        if not isinstance(dictionary, dict):
+            dictionary = {}
+
+        local_data = shared.get("local_data", {}) if isinstance(shared.get("local_data"), dict) else {}
+        data_sources = local_data.get("data_sources") or data_context.get("matches", [])
+        for source in data_sources[:10]:
+            if not isinstance(source, dict):
+                continue
+            score = source.get("score", 0) or 0
+            try:
+                score = float(score)
+            except (TypeError, ValueError):
+                score = 0
+            evidence.append({
+                "source_brain": "Data_context",
+                "name": source.get("file", "local data"),
+                "url": "",
+                "source_type": "local_data_json",
+                "trust_score": max(45, min(round(58 + score * 0.6, 2), 85)),
+                "supports": source.get("matched_terms", [])[:10],
+                "notes": f"Relevant Canri DATA file. Shape: {source.get('shape')}, items: {source.get('items')}",
+                "sample": source.get("value_matches", [])[:4] or source.get("sample", [])[:6]
+            })
+
+        for item in knowledge.get("matches", [])[:8]:
+            if not isinstance(item, dict):
+                continue
+            sources = item.get("sources", [])
+            trust = 78
+            if sources and isinstance(sources[0], dict):
+                trust = sources[0].get("trust_score", sources[0].get("source_trust", trust))
+            try:
+                trust = float(trust)
+            except (TypeError, ValueError):
+                trust = 78
+            evidence.append({
+                "source_brain": "Knowledge_database",
+                "name": item.get("title", "knowledge article"),
+                "url": "",
+                "source_type": "local_knowledge_article",
+                "trust_score": max(50, min(round(trust, 2), 90)),
+                "supports": item.get("terms", [])[:12],
+                "notes": str(item.get("summary", ""))[:500]
+            })
+
+        for entry in dictionary.get("entries", [])[:10]:
+            if not isinstance(entry, dict):
+                continue
+            meanings = entry.get("meanings", [])
+            evidence.append({
+                "source_brain": "UnderstandingDk",
+                "name": entry.get("word", "dictionary entry"),
+                "url": "",
+                "source_type": "local_dictionary",
+                "trust_score": 74,
+                "supports": [entry.get("word"), entry.get("type")] + entry.get("connections", [])[:8],
+                "notes": "; ".join(str(item) for item in meanings[:3])
+            })
+
+        return evidence[:30]
+
     def collect_evidence_from_result(self, brain_name, result, evidence):
 
         sources = []
@@ -621,6 +710,7 @@ class FactCheckBrain:
         text = self.extract_text(data)
         claims = self.collect_claims(data, results)
         evidence = self.collect_evidence(data, results)
+        evidence.extend(self.collect_context_evidence(data))
         local_data_evidence = self.collect_local_data_evidence(text, report, claims)
         evidence.extend(local_data_evidence)
         conflicts = self.detect_conflicts(claims)

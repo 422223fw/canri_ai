@@ -416,6 +416,27 @@ class ResponseBrain:
             "warnings": list(dict.fromkeys(warnings))
         }
 
+    def quality_status(self, results):
+
+        quality = results.get("Quality_Control_brain", {})
+
+        if not isinstance(quality, dict):
+            return {
+                "available": False,
+                "passed": None,
+                "score": None,
+                "issues": []
+            }
+
+        return {
+            "available": True,
+            "passed": quality.get("passed"),
+            "score": quality.get("quality_score"),
+            "needs_retry": quality.get("needs_retry"),
+            "issues": quality.get("issues", [])[:5],
+            "retry_requests": quality.get("retry_requests", [])[:5]
+        }
+
     # ---------- selection ----------
 
     def result_score(self, brain_name, result):
@@ -786,15 +807,35 @@ class ResponseBrain:
 
     def format_creative_result(self, result):
 
+        nested_answer = result.get("answer_for_source_brain")
+        if isinstance(nested_answer, dict):
+            for key in ["generated_code", "final_output", "story", "answer", "concept"]:
+                value = nested_answer.get(key)
+                if isinstance(value, str) and value.strip():
+                    if key == "generated_code":
+                        return self.format_code_block(
+                            value,
+                            nested_answer.get("language")
+                        )
+                    if not self.looks_like_internal_report(value):
+                        return value
+
         for key in ["final_output", "story", "answer", "result"]:
             value = result.get(key)
             if isinstance(value, str) and value.strip():
-                return value
+                if not self.looks_like_internal_report(value):
+                    return value
 
         evolution = result.get("evolution", {})
         quality = result.get("quality", {})
         best = result.get("best_idea", {})
         top_ideas = result.get("top_ideas", [])
+
+        if isinstance(best, dict):
+            for key in ["final_output", "story", "concept", "summary"]:
+                value = best.get(key)
+                if isinstance(value, str) and value.strip():
+                    return self.clean_text(value)
 
         lines = ["Simulation results:"]
 
@@ -841,7 +882,10 @@ class ResponseBrain:
                 suffix = f" ({score})" if score != "" else ""
                 lines.append(f"{index}. {self.clean_text(title)}{suffix}")
 
-        return "\n".join(line for line in lines if line.strip())
+        return (
+            "Creative_brain completed a simulation, but it did not return a clean final answer yet. "
+            "Quality_Control_brain should ask the specialist to convert the selected idea into the final user-facing result."
+        )
 
     def format_image_result(self, result):
 
@@ -968,6 +1012,52 @@ class ResponseBrain:
             return self.format_structured(result["game_design"])
 
         return self.format_structured(result)
+
+    def looks_like_internal_report(self, text):
+
+        lowered = str(text).lower()
+        markers = [
+            "goal:",
+            "core idea:",
+            "novel twist:",
+            "constraint:",
+            "validation:",
+            "tradeoff:",
+            "implementation:",
+            "direction:"
+        ]
+
+        return sum(1 for marker in markers if marker in lowered) >= 3
+
+    def safe_alternative_result(self, results, report, user_text, current_brain=None):
+
+        preferred_brain, preferred_result = self.choose_domain_result(
+            report,
+            results,
+            user_text
+        )
+
+        candidates = []
+        if preferred_brain and preferred_brain != current_brain:
+            candidates.append((preferred_brain, preferred_result))
+
+        for brain_name, result in results.items():
+            if brain_name in {
+                current_brain,
+                "Response_brain",
+                "Security_brain",
+                "Quality_Control_brain",
+                "Learning_brain"
+            }:
+                continue
+            candidates.append((brain_name, result))
+
+        for brain_name, result in candidates:
+            text = self.text_from_result(brain_name, result)
+            if text and not self.looks_like_internal_report(text):
+                return brain_name, result, text
+
+        return None, {}, ""
 
     def format_plan(self, plan):
 
@@ -1102,6 +1192,29 @@ class ResponseBrain:
 
         return text
 
+    def add_quality_note(self, text, results):
+
+        quality = self.quality_status(results)
+
+        if not quality["available"]:
+            return text
+
+        if quality.get("passed") is True:
+            return text
+
+        issues = quality.get("issues", [])
+        if not issues:
+            return text
+
+        main_issue = issues[0]
+        problem = main_issue.get("problem", "Quality check found a possible issue.")
+        score = quality.get("score")
+        note = f"Quality note: {problem}"
+        if score is not None:
+            note += f" Score: {score}/100."
+
+        return f"{text}\n\n{note}"
+
     def adapt_tone(self, text, results):
 
         emotion = results.get("Emotion_brain", {})
@@ -1211,6 +1324,22 @@ class ResponseBrain:
 
             if primary_brain:
                 display_text = self.text_from_result(primary_brain, primary_result)
+                if self.looks_like_internal_report(display_text):
+                    alt_brain, alt_result, alt_text = self.safe_alternative_result(
+                        results,
+                        report,
+                        user_text,
+                        primary_brain
+                    )
+                    if alt_text:
+                        primary_brain = alt_brain
+                        primary_result = alt_result
+                        display_text = alt_text
+                    else:
+                        display_text = (
+                            "I found internal planning output, but not a clean final answer yet. "
+                            "Quality_Control_brain should retry the specialist brain and ask it for the final user-facing result."
+                        )
             elif user_text:
                 display_text = "קיבלתי את ההודעה, אבל עדיין אין לי פלט מומחה מספיק טוב להציג."
             else:
@@ -1221,6 +1350,10 @@ class ResponseBrain:
                 results,
                 report,
                 primary_brain
+            )
+            display_text = self.add_quality_note(
+                display_text,
+                results
             )
             display_text = self.adapt_tone(display_text, results)
 
@@ -1248,6 +1381,7 @@ class ResponseBrain:
             "confidence": confidence,
             "blocked": safety["blocked"],
             "safety": safety,
+            "quality": self.quality_status(results),
             "used_results": sorted(results.keys()),
             "screen_ready": True,
             "rules": [

@@ -15,8 +15,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 try:
-    from Data_context import search_data_context
+    from Data_context import build_shared_data_context, search_data_context
 except Exception:
+    build_shared_data_context = None
     search_data_context = None
 
 try:
@@ -443,7 +444,10 @@ class ManagerBrain:
             }
 
         try:
-            context = search_data_context(query, limit=12)
+            if build_shared_data_context:
+                context = build_shared_data_context(query, limit=12)
+            else:
+                context = search_data_context(query, limit=12)
         except Exception as error:
             return {
                 "available": False,
@@ -456,6 +460,108 @@ class ManagerBrain:
         context["query"] = query
         context["source"] = "main_ai_canri/data"
         return context
+
+    def build_shared_brain_context(
+        self,
+        original_data,
+        report,
+        memory_report,
+        dictionary,
+        data_context,
+        knowledge
+    ):
+
+        query = self.extract_query_text(
+            original_data,
+            report,
+            memory_report
+        )
+
+        conversation = (
+            memory_report.get("conversation", {})
+            if isinstance(memory_report, dict)
+            else {}
+        )
+
+        data_pack = (
+            data_context.get("context_pack", {})
+            if isinstance(data_context, dict)
+            else {}
+        )
+
+        dictionary_entries = []
+        if isinstance(dictionary, dict):
+            for entry in dictionary.get("entries", [])[:8]:
+                if not isinstance(entry, dict):
+                    continue
+                dictionary_entries.append({
+                    "word": entry.get("word"),
+                    "type": entry.get("type"),
+                    "meanings": entry.get("meanings", [])[:2],
+                    "connections": entry.get("connections", [])[:6],
+                    "forms": entry.get("forms", {})
+                })
+
+        knowledge_matches = []
+        if isinstance(knowledge, dict):
+            for item in knowledge.get("matches", [])[:5]:
+                if not isinstance(item, dict):
+                    continue
+                knowledge_matches.append({
+                    "title": item.get("title"),
+                    "summary": str(item.get("summary", ""))[:500],
+                    "score": item.get("score"),
+                    "sources": item.get("sources", [])[:2]
+                })
+
+        recommended = []
+        if isinstance(data_pack, dict):
+            recommended.extend(data_pack.get("recommended_brains", []))
+
+        return {
+            "query": query,
+            "request": {
+                "main_topic": report.get("main_topic"),
+                "intent": report.get("intent"),
+                "possible_tasks": report.get("possible_tasks", [])[:12],
+                "requested_action": report.get("requested_action", {}),
+                "semantic_frame": report.get("semantic_frame", {}),
+                "meaning_frame": report.get("meaning_frame", {})
+            },
+            "conversation": {
+                "session_id": conversation.get("session_id"),
+                "turn_count": conversation.get("turn_count", 0),
+                "summary": conversation.get("summary", ""),
+                "keywords": conversation.get("keywords", [])[:20],
+                "recent_turns": conversation.get("recent_turns", [])[-4:],
+                "session_isolation": conversation.get("session_isolation", True)
+            },
+            "dictionary": {
+                "available": dictionary.get("available") if isinstance(dictionary, dict) else False,
+                "entries": dictionary_entries,
+                "company_matches": dictionary.get("company_matches", [])[:5] if isinstance(dictionary, dict) else [],
+                "product_matches": dictionary.get("product_matches", [])[:8] if isinstance(dictionary, dict) else []
+            },
+            "local_data": {
+                "available": data_context.get("available") if isinstance(data_context, dict) else False,
+                "domains": data_pack.get("domains", []) if isinstance(data_pack, dict) else [],
+                "key_terms": data_pack.get("key_terms", [])[:25] if isinstance(data_pack, dict) else [],
+                "data_sources": data_pack.get("data_sources", [])[:6] if isinstance(data_pack, dict) else [],
+                "evidence_snippets": data_pack.get("evidence_snippets", [])[:8] if isinstance(data_pack, dict) else [],
+                "confidence": data_pack.get("confidence", 0) if isinstance(data_pack, dict) else 0
+            },
+            "knowledge": {
+                "available": knowledge.get("available") if isinstance(knowledge, dict) else False,
+                "matches": knowledge_matches
+            },
+            "recommended_brains": list(dict.fromkeys(recommended)),
+            "handoff_rules": [
+                "Every specialist should use Understanding + Memory + shared_context before answering.",
+                "If a specialist cannot satisfy the request, return needs_help=True with missing parts.",
+                "Quality_Control_brain must check whether the final answer matches the user request.",
+                "Response_brain must show the final user-facing result, not internal planning reports."
+            ]
+        }
 
     # ---------- planning ----------
 
@@ -581,6 +687,7 @@ class ManagerBrain:
             {
                 "phase": "safety_and_context",
                 "brains": [
+                    "Memory_brain",
                     "Emotion_brain",
                     "Security_brain"
                 ]
@@ -783,13 +890,27 @@ class ManagerBrain:
             report,
             memory_report
         )
+        context["shared_context"] = context.get("shared_context") or self.build_shared_brain_context(
+            original_data,
+            report,
+            memory_report,
+            context["dictionary"],
+            context["data_context"],
+            context["knowledge"]
+        )
         context["manager_context"] = {
             "phase": phase,
             "previous_results": results,
             "available_brains": sorted(self.brains.keys()),
             "dictionary": context["dictionary"],
             "data_context": context["data_context"],
-            "knowledge": context["knowledge"]
+            "knowledge": context["knowledge"],
+            "shared_context": context["shared_context"],
+            "conversation": (
+                memory_report.get("conversation", {})
+                if isinstance(memory_report, dict)
+                else {}
+            )
         }
 
         return context
@@ -1018,6 +1139,18 @@ class ManagerBrain:
                 memory_report
             )
 
+        if isinstance(data, dict) and isinstance(data.get("shared_context"), dict):
+            shared_brain_context = data["shared_context"]
+        else:
+            shared_brain_context = self.build_shared_brain_context(
+                data,
+                report,
+                memory_report,
+                shared_dictionary,
+                shared_data_context,
+                shared_knowledge
+            )
+
         for phase_data in phases:
 
             phase_name = phase_data.get("phase", "unknown")
@@ -1030,6 +1163,7 @@ class ManagerBrain:
                 phase_context["knowledge"] = shared_knowledge
                 phase_context["dictionary"] = shared_dictionary
                 phase_context["data_context"] = shared_data_context
+                phase_context["shared_context"] = shared_brain_context
 
             results = self.execute(
                 phase_brains,
@@ -1272,12 +1406,21 @@ class ManagerBrain:
             report,
             memory_report
         )
+        shared_brain_context = self.build_shared_brain_context(
+            data,
+            report,
+            memory_report,
+            shared_dictionary,
+            shared_data_context,
+            shared_knowledge
+        )
 
         if isinstance(data, dict):
             data = dict(data)
             data["knowledge"] = shared_knowledge
             data["dictionary"] = shared_dictionary
             data["data_context"] = shared_data_context
+            data["shared_context"] = shared_brain_context
 
         phases = self.build_plan(report, memory_report)
         plan = self.flatten_plan(phases)
@@ -1346,6 +1489,22 @@ class ManagerBrain:
                     if isinstance(item, dict)
                 ]
             },
+            "conversation_context": (
+                memory_report.get("conversation", {})
+                if isinstance(memory_report, dict)
+                else {}
+            ),
+            "shared_context": shared_brain_context,
+            "quality_control": (
+                {
+                    "passed": results.get("Quality_Control_brain", {}).get("passed"),
+                    "quality_score": results.get("Quality_Control_brain", {}).get("quality_score"),
+                    "needs_retry": results.get("Quality_Control_brain", {}).get("needs_retry"),
+                    "issues": results.get("Quality_Control_brain", {}).get("issues", [])[:8]
+                }
+                if isinstance(results.get("Quality_Control_brain"), dict)
+                else {}
+            ),
             "brains_used": plan,
             "phases": [
                 {

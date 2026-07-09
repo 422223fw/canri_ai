@@ -319,8 +319,104 @@ def search_data_context(query, limit=10):
     }
 
 
-def best_data_sources(query, limit=5):
+def compact_match_for_brains(match):
+    value_matches = []
+
+    for item in match.get("value_matches", [])[:4]:
+        if isinstance(item, dict):
+            value_matches.append({
+                "path": item.get("path"),
+                "matched_terms": item.get("matched_terms", [])[:6],
+                "text": str(item.get("text", ""))[:260]
+            })
+        else:
+            value_matches.append(str(item)[:260])
+
+    return {
+        "file": match.get("file"),
+        "score": match.get("score", 0),
+        "shape": match.get("shape"),
+        "items": match.get("items"),
+        "matched_terms": match.get("matched_terms", [])[:10],
+        "sample": match.get("sample", [])[:10],
+        "value_matches": value_matches
+    }
+
+
+def recommended_brains_from_domains(domains):
+    mapping = {
+        "code": ["Code_brain", "Technology_brain", "Quality_Control_brain"],
+        "creative": ["Creative_brain", "Quality_Control_brain"],
+        "game": ["Game_brain", "Creative_brain", "Quality_Control_brain"],
+        "planner": ["Planner_brain", "Reasoning_brain"],
+        "language": ["Language_brain", "Spelling_brain"],
+        "knowledge": ["Research_brain", "Fact_Check_brain"],
+        "memory": ["Memory_brain"],
+        "science": ["Science_brain", "Research_brain", "Fact_Check_brain"],
+        "geography": ["Geography_brain", "Research_brain"],
+        "technology": ["Technology_brain", "Research_brain"],
+        "vision": ["Vision_brain", "Security_brain"],
+        "voice": ["Voice_brain", "Vision_brain"],
+        "reasoning": ["Reasoning_brain", "Quality_Control_brain"],
+        "security": ["Security_brain", "Fact_Check_brain"],
+        "math": ["Math_brain", "Reasoning_brain", "Quality_Control_brain"],
+    }
+
+    brains = []
+    for domain in domains:
+        brains.extend(mapping.get(domain, []))
+
+    return list(dict.fromkeys(brains))
+
+
+def build_context_pack(context, query):
+    matches = context.get("matches", [])
+    domains = context.get("domains", [])
+    compact_matches = [
+        compact_match_for_brains(match)
+        for match in matches[:8]
+        if isinstance(match, dict)
+    ]
+    top_score = compact_matches[0]["score"] if compact_matches else 0
+
+    evidence_snippets = []
+    for match in compact_matches:
+        for value in match.get("value_matches", [])[:3]:
+            if isinstance(value, dict) and value.get("text"):
+                evidence_snippets.append({
+                    "file": match.get("file"),
+                    "path": value.get("path"),
+                    "text": value.get("text"),
+                    "matched_terms": value.get("matched_terms", [])
+                })
+        if len(evidence_snippets) >= 10:
+            break
+
+    return {
+        "query": query,
+        "key_terms": context.get("query_terms", [])[:30],
+        "domains": domains,
+        "data_sources": compact_matches,
+        "evidence_snippets": evidence_snippets[:10],
+        "recommended_brains": recommended_brains_from_domains(domains),
+        "confidence": min(95, 35 + top_score) if compact_matches else 0,
+        "usage_policy": [
+            "Use local DATA as supporting context, not as the only truth source.",
+            "Prefer exact value_matches over broad file-name matches.",
+            "If facts are important or high risk, send the result to Fact_Check_brain.",
+            "If the DATA is weak or missing, ask Research_brain or Knowledge_collector for stronger context."
+        ]
+    }
+
+
+def build_shared_data_context(query, limit=12):
     context = search_data_context(query, limit=limit)
+    context["context_pack"] = build_context_pack(context, query)
+    return context
+
+
+def best_data_sources(query, limit=5):
+    context = build_shared_data_context(query, limit=limit)
     return [
         {
             "name": match["file"],

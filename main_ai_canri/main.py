@@ -296,13 +296,34 @@ def process_user_message(message, attached_files=None, progress_callback=None, s
             memory_result,
             manager_result
         )
+        try:
+            memory_brain.store_response(
+                session_id,
+                message,
+                response_result.get("display_text") or response_result.get("answer", ""),
+                response_result,
+                manager_result
+            )
+        except Exception:
+            pass
         emit_progress(progress_callback, "complete", "Response ready")
         return response_result
 
     emit_progress(progress_callback, "complete", "Fallback response ready")
+    fallback_text = str(manager_result)
+    try:
+        memory_brain.store_response(
+            session_id,
+            message,
+            fallback_text,
+            {},
+            manager_result
+        )
+    except Exception:
+        pass
     return {
-        "display_text": str(manager_result),
-        "answer": str(manager_result),
+        "display_text": fallback_text,
+        "answer": fallback_text,
         "thinking_trace": build_thinking_trace(
             spelling_report,
             understanding_report,
