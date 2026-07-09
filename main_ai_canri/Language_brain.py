@@ -179,14 +179,27 @@ class LanguageBrain:
         confidence = round(sum(confidence_values) / len(confidence_values), 2) if confidence_values else 68
 
         answer_parts = []
-        if translation.get("translated_text"):
-            answer_parts.append(f"Translation: {translation['translated_text']}")
-        if grammar.get("corrected_text"):
-            answer_parts.append(f"Grammar: {grammar['corrected_text']}")
+        translation_text = translation.get("translated_text")
+        if not translation_text and isinstance(translation.get("result"), dict):
+            translation_text = translation["result"].get("translated_text")
+
+        is_translation_request = translation.get("is_translation_request", False)
+        corrected_text = grammar.get("corrected_text") or grammar.get("fixed_text")
+
+        if is_translation_request and translation_text:
+            answer_parts.append(str(translation_text))
+
+        if corrected_text and corrected_text != text and corrected_text.lower() != text.lower():
+            answer_parts.append(f"Corrected text: {corrected_text}")
+
         if dictionary.get("answer"):
             answer_parts.append(str(dictionary["answer"]))
+
         if expressions.get("answer"):
             answer_parts.append(str(expressions["answer"]))
+
+        if not answer_parts and isinstance(final_report, dict) and final_report.get("answer"):
+            answer_parts.append(str(final_report["answer"]))
 
         if not answer_parts:
             answer_parts.append(
@@ -214,7 +227,8 @@ class LanguageBrain:
             "grammar": grammar,
             "translation": translation,
             "dictionary": dictionary,
-            "expressions": expressions
+            "expressions": expressions,
+            "language_data_summary": raw_report.get("language_data_summary", {})
         })
         return unified
 
@@ -305,6 +319,11 @@ class LanguageBrain:
             "input_text": text,
             "understanding_report": understanding_report,
             "language_data_loaded": bool(language_data),
+            "language_data_summary": (
+                language_data.get("metadata", {})
+                if isinstance(language_data, dict)
+                else {}
+            ),
 
             "analysis": analysis_result,
             "grammar": grammar_result,
