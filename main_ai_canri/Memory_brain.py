@@ -575,11 +575,44 @@ class MemoryBrain:
         self.save_memory()
         return target
 
-    def build_conversation_report(self, session_id):
+    def is_continuation_request(self, text):
+
+        lowered = str(text).lower()
+        markers = [
+            "continue",
+            "same program",
+            "same code",
+            "same story",
+            "you just wrote",
+            "previous code",
+            "previous answer",
+            "fix the program",
+            "fix it",
+            "improve it",
+            "improve the same",
+            "add these features",
+            "from the code",
+            "מהקוד הקודם",
+            "תמשיך",
+            "תתקן",
+            "תשפר"
+        ]
+
+        return any(marker in lowered for marker in markers)
+
+    def build_conversation_report(self, session_id, current_report=None, current_text=""):
 
         bucket = self.conversation_bucket(session_id)
         turns = bucket.get("turns", [])
         code_blocks = []
+        current_report = current_report if isinstance(current_report, dict) else {}
+        current_topic = current_report.get("main_topic", "unknown")
+        current_intent = current_report.get("intent", "unknown")
+        current_keywords = set(
+            self.extract_keywords(current_report, current_text)
+            if current_report
+            else []
+        )
 
         for turn in turns[-12:]:
             canri_text = str(turn.get("canri", ""))
@@ -598,6 +631,25 @@ class MemoryBrain:
                     "created_utc": turn.get("created_utc")
                 })
 
+        completed_turns = [
+            turn
+            for turn in turns
+            if str(turn.get("canri", "")).strip()
+        ]
+        last_turn = completed_turns[-1] if completed_turns else {}
+        last_topic = last_turn.get("main_topic", "unknown")
+        last_intent = last_turn.get("intent", "unknown")
+        last_keywords = set(last_turn.get("keywords", []))
+        overlap = sorted(current_keywords & last_keywords)[:12]
+        topic_shift = bool(
+            current_topic
+            and last_topic
+            and current_topic not in {"unknown", "general"}
+            and last_topic not in {"unknown", "general"}
+            and current_topic != last_topic
+            and len(overlap) < 3
+        )
+
         return {
             "session_id": session_id,
             "title": bucket.get("title"),
@@ -615,6 +667,18 @@ class MemoryBrain:
                 for turn in turns[-8:]
             ],
             "recent_code_blocks": code_blocks[-4:],
+            "last_completed_turn": {
+                "user": str(last_turn.get("user", ""))[:500],
+                "canri": str(last_turn.get("canri", ""))[:900],
+                "main_topic": last_topic,
+                "intent": last_intent,
+                "keywords": list(last_keywords)[:20],
+                "created_utc": last_turn.get("created_utc")
+            } if last_turn else {},
+            "continuation_request": self.is_continuation_request(current_text),
+            "topic_shift_from_previous": topic_shift,
+            "keyword_overlap_with_previous": overlap,
+            "usable_previous_code": code_blocks[-1] if code_blocks else None,
             "session_isolation": True
         }
 
@@ -832,7 +896,11 @@ class MemoryBrain:
             "memory_found": len(ranked_matches),
             "session_id": session_id,
             "session_isolation": True,
-            "conversation": self.build_conversation_report(session_id),
+            "conversation": self.build_conversation_report(
+                session_id,
+                understanding_report,
+                user_turn_text
+            ),
             "ranked_matches": ranked_matches,
             "topic_matches": topic_matches,
             "intent_matches": intent_matches,
@@ -860,7 +928,11 @@ class MemoryBrain:
 
         memory_report["stored_episode_id"] = stored_episode["id"]
         memory_report["stored_turn_id"] = user_turn.get("id")
-        memory_report["conversation"] = self.build_conversation_report(session_id)
+        memory_report["conversation"] = self.build_conversation_report(
+            session_id,
+            understanding_report,
+            user_turn_text
+        )
         memory_report["memory_depth"] = {
             "episodes": len(self.database.get("episodes", [])),
             "session_episodes": len(self.session_episodes(session_id)),

@@ -1215,6 +1215,23 @@ class ResponseBrain:
 
         return f"{text}\n\n{note}"
 
+    def blocking_quality_issue(self, results, primary_brain=None):
+
+        quality = self.quality_status(results)
+        if not quality["available"] or quality.get("passed") is True:
+            return None
+
+        for issue in quality.get("issues", []):
+            if not isinstance(issue, dict):
+                continue
+            if issue.get("severity") not in {"critical", "high"}:
+                continue
+            if primary_brain and issue.get("target_brain") not in {primary_brain, "Manager_brain"}:
+                continue
+            return issue
+
+        return None
+
     def adapt_tone(self, text, results):
 
         emotion = results.get("Emotion_brain", {})
@@ -1340,6 +1357,14 @@ class ResponseBrain:
                             "I found internal planning output, but not a clean final answer yet. "
                             "Quality_Control_brain should retry the specialist brain and ask it for the final user-facing result."
                         )
+                blocking_issue = self.blocking_quality_issue(results, primary_brain)
+                if blocking_issue:
+                    display_text = (
+                        "The current draft did not pass Canri's quality check yet.\n\n"
+                        f"Problem: {blocking_issue.get('problem')}\n"
+                        f"Fix needed: {blocking_issue.get('instruction')}"
+                    )
+                    primary_brain = "Quality_Control_brain"
             elif user_text:
                 display_text = "קיבלתי את ההודעה, אבל עדיין אין לי פלט מומחה מספיק טוב להציג."
             else:

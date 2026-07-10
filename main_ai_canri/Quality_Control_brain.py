@@ -178,6 +178,7 @@ class QualityControlBrain:
             "wants_percentages": "percentage" in lowered or "percentages" in lowered or "percent" in lowered,
             "wants_history": "history" in lowered,
             "wants_steps": "step by step" in lowered or "steps" in lowered,
+            "expected_program_kind": self.detect_expected_program_kind(lowered),
             "requested_code_features": self.extract_requested_code_features(lowered),
             "needs_local_data": any(
                 marker in lowered
@@ -209,10 +210,37 @@ class QualityControlBrain:
 
         return requirements
 
+    def detect_expected_program_kind(self, lowered):
+
+        checks = [
+            ("expense_tracker", ["expense tracker", "expenses", "amount spent", "total amount", "search expenses", "category"]),
+            ("calendar_app", ["calendar", "appointment", "appointments", "event planner", "schedule event"]),
+            ("contact_book", ["contact book", "contacts", "phone book", "address book"]),
+            ("library_manager", ["library manager", "book tracker", "books", "borrowed books", "reading list"]),
+            ("flashcards_app", ["flashcards", "flash cards", "study cards"]),
+            ("shop_inventory", ["shop inventory", "store inventory", "inventory tracker", "stock", "products in stock"]),
+            ("todo_app", ["to-do", "todo", "task list", "tasks", "mark a task"]),
+            ("notes_app", ["note app", "notes app", "notes", "note taking"]),
+            ("weather_app", ["weather app", "weather", "temperature", "humidity"]),
+            ("calculator", ["calculator", "calculate", "addition", "subtraction", "multiplication", "division"]),
+            ("quiz_game", ["quiz", "multiple choice"]),
+        ]
+
+        for kind, signals in checks:
+            if any(signal in lowered for signal in signals):
+                return kind
+
+        return None
+
     def extract_requested_code_features(self, lowered):
 
         features = []
         checks = [
+            ("calendar_events", ["calendar", "appointment", "appointments", "event", "events by date", "schedule event"]),
+            ("contact_records", ["contacts", "contact book", "phone", "email"]),
+            ("library_books", ["library", "books", "author", "borrowed books", "reading list"]),
+            ("flashcards", ["flashcards", "flash cards", "question", "answer", "study cards"]),
+            ("shop_inventory", ["shop inventory", "store inventory", "inventory", "stock", "products in stock"]),
             ("edit_existing_item", ["edit an existing", "edit a note", "edit note", "update an existing", "modify an existing"]),
             ("tags", ["add tags", "tags to", "by tag", "tags", "tag"]),
             ("search_title_body_tag", ["search notes by title", "search by title", "search notes by word", "search notes", "search by tag", "title, body, or tag"]),
@@ -327,6 +355,17 @@ class QualityControlBrain:
             )
             return
 
+        expected_kind = requirements.get("expected_program_kind")
+        actual_kind = result.get("program_kind")
+        if expected_kind and actual_kind and expected_kind != actual_kind:
+            self.add_issue(
+                issues,
+                "Code_brain",
+                "critical",
+                f"Wrong program kind selected: expected {expected_kind}, got {actual_kind}.",
+                "Select the dedicated complete program template for the user's requested app type."
+            )
+
         if requirements["code_only"]:
             forbidden = ["main pieces:", "plan:", "draft structure", "helper variant", "placeholder"]
             if any(marker in lowered_code for marker in forbidden):
@@ -397,6 +436,21 @@ class QualityControlBrain:
 
         if feature == "old_json_compatibility":
             return ("normalize_" in lowered and '"tags": []' in lowered) or "item.get(\"text\"" in lowered
+
+        if feature == "calendar_events":
+            return "calendar" in lowered and "date" in lowered and "time" in lowered and "events" in lowered
+
+        if feature == "contact_records":
+            return "contacts.json" in lowered and "phone" in lowered and "email" in lowered
+
+        if feature == "library_books":
+            return "library" in lowered and "title" in lowered and "author" in lowered
+
+        if feature == "flashcards":
+            return "flashcards.json" in lowered and "question" in lowered and "answer" in lowered
+
+        if feature == "shop_inventory":
+            return "inventory" in lowered and "quantity" in lowered and "price" in lowered
 
         if feature == "expense_amount":
             return '"amount"' in lowered and "float(" in lowered
@@ -837,6 +891,60 @@ class QualityControlBrain:
 
         return max(0, min(score, 100))
 
+    def build_requirement_checks(self, results, requirements):
+
+        checks = []
+
+        for brain_name in self.expected_brains(requirements):
+            result = results.get(brain_name)
+            checks.append({
+                "requirement": f"run_{brain_name}",
+                "passed": isinstance(result, dict) and not result.get("error") and not result.get("skipped"),
+                "target_brain": brain_name
+            })
+
+        if requirements.get("is_code_request"):
+            code_result = results.get("Code_brain", {})
+            code = ""
+            if isinstance(code_result, dict):
+                code = str(
+                    code_result.get("generated_code")
+                    or code_result.get("code")
+                    or code_result.get("answer")
+                    or ""
+                )
+
+            expected_kind = requirements.get("expected_program_kind")
+            if expected_kind:
+                checks.append({
+                    "requirement": f"program_kind_{expected_kind}",
+                    "passed": isinstance(code_result, dict) and code_result.get("program_kind") == expected_kind,
+                    "target_brain": "Code_brain"
+                })
+
+            for feature in requirements.get("requested_code_features", []):
+                checks.append({
+                    "requirement": feature,
+                    "passed": self.code_feature_present(feature, code),
+                    "target_brain": "Code_brain"
+                })
+
+        if requirements.get("is_math_request"):
+            math_result = results.get("Math_brain", {})
+            checks.append({
+                "requirement": "math_solved",
+                "passed": isinstance(math_result, dict) and math_result.get("success") is True,
+                "target_brain": "Math_brain"
+            })
+            if requirements.get("wants_steps"):
+                checks.append({
+                    "requirement": "step_by_step",
+                    "passed": isinstance(math_result, dict) and bool(math_result.get("steps")),
+                    "target_brain": "Math_brain"
+                })
+
+        return checks
+
     def process(self, data):
         report = self.get_understanding_report(data)
         results = self.get_results(data)
@@ -857,6 +965,7 @@ class QualityControlBrain:
 
         retry_requests = self.build_retry_requests(issues)
         score = self.quality_score(issues)
+        requirement_checks = self.build_requirement_checks(results, requirements)
         passed = score >= 78 and not retry_requests
 
         self.save_statistics(passed, score)
@@ -868,6 +977,7 @@ class QualityControlBrain:
             "needs_retry": bool(retry_requests),
             "retry_requests": retry_requests,
             "issues": issues[:20],
+            "requirement_checks": requirement_checks[:40],
             "requirements": requirements,
             "checked_brains": sorted(results.keys()),
             "confidence": score,

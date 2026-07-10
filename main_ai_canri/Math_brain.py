@@ -359,22 +359,73 @@ class MathBrain:
             "confidence": 96
         }
 
+    def parse_quadratic_side(self, side):
+        side = side.replace("-", "+-")
+        if side.startswith("+"):
+            side = side[1:]
+
+        coefficients = {
+            "x2": 0.0,
+            "x": 0.0,
+            "constant": 0.0
+        }
+
+        for term in side.split("+"):
+            term = term.strip()
+            if not term:
+                continue
+
+            if "x**2" in term:
+                coefficient = term.replace("x**2", "")
+                if coefficient in ["", "+"]:
+                    value = 1.0
+                elif coefficient == "-":
+                    value = -1.0
+                else:
+                    value = float(coefficient)
+                coefficients["x2"] += value
+            elif "x" in term:
+                coefficient = term.replace("x", "")
+                if coefficient in ["", "+"]:
+                    value = 1.0
+                elif coefficient == "-":
+                    value = -1.0
+                else:
+                    value = float(coefficient)
+                coefficients["x"] += value
+            else:
+                coefficients["constant"] += float(term)
+
+        return coefficients
+
     def solve_quadratic_equation(self, text):
         cleaned = self.normalize_expression(text).replace(" ", "")
         if "x**2" not in cleaned or "=" not in cleaned:
             return None
 
-        match = re.search(
-            r"([+-]?\d*(?:\.\d+)?)x\*\*2([+-]\d*(?:\.\d+)?)x([+-]\d+(?:\.\d+)?)=0(?:\.0)?",
-            cleaned
-        )
-        if not match:
+        start = cleaned.find("x**2")
+        while start > 0 and cleaned[start - 1] in "0123456789.+-":
+            start -= 1
+        cleaned = cleaned[start:]
+
+        left_side, right_side = cleaned.split("=", 1)
+        right_match = re.match(r"[+\-0-9.x*]+", right_side)
+        if right_match:
+            right_side = right_match.group(0)
+
+        try:
+            left = self.parse_quadratic_side(left_side)
+            right = self.parse_quadratic_side(right_side)
+        except ValueError:
             return None
 
-        a_text, b_text, c_text = match.groups()
-        a = 1.0 if a_text in ["", "+"] else -1.0 if a_text == "-" else float(a_text)
-        b = 1.0 if b_text == "+" else -1.0 if b_text == "-" else float(b_text)
-        c = float(c_text)
+        a = left["x2"] - right["x2"]
+        b = left["x"] - right["x"]
+        c = left["constant"] - right["constant"]
+
+        if a == 0:
+            return None
+
         discriminant = b * b - 4 * a * c
 
         if discriminant < 0:
@@ -397,6 +448,7 @@ class MathBrain:
             "type": "quadratic_equation",
             "answer": answer,
             "steps": [
+                f"Move everything to one side: {self.format_number(a)}x^2 + {self.format_number(b)}x + {self.format_number(c)} = 0",
                 f"a={self.format_number(a)}, b={self.format_number(b)}, c={self.format_number(c)}",
                 f"discriminant = {self.format_number(discriminant)}",
                 "x = (-b +/- sqrt(discriminant)) / 2a",

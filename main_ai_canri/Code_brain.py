@@ -2106,8 +2106,12 @@ if __name__ == "__main__":
         checks = [
             ("weather_app", ["weather", "temperature", "humidity", "forecast"]),
             ("expense_tracker", ["expense tracker", "expenses", "amount spent", "total amount", "search expenses", "category"]),
+            ("calendar_app", ["calendar", "appointment", "appointments", "event planner", "events by date", "schedule event"]),
             ("todo_app", ["to-do", "todo", "task list", "tasks", "mark a task"]),
             ("contact_book", ["contact", "phone book", "address book", "email book"]),
+            ("library_manager", ["library", "books", "book tracker", "borrowed books", "reading list"]),
+            ("flashcards_app", ["flashcards", "flash cards", "study cards", "review cards"]),
+            ("shop_inventory", ["shop inventory", "store inventory", "inventory tracker", "stock", "products in stock"]),
             ("notes_app", ["notes", "note taking", "save notes", "notebook"]),
             ("password_manager", ["password manager", "accounts", "account names", "view one account"]),
             ("quiz_game", ["quiz", "question game", "multiple choice"]),
@@ -2125,6 +2129,215 @@ if __name__ == "__main__":
             return "json_cli"
 
         return "number_summary"
+
+    def build_json_record_cli_code(
+        self,
+        title,
+        file_name,
+        fields,
+        search_fields,
+        numeric_fields=None,
+        total_expression=None,
+        total_label=None
+    ):
+
+        numeric_fields = numeric_fields or []
+        field_lines = ",\n    ".join(
+            repr(field)
+            for field in fields
+        )
+        search_field_lines = ",\n    ".join(
+            repr(field)
+            for field in search_fields
+        )
+        numeric_field_lines = ",\n    ".join(
+            repr(field)
+            for field in numeric_fields
+        )
+        total_expression = total_expression or "0"
+        total_label = total_label or "Total"
+
+        return f'''import json
+from pathlib import Path
+
+
+DATA_FILE = Path("{file_name}")
+FIELDS = [
+    {field_lines}
+]
+SEARCH_FIELDS = [
+    {search_field_lines}
+]
+NUMERIC_FIELDS = [
+    {numeric_field_lines}
+]
+
+
+def load_records():
+    if not DATA_FILE.exists():
+        return []
+
+    try:
+        data = json.loads(DATA_FILE.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        print(f"Could not read {{DATA_FILE}}, starting with an empty list.")
+        return []
+
+    if not isinstance(data, list):
+        return []
+
+    records = []
+    for item in data:
+        if isinstance(item, dict):
+            records.append(normalize_record(item))
+
+    return records
+
+
+def save_records(records):
+    DATA_FILE.write_text(
+        json.dumps(records, indent=2, ensure_ascii=False),
+        encoding="utf-8"
+    )
+
+
+def normalize_record(item):
+    record = {{}}
+    for field in FIELDS:
+        value = item.get(field, "")
+        if field in NUMERIC_FIELDS:
+            try:
+                value = float(value)
+            except (TypeError, ValueError):
+                value = 0.0
+        else:
+            value = str(value).strip()
+        record[field] = value
+    return record
+
+
+def input_value(field):
+    value = input(field.replace("_", " ").title() + ": ").strip()
+    if field in NUMERIC_FIELDS:
+        try:
+            return float(value)
+        except ValueError:
+            print("Invalid number, using 0.")
+            return 0.0
+    return value
+
+
+def add_record(records):
+    record = {{}}
+    for field in FIELDS:
+        record[field] = input_value(field)
+
+    if not any(str(value).strip() for value in record.values()):
+        print("Nothing was added.")
+        return
+
+    records.append(record)
+    save_records(records)
+    print("Saved.")
+
+
+def list_records(records):
+    if not records:
+        print("No records yet.")
+        return
+
+    for index, record in enumerate(records, start=1):
+        parts = [f"{{field}}={{record.get(field, '')}}" for field in FIELDS]
+        print(f"{{index}}. " + " | ".join(parts))
+
+
+def search_records(records, keyword):
+    keyword = keyword.strip().lower()
+    if not keyword:
+        print("Search keyword cannot be empty.")
+        return
+
+    matches = [
+        record
+        for record in records
+        if any(keyword in str(record.get(field, "")).lower() for field in SEARCH_FIELDS)
+    ]
+
+    list_records(matches)
+
+
+def get_record_index(records, raw_index):
+    try:
+        index = int(raw_index) - 1
+    except ValueError:
+        print("Please enter a valid number.")
+        return None
+
+    if index < 0 or index >= len(records):
+        print("Number is out of range.")
+        return None
+
+    return index
+
+
+def delete_record(records, raw_index):
+    index = get_record_index(records, raw_index)
+    if index is None:
+        return
+
+    removed = records.pop(index)
+    save_records(records)
+    print("Deleted: " + " | ".join(str(removed.get(field, "")) for field in FIELDS))
+
+
+def show_total(records):
+    total = sum({total_expression} for record in records)
+    print(f"{total_label}: {{total:.2f}}")
+
+
+def print_help():
+    print("Commands:")
+    print("  add               Add a record")
+    print("  list              List records")
+    print("  search <keyword>  Search records")
+    print("  delete <number>   Delete a record")
+    print("  total             Show total value")
+    print("  help              Show commands")
+    print("  quit              Save and exit")
+
+
+def main():
+    records = load_records()
+    print("{title}")
+    print_help()
+
+    while True:
+        command = input("> ").strip()
+        lower = command.lower()
+
+        if lower == "add":
+            add_record(records)
+        elif lower == "list":
+            list_records(records)
+        elif lower.startswith("search "):
+            search_records(records, command[7:].strip())
+        elif lower.startswith("delete "):
+            delete_record(records, command[7:].strip())
+        elif lower == "total":
+            show_total(records)
+        elif lower == "help":
+            print_help()
+        elif lower == "quit":
+            save_records(records)
+            print("Saved. Goodbye.")
+            break
+        else:
+            print("Unknown command. Type 'help' for commands.")
+
+
+if __name__ == "__main__":
+    main()
+'''
 
     def build_notes_app_code(self):
 
@@ -2482,6 +2695,48 @@ def main():
 if __name__ == "__main__":
     main()
 '''
+
+        if program_kind == "calendar_app":
+            return self.build_json_record_cli_code(
+                "Calendar App",
+                "calendar_events.json",
+                ["date", "time", "title", "description"],
+                ["date", "title", "description"],
+                total_label="Events",
+                total_expression="1"
+            )
+
+        if program_kind == "library_manager":
+            return self.build_json_record_cli_code(
+                "Library Manager",
+                "library_books.json",
+                ["title", "author", "year", "status"],
+                ["title", "author", "status"],
+                numeric_fields=["year"],
+                total_label="Books",
+                total_expression="1"
+            )
+
+        if program_kind == "flashcards_app":
+            return self.build_json_record_cli_code(
+                "Flashcards App",
+                "flashcards.json",
+                ["question", "answer", "tag"],
+                ["question", "answer", "tag"],
+                total_label="Cards",
+                total_expression="1"
+            )
+
+        if program_kind == "shop_inventory":
+            return self.build_json_record_cli_code(
+                "Shop Inventory",
+                "shop_inventory.json",
+                ["name", "sku", "category", "quantity", "price"],
+                ["name", "sku", "category"],
+                numeric_fields=["quantity", "price"],
+                total_label="Inventory value",
+                total_expression='record.get("quantity", 0) * record.get("price", 0)'
+            )
 
         if program_kind == "todo_app":
             return '''import json

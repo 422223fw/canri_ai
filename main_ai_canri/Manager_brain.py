@@ -534,6 +534,11 @@ class ManagerBrain:
                 "summary": conversation.get("summary", ""),
                 "keywords": conversation.get("keywords", [])[:20],
                 "recent_turns": conversation.get("recent_turns", [])[-4:],
+                "last_completed_turn": conversation.get("last_completed_turn", {}),
+                "continuation_request": conversation.get("continuation_request", False),
+                "topic_shift_from_previous": conversation.get("topic_shift_from_previous", False),
+                "keyword_overlap_with_previous": conversation.get("keyword_overlap_with_previous", [])[:12],
+                "usable_previous_code": conversation.get("usable_previous_code"),
                 "session_isolation": conversation.get("session_isolation", True)
             },
             "dictionary": {
@@ -678,10 +683,111 @@ class ManagerBrain:
 
         return list(dict.fromkeys(domains))
 
+    def primary_domain(self, report, memory_report=None):
+
+        memory_report = memory_report or {}
+        topic = str(report.get("main_topic", "")).lower()
+        intent = str(report.get("intent", "")).lower()
+        raw_text = " ".join(
+            str(report.get(key, ""))
+            for key in [
+                "original_text",
+                "corrected_text",
+                "text",
+                "goal",
+                "prompt"
+            ]
+            if report.get(key)
+        ).lower()
+        requested_action = report.get("requested_action", {})
+        action_intent = ""
+        if isinstance(requested_action, dict):
+            action_intent = str(requested_action.get("intent_override", "")).lower()
+
+        if intent == "math" or action_intent == "math" or (
+            re.search(r"\d|\bx\b", raw_text)
+            and (
+                "=" in raw_text
+                or "^" in raw_text
+                or "**" in raw_text
+                or any(term in raw_text for term in ["solve", "calculate", "equation", "step by step"])
+            )
+        ):
+            return "math"
+
+        if intent in {"code_generation", "code_analysis"} or action_intent in {"code_generation", "code_analysis"}:
+            return "code"
+
+        if topic == "code" and any(term in raw_text for term in ["code", "program", "python", "runnable", "terminal"]):
+            return "code"
+
+        if intent == "image_generation" or topic == "image_generation":
+            return "image_generation"
+
+        if intent == "story_creation" or topic == "story":
+            return "story"
+
+        if intent in {"question", "research"} and any(
+            marker in raw_text
+            for marker in ["reliable", "sources", "fact check", "local knowledge", "what is", "explain"]
+        ):
+            return "knowledge"
+
+        return topic or "general"
+
+    def focus_domains(self, domains, report, memory_report):
+
+        primary = self.primary_domain(report, memory_report)
+        domain_set = set(domains)
+
+        if primary == "math":
+            return [
+                domain
+                for domain in ["math", "security", "memory_context"]
+                if domain in domain_set or domain == "math"
+            ]
+
+        if primary == "code":
+            focused = ["code"]
+            if "game" in domain_set and any(
+                marker in " ".join(str(report.get(key, "")) for key in ["original_text", "corrected_text", "text", "goal", "prompt"]).lower()
+                for marker in ["game", "rpg", "player", "enemy", "inventory"]
+            ):
+                focused.append("game")
+            if "security" in domain_set:
+                focused.append("security")
+            if "memory_context" in domain_set:
+                focused.append("memory_context")
+            return focused
+
+        if primary == "story":
+            return [
+                domain
+                for domain in ["story", "creative", "memory_context"]
+                if domain in domain_set or domain in {"story", "creative"}
+            ]
+
+        if primary == "image_generation":
+            return [
+                domain
+                for domain in ["image_generation", "creative", "security", "memory_context"]
+                if domain in domain_set or domain in {"image_generation", "creative"}
+            ]
+
+        if primary == "knowledge":
+            return [
+                domain
+                for domain in ["research", "science", "technology", "geography", "history", "language", "general", "memory_context"]
+                if domain in domain_set
+            ] or ["research"]
+
+        return domains
+
     def build_plan(self, report, memory_report=None):
 
         memory_report = memory_report or {}
         domains = self.classify_request(report, memory_report)
+        domains = self.focus_domains(domains, report, memory_report)
 
         phases = [
             {
@@ -1437,7 +1543,13 @@ class ManagerBrain:
             "created_utc": datetime.now(timezone.utc).isoformat(),
             "used_understanding_report": bool(report),
             "used_memory_report": bool(memory_report),
+            "primary_domain": self.primary_domain(report, memory_report),
             "domains_detected": self.classify_request(report, memory_report),
+            "domains_used": self.focus_domains(
+                self.classify_request(report, memory_report),
+                report,
+                memory_report
+            ),
             "dictionary_context": {
                 "available": shared_dictionary.get("available"),
                 "entry_count": shared_dictionary.get("entry_count", 0),
