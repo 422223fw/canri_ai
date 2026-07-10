@@ -14,6 +14,7 @@ PACKAGE_DIR = PROJECT_ROOT / "main_ai_canri"
 sys.path.insert(0, str(PACKAGE_DIR))
 
 from Code_brain import CodeBrain  # noqa: E402
+from Creative_brain import CreativeBrain  # noqa: E402
 from Fact_Check_brain import FactCheckBrain  # noqa: E402
 from Math_brain import MathBrain  # noqa: E402
 from Quality_Control_brain import QualityControlBrain  # noqa: E402
@@ -166,6 +167,54 @@ def test_fact_check_evidence_coverage():
     assert_true(coverage["strong_sources"] >= 2, "Fact check should count strong sources.")
 
 
+def test_creative_story_returns_final_story():
+    prompt = (
+        "Write a short original story in 6 sentences about a quiet boy named Leo "
+        "who finds a tiny door under his bed. Only output the final story."
+    )
+
+    creative = CreativeBrain()
+    result = creative.solve_brain_task(
+        "Story_brain",
+        {
+            "understanding": {
+                "original_text": prompt,
+                "main_topic": "story",
+                "intent": "story_creation"
+            }
+        },
+        "creative_story_support"
+    )
+
+    story = result.get("final_output", "")
+    lowered = story.lower()
+    assert_true("leo" in lowered, "Creative story output should use the requested character.")
+    assert_true("door" in lowered, "Creative story output should keep the requested object.")
+    assert_true("goal:" not in lowered and "core idea:" not in lowered, "Creative story output leaked an internal report.")
+    assert_true(result.get("answer_for_source_brain", {}).get("story"), "Creative story payload should include a story field.")
+
+
+def test_creative_code_returns_real_code():
+    prompt = (
+        "Build a real runnable Python expense tracker for the terminal with amount, "
+        "category, description, search, total, delete, and expenses.json."
+    )
+
+    creative = CreativeBrain()
+    result = creative.solve_brain_task(
+        "Code_brain",
+        {"original_text": prompt},
+        "creative_code_assembly"
+    )
+
+    code = result.get("generated_code", "")
+    lowered = code.lower()
+    assert_true("def add_expense" in code, "Creative code fallback should generate an expense add function.")
+    assert_true("def show_total" in code, "Creative code fallback should generate a total function.")
+    assert_true("expenses.json" in lowered, "Creative code fallback should use expenses.json.")
+    assert_true("production_draft" not in lowered, "Creative code fallback should not return placeholder variants.")
+
+
 def main():
     tests = [
         test_expense_tracker_code_and_quality,
@@ -173,6 +222,8 @@ def main():
         test_response_blocks_bad_quality,
         test_quality_catches_wrong_program_kind,
         test_fact_check_evidence_coverage,
+        test_creative_story_returns_final_story,
+        test_creative_code_returns_real_code,
     ]
 
     for test in tests:
