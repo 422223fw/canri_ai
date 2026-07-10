@@ -688,6 +688,53 @@ class FactCheckBrain:
 
         return recommendations
 
+    def evidence_coverage(self, evidence):
+
+        coverage = {
+            "data_context": 0,
+            "knowledge_database": 0,
+            "dictionary": 0,
+            "research_or_external": 0,
+            "source_types": {},
+            "strong_sources": 0
+        }
+
+        for item in evidence:
+            if not isinstance(item, dict):
+                continue
+
+            source_brain = str(item.get("source_brain", "")).lower()
+            source_type = str(item.get("source_type", "")).lower()
+            trust_score = item.get("trust_score", 0) or 0
+            try:
+                trust_score = float(trust_score)
+            except (TypeError, ValueError):
+                trust_score = 0
+
+            coverage["source_types"][source_type or "unknown"] = (
+                coverage["source_types"].get(source_type or "unknown", 0) + 1
+            )
+
+            if "data_context" in source_brain:
+                coverage["data_context"] += 1
+            elif "knowledge_database" in source_brain:
+                coverage["knowledge_database"] += 1
+            elif "understandingdk" in source_brain:
+                coverage["dictionary"] += 1
+            else:
+                coverage["research_or_external"] += 1
+
+            if trust_score >= 70:
+                coverage["strong_sources"] += 1
+
+        coverage["has_local_support"] = bool(
+            coverage["data_context"]
+            or coverage["knowledge_database"]
+            or coverage["dictionary"]
+        )
+        coverage["has_external_or_research_support"] = bool(coverage["research_or_external"])
+        return coverage
+
     def update_statistics(self, verdict, confidence):
 
         stats = self.statistics.get("Fact_Check_brain", {})
@@ -729,6 +776,7 @@ class FactCheckBrain:
         verdict = self.verdict_from_confidence(confidence, conflicts, topic_risk)
         verified = verdict in {"verified", "likely_true"} and not conflicts
         recommendations = self.build_recommendations(verdict, warnings, topic_risk)
+        coverage = self.evidence_coverage(evidence)
         final_output = self.build_fact_summary(
             verdict,
             confidence,
@@ -749,6 +797,7 @@ class FactCheckBrain:
             "claims_checked": claims[:20],
             "evidence_count": len(evidence),
             "evidence_score": self.evidence_score(evidence),
+            "evidence_coverage": coverage,
             "local_data_evidence": local_data_evidence,
             "claim_evidence_links": claim_evidence_links,
             "strongest_sources": sorted(
