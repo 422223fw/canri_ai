@@ -579,6 +579,24 @@ class MemoryBrain:
 
         bucket = self.conversation_bucket(session_id)
         turns = bucket.get("turns", [])
+        code_blocks = []
+
+        for turn in turns[-12:]:
+            canri_text = str(turn.get("canri", ""))
+            for match in re.finditer(
+                r"```([a-zA-Z0-9_+\-.#]*)\s*(.*?)```",
+                canri_text,
+                re.DOTALL
+            ):
+                code = match.group(2).strip()
+                if not code:
+                    continue
+                code_blocks.append({
+                    "language": (match.group(1) or "text").strip().lower(),
+                    "code": code[:12000],
+                    "turn_user": str(turn.get("user", ""))[:300],
+                    "created_utc": turn.get("created_utc")
+                })
 
         return {
             "session_id": session_id,
@@ -596,6 +614,7 @@ class MemoryBrain:
                 }
                 for turn in turns[-8:]
             ],
+            "recent_code_blocks": code_blocks[-4:],
             "session_isolation": True
         }
 
