@@ -811,6 +811,48 @@ class CodeBrain:
             if value:
                 return str(value)
 
+        request_text = " ".join(
+            str(data.get(key, ""))
+            for key in [
+                "original_text",
+                "corrected_text",
+                "user_message",
+                "question",
+                "text",
+                "goal",
+                "prompt"
+            ]
+            if data.get(key)
+        ).lower()
+
+        continuation_markers = [
+            "continue from",
+            "same program",
+            "same code",
+            "previous code",
+            "code you just wrote",
+            "program you just wrote",
+            "improve the same",
+            "not a new project",
+            "keep the same",
+            "add these features",
+            "תמשיך",
+            "אותו קוד",
+            "אותה תוכנה",
+            "שפר את אותו"
+        ]
+
+        if any(marker in request_text for marker in continuation_markers):
+            memory = data.get("memory", {})
+            if isinstance(memory, dict):
+                conversation = memory.get("conversation", {})
+                if isinstance(conversation, dict):
+                    code_blocks = conversation.get("recent_code_blocks", [])
+                    if isinstance(code_blocks, list):
+                        for block in reversed(code_blocks):
+                            if isinstance(block, dict) and block.get("code"):
+                                return str(block["code"])
+
         return ""
 
     def is_code_analysis_request(
@@ -2082,6 +2124,274 @@ if __name__ == "__main__":
 
         return "number_summary"
 
+    def build_notes_app_code(self):
+
+        return '''import json
+from datetime import datetime
+from pathlib import Path
+
+
+NOTES_FILE = Path("notes.json")
+EXPORT_FILE = Path("notes_export.txt")
+
+
+def parse_tags(raw_tags):
+    return [
+        tag.strip().lower()
+        for tag in raw_tags.split(",")
+        if tag.strip()
+    ]
+
+
+def normalize_note(item):
+    if not isinstance(item, dict):
+        return None
+
+    title = str(item.get("title", "Untitled")).strip() or "Untitled"
+    body = str(item.get("body", item.get("text", ""))).strip()
+    created_at = item.get("created_at") or datetime.now().isoformat(timespec="seconds")
+    updated_at = item.get("updated_at", "")
+    tags = item.get("tags", [])
+
+    if isinstance(tags, str):
+        tags = parse_tags(tags)
+    elif isinstance(tags, list):
+        tags = [
+            str(tag).strip().lower()
+            for tag in tags
+            if str(tag).strip()
+        ]
+    else:
+        tags = []
+
+    return {
+        "title": title,
+        "body": body,
+        "tags": tags,
+        "created_at": str(created_at),
+        "updated_at": str(updated_at)
+    }
+
+
+def load_notes():
+    if not NOTES_FILE.exists():
+        return []
+
+    try:
+        data = json.loads(NOTES_FILE.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        print("Could not read notes.json, starting with an empty list.")
+        return []
+
+    if not isinstance(data, list):
+        return []
+
+    notes = []
+    for item in data:
+        note = normalize_note(item)
+        if note is not None:
+            notes.append(note)
+
+    return notes
+
+
+def save_notes(notes):
+    NOTES_FILE.write_text(
+        json.dumps(notes, indent=2, ensure_ascii=False),
+        encoding="utf-8"
+    )
+
+
+def add_note(notes):
+    title = input("Title: ").strip()
+    body = input("Note: ").strip()
+    tags = parse_tags(input("Tags, separated by commas: ").strip())
+
+    if not title or not body:
+        print("Title and note are required.")
+        return
+
+    notes.append({
+        "title": title,
+        "body": body,
+        "tags": tags,
+        "created_at": datetime.now().isoformat(timespec="seconds"),
+        "updated_at": ""
+    })
+    save_notes(notes)
+    print("Note saved.")
+
+
+def list_notes(notes):
+    if not notes:
+        print("No notes yet.")
+        return
+
+    for index, note in enumerate(notes, start=1):
+        tags = ", ".join(note.get("tags", [])) or "no tags"
+        print(f"{index}. {note['title']} [{tags}] ({note['created_at']})")
+
+
+def get_note_index(notes, raw_index):
+    try:
+        index = int(raw_index) - 1
+    except ValueError:
+        print("Please enter a valid note number.")
+        return None
+
+    if index < 0 or index >= len(notes):
+        print("Note number is out of range.")
+        return None
+
+    return index
+
+
+def view_note(notes, raw_index):
+    index = get_note_index(notes, raw_index)
+    if index is None:
+        return
+
+    note = notes[index]
+    tags = ", ".join(note.get("tags", [])) or "no tags"
+    print(f"\\n{note['title']}")
+    print("-" * len(note["title"]))
+    print(note["body"])
+    print(f"Tags: {tags}")
+    if note.get("updated_at"):
+        print(f"Updated: {note['updated_at']}")
+
+
+def edit_note(notes, raw_index):
+    index = get_note_index(notes, raw_index)
+    if index is None:
+        return
+
+    note = notes[index]
+    print("Press Enter to keep the current value.")
+    title = input(f"Title [{note['title']}]: ").strip()
+    body = input("Note body: ").strip()
+    current_tags = ", ".join(note.get("tags", []))
+    raw_tags = input(f"Tags [{current_tags}]: ").strip()
+
+    if title:
+        note["title"] = title
+    if body:
+        note["body"] = body
+    if raw_tags:
+        note["tags"] = parse_tags(raw_tags)
+
+    note["updated_at"] = datetime.now().isoformat(timespec="seconds")
+    save_notes(notes)
+    print("Note updated.")
+
+
+def note_matches(note, keyword):
+    keyword = keyword.strip().lower()
+    if keyword in note.get("title", "").lower():
+        return True
+    if keyword in note.get("body", "").lower():
+        return True
+    return any(keyword in tag.lower() for tag in note.get("tags", []))
+
+
+def search_notes(notes, keyword):
+    keyword = keyword.strip().lower()
+    if not keyword:
+        print("Search keyword cannot be empty.")
+        return
+
+    matches = [
+        (index, note)
+        for index, note in enumerate(notes, start=1)
+        if note_matches(note, keyword)
+    ]
+
+    if not matches:
+        print("No matching notes found.")
+        return
+
+    for index, note in matches:
+        tags = ", ".join(note.get("tags", [])) or "no tags"
+        print(f"{index}. {note['title']} [{tags}] ({note['created_at']})")
+
+
+def delete_note(notes, raw_index):
+    index = get_note_index(notes, raw_index)
+    if index is None:
+        return
+
+    removed = notes.pop(index)
+    save_notes(notes)
+    print(f"Deleted note: {removed['title']}")
+
+
+def export_notes(notes, path=EXPORT_FILE):
+    lines = ["Notes Export", "=" * 12, ""]
+
+    for index, note in enumerate(notes, start=1):
+        tags = ", ".join(note.get("tags", [])) or "no tags"
+        lines.append(f"{index}. {note['title']}")
+        lines.append(f"Created: {note['created_at']}")
+        if note.get("updated_at"):
+            lines.append(f"Updated: {note['updated_at']}")
+        lines.append(f"Tags: {tags}")
+        lines.append(note.get("body", ""))
+        lines.append("")
+
+    path.write_text("\\n".join(lines), encoding="utf-8")
+    print(f"Exported {len(notes)} notes to {path}.")
+
+
+def print_help():
+    print("Commands:")
+    print("  add                Add a new note")
+    print("  list               List all notes")
+    print("  view <number>      View a note")
+    print("  edit <number>      Edit a note")
+    print("  search <keyword>   Search title, body, or tags")
+    print("  delete <number>    Delete a note")
+    print("  export             Export notes to notes_export.txt")
+    print("  help               Show commands")
+    print("  quit               Save and exit")
+
+
+def main():
+    notes = load_notes()
+    print("Notes App")
+    print_help()
+
+    while True:
+        command = input("> ").strip()
+        lower = command.lower()
+
+        if lower == "add":
+            add_note(notes)
+        elif lower == "list":
+            list_notes(notes)
+        elif lower.startswith("view "):
+            view_note(notes, command[5:].strip())
+        elif lower.startswith("edit "):
+            edit_note(notes, command[5:].strip())
+        elif lower.startswith("search "):
+            search_notes(notes, command[7:].strip())
+        elif lower.startswith("delete "):
+            delete_note(notes, command[7:].strip())
+        elif lower == "export":
+            export_notes(notes)
+        elif lower == "help":
+            print_help()
+        elif lower == "quit":
+            save_notes(notes)
+            print("Notes saved. Goodbye.")
+            break
+        else:
+            print("Unknown command. Type 'help' for commands.")
+
+
+if __name__ == "__main__":
+    main()
+'''
+
     def build_direct_python_program_code(self, text, task_type):
 
         lowered = str(text).lower()
@@ -2402,6 +2712,9 @@ def main():
 if __name__ == "__main__":
     main()
 '''
+
+        if program_kind == "notes_app":
+            return self.build_notes_app_code()
 
         if program_kind == "notes_app":
             return '''import json
@@ -2859,7 +3172,7 @@ if __name__ == "__main__":
     main()
 '''
 
-    def build_direct_python_program_result(self, text, terms, task_type):
+    def build_direct_python_program_result(self, text, terms, task_type, existing_code=""):
 
         program_kind = self.detect_direct_program_kind(
             text,
@@ -2912,9 +3225,10 @@ if __name__ == "__main__":
             ],
             "adapter_notes": [
                 "Direct runnable program mode was used because the user requested code only.",
-                f"Selected direct Python program kind: {program_kind}."
+                f"Selected direct Python program kind: {program_kind}.",
+                "Previous conversation code was detected and used as continuation context." if existing_code else "No previous code context was needed."
             ],
-            "existing_code_detected": False,
+            "existing_code_detected": bool(existing_code),
             "match_details": [],
             "generated_code": code,
             "missing": [],
@@ -3657,7 +3971,8 @@ if __name__ == "__main__":
                 self.build_direct_python_program_result(
                     text,
                     terms,
-                    task_type
+                    task_type,
+                    existing_code
                 )
             )
 

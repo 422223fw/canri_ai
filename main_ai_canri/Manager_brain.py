@@ -595,7 +595,7 @@ class ManagerBrain:
             ("math", ["math", "number", "equation", "calculate", "solve", "step by step", "algebra", "x^2", "x**2"]),
             ("security", ["security", "password", "token", "encrypt", "danger", "bomb", "suicide"]),
             ("image_generation", ["generate image", "create image", "make image", "draw", "illustration", "poster", "logo", "icon", "concept art", "image prompt"]),
-            ("vision", ["vision", "image", "photo", "picture", "video", "file", "attachment", "pdf", "png", "jpg", "mp4"]),
+            ("vision", ["vision", "image", "photo", "picture", "video", "attachment", "pdf", "png", "jpg", "mp4"]),
             ("voice", ["voice", "audio", "sound", "recording", "microphone", "speech", "transcribe", "wav", "mp3", "m4a"]),
             ("creative", ["creative", "creativity", "idea", "invent", "original", "brainstorm", "stuck", "fallback"]),
             ("story", ["story", "stories", "sentence", "sentences", "chapter", "character", "plot", "narrative", "leo", "tiny door"]),

@@ -178,6 +178,7 @@ class QualityControlBrain:
             "wants_percentages": "percentage" in lowered or "percentages" in lowered or "percent" in lowered,
             "wants_history": "history" in lowered,
             "wants_steps": "step by step" in lowered or "steps" in lowered,
+            "requested_code_features": self.extract_requested_code_features(lowered),
             "needs_local_data": any(
                 marker in lowered
                 for marker in [
@@ -202,11 +203,32 @@ class QualityControlBrain:
             ),
             "is_vision_request": topic == "vision" or any(
                 marker in lowered
-                for marker in ["image file", "photo", "video", "attachment", ".png", ".jpg", ".mp4", ".json"]
+                for marker in ["image file", "photo", "video", "attachment", ".png", ".jpg", ".mp4"]
             ),
         }
 
         return requirements
+
+    def extract_requested_code_features(self, lowered):
+
+        features = []
+        checks = [
+            ("edit_existing_item", ["edit an existing", "edit a note", "edit note", "update an existing", "modify an existing"]),
+            ("tags", ["add tags", "tags to", "by tag", "tags", "tag"]),
+            ("search_title_body_tag", ["search notes by title", "search by title", "search notes by word", "search notes", "search by tag", "title, body, or tag"]),
+            ("export_txt", ["export", "txt file", "readable txt", "notes_export.txt"]),
+            ("old_json_compatibility", ["compatible with old", "old notes", "same notes.json format", "keep the same notes.json"]),
+            ("json_persistence", ["json file", "notes.json", "save notes", "load notes", "save tasks", "load tasks"]),
+            ("delete_item", ["delete a note", "delete notes", "delete a task", "delete task"]),
+            ("list_items", ["list notes", "list tasks", "list all"]),
+            ("add_item", ["add notes", "add note", "add tasks", "add task"])
+        ]
+
+        for feature, signals in checks:
+            if any(signal in lowered for signal in signals):
+                features.append(feature)
+
+        return list(dict.fromkeys(features))
 
     def looks_like_math(self, lowered):
         return bool(
@@ -344,6 +366,76 @@ class QualityControlBrain:
                 "medium",
                 "The user asked for history, but the code does not track calculation history.",
                 "Add a history list and save it to JSON."
+            )
+
+    def code_feature_present(self, feature, code):
+
+        lowered = str(code).lower()
+
+        if feature == "edit_existing_item":
+            return "def edit_" in lowered and "updated_at" in lowered
+
+        if feature == "tags":
+            return '"tags"' in lowered and ("parse_tags" in lowered or "tag" in lowered)
+
+        if feature == "search_title_body_tag":
+            return (
+                "def search_" in lowered
+                and "title" in lowered
+                and "body" in lowered
+                and "tags" in lowered
+            )
+
+        if feature == "export_txt":
+            return "def export_" in lowered and ".txt" in lowered and "write_text" in lowered
+
+        if feature == "old_json_compatibility":
+            return "normalize_" in lowered and '"tags": []' in lowered or "item.get(\"text\"" in lowered
+
+        if feature == "json_persistence":
+            return "json.loads" in lowered and "json.dumps" in lowered and "write_text" in lowered
+
+        if feature == "delete_item":
+            return "def delete_" in lowered and ".pop(" in lowered
+
+        if feature == "list_items":
+            return "def list_" in lowered and "enumerate" in lowered
+
+        if feature == "add_item":
+            return "def add_" in lowered and ".append(" in lowered
+
+        return True
+
+    def audit_requested_code_features(self, results, requirements, issues):
+
+        if not requirements["is_code_request"]:
+            return
+
+        features = requirements.get("requested_code_features", [])
+        if not features:
+            return
+
+        result = results.get("Code_brain", {})
+        code = str(
+            result.get("generated_code")
+            or result.get("code")
+            or result.get("answer")
+            or ""
+        )
+
+        missing = [
+            feature
+            for feature in features
+            if not self.code_feature_present(feature, code)
+        ]
+
+        for feature in missing[:8]:
+            self.add_issue(
+                issues,
+                "Code_brain",
+                "high",
+                f"Requested feature is missing: {feature}.",
+                "Read every numbered requirement and update the code so this exact feature is implemented."
             )
 
     def audit_math(self, results, requirements, issues):
@@ -730,6 +822,7 @@ class QualityControlBrain:
 
         self.audit_expected_brains(results, requirements, issues)
         self.audit_code(results, requirements, issues)
+        self.audit_requested_code_features(results, requirements, issues)
         self.audit_math(results, requirements, issues)
         self.audit_reliability(results, requirements, issues)
         self.audit_story(results, requirements, issues)
