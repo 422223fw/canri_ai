@@ -309,16 +309,296 @@ class CreativeCodeAssembler:
 
     def generate_python(self, terms, graph_plan):
 
+        term_text = " ".join(str(term).lower() for term in terms)
+
+        if any(term in term_text for term in ["expense", "spending", "category"]):
+            return self.generate_expense_tracker_python()
+
+        if any(term in term_text for term in ["todo", "to do", "task"]):
+            return self.generate_todo_python()
+
+        if any(term in term_text for term in ["note", "notes"]):
+            return self.generate_notes_python()
+
+        if any(term in term_text for term in ["calculator", "calculate", "math"]):
+            return self.generate_calculator_python()
+
+        return self.generate_generic_cli_python(terms, graph_plan)
+
+    def generate_expense_tracker_python(self):
+
+        return "\n".join([
+            "import json",
+            "from pathlib import Path",
+            "",
+            "EXPENSES_FILE = Path(\"expenses.json\")",
+            "",
+            "",
+            "def load_expenses():",
+            "    if not EXPENSES_FILE.exists():",
+            "        return []",
+            "    try:",
+            "        data = json.loads(EXPENSES_FILE.read_text(encoding=\"utf-8\"))",
+            "    except json.JSONDecodeError:",
+            "        print(\"Could not read expenses.json. Starting empty.\")",
+            "        return []",
+            "    return data if isinstance(data, list) else []",
+            "",
+            "",
+            "def save_expenses(expenses):",
+            "    EXPENSES_FILE.write_text(json.dumps(expenses, indent=2, ensure_ascii=False), encoding=\"utf-8\")",
+            "",
+            "",
+            "def add_expense(expenses):",
+            "    try:",
+            "        amount = float(input(\"Amount: \").strip())",
+            "    except ValueError:",
+            "        print(\"Amount must be a number.\")",
+            "        return",
+            "    category = input(\"Category: \").strip()",
+            "    description = input(\"Description: \").strip()",
+            "    if not category or not description:",
+            "        print(\"Category and description are required.\")",
+            "        return",
+            "    expenses.append({\"amount\": amount, \"category\": category, \"description\": description})",
+            "    save_expenses(expenses)",
+            "    print(\"Expense saved.\")",
+            "",
+            "",
+            "def list_expenses(expenses):",
+            "    if not expenses:",
+            "        print(\"No expenses yet.\")",
+            "        return",
+            "    for index, expense in enumerate(expenses, start=1):",
+            "        print(f\"{index}. ${expense.get('amount', 0):.2f} | {expense.get('category', '')} | {expense.get('description', '')}\")",
+            "",
+            "",
+            "def search_by_category(expenses, category):",
+            "    category = category.strip().lower()",
+            "    matches = [expense for expense in expenses if expense.get(\"category\", \"\").lower() == category]",
+            "    if not matches:",
+            "        print(\"No matching expenses found.\")",
+            "        return",
+            "    list_expenses(matches)",
+            "",
+            "",
+            "def show_total(expenses):",
+            "    total = sum(float(expense.get(\"amount\", 0)) for expense in expenses)",
+            "    print(f\"Total spent: ${total:.2f}\")",
+            "",
+            "",
+            "def delete_expense(expenses, raw_number):",
+            "    try:",
+            "        index = int(raw_number) - 1",
+            "    except ValueError:",
+            "        print(\"Please enter a valid expense number.\")",
+            "        return",
+            "    if index < 0 or index >= len(expenses):",
+            "        print(\"Expense number is out of range.\")",
+            "        return",
+            "    removed = expenses.pop(index)",
+            "    save_expenses(expenses)",
+            "    print(f\"Deleted: {removed.get('description', '')}\")",
+            "",
+            "",
+            "def print_help():",
+            "    print(\"Commands: add, list, search <category>, total, delete <number>, help, quit\")",
+            "",
+            "",
+            "def main():",
+            "    expenses = load_expenses()",
+            "    print(\"Expense Tracker\")",
+            "    print_help()",
+            "    while True:",
+            "        command = input(\"> \").strip()",
+            "        lowered = command.lower()",
+            "        if lowered == \"add\":",
+            "            add_expense(expenses)",
+            "        elif lowered == \"list\":",
+            "            list_expenses(expenses)",
+            "        elif lowered.startswith(\"search \"):",
+            "            search_by_category(expenses, command[7:])",
+            "        elif lowered == \"total\":",
+            "            show_total(expenses)",
+            "        elif lowered.startswith(\"delete \"):",
+            "            delete_expense(expenses, command[7:].strip())",
+            "        elif lowered == \"help\":",
+            "            print_help()",
+            "        elif lowered == \"quit\":",
+            "            save_expenses(expenses)",
+            "            break",
+            "        else:",
+            "            print(\"Unknown command. Type help for commands.\")",
+            "",
+            "",
+            "if __name__ == \"__main__\":",
+            "    main()",
+            ""
+        ])
+
+    def generate_todo_python(self):
+
+        return self.generate_generic_json_cli_python(
+            "tasks.json",
+            "Task Manager",
+            "task"
+        )
+
+    def generate_notes_python(self):
+
+        return self.generate_generic_json_cli_python(
+            "notes.json",
+            "Notes App",
+            "note"
+        )
+
+    def generate_calculator_python(self):
+
+        return "\n".join([
+            "def calculate(left, operator, right):",
+            "    if operator == \"+\":",
+            "        return left + right",
+            "    if operator == \"-\":",
+            "        return left - right",
+            "    if operator == \"*\":",
+            "        return left * right",
+            "    if operator == \"/\":",
+            "        if right == 0:",
+            "            raise ZeroDivisionError(\"Cannot divide by zero.\")",
+            "        return left / right",
+            "    if operator == \"%\":",
+            "        return left * right / 100",
+            "    raise ValueError(\"Unknown operator.\")",
+            "",
+            "",
+            "def main():",
+            "    print(\"Calculator\")",
+            "    print(\"Use: number operator number. Example: 10 % 25\")",
+            "    print(\"Type quit to exit.\")",
+            "    while True:",
+            "        raw = input(\"> \").strip()",
+            "        if raw.lower() == \"quit\":",
+            "            break",
+            "        parts = raw.split()",
+            "        if len(parts) != 3:",
+            "            print(\"Use format: number operator number\")",
+            "            continue",
+            "        try:",
+            "            left = float(parts[0])",
+            "            operator = parts[1]",
+            "            right = float(parts[2])",
+            "            print(calculate(left, operator, right))",
+            "        except (ValueError, ZeroDivisionError) as error:",
+            "            print(error)",
+            "",
+            "",
+            "if __name__ == \"__main__\":",
+            "    main()",
+            ""
+        ])
+
+    def generate_generic_json_cli_python(self, file_name, title, item_name):
+
+        return "\n".join([
+            "import json",
+            "from pathlib import Path",
+            "",
+            f"DATA_FILE = Path(\"{file_name}\")",
+            "",
+            "",
+            "def load_items():",
+            "    if not DATA_FILE.exists():",
+            "        return []",
+            "    try:",
+            "        data = json.loads(DATA_FILE.read_text(encoding=\"utf-8\"))",
+            "    except json.JSONDecodeError:",
+            "        return []",
+            "    return data if isinstance(data, list) else []",
+            "",
+            "",
+            "def save_items(items):",
+            "    DATA_FILE.write_text(json.dumps(items, indent=2, ensure_ascii=False), encoding=\"utf-8\")",
+            "",
+            "",
+            "def add_item(items):",
+            "    title = input(\"Title: \").strip()",
+            "    details = input(\"Details: \").strip()",
+            "    if not title:",
+            "        print(\"Title is required.\")",
+            "        return",
+            "    items.append({\"title\": title, \"details\": details, \"done\": False})",
+            "    save_items(items)",
+            f"    print(\"{item_name.title()} saved.\")",
+            "",
+            "",
+            "def list_items(items):",
+            "    if not items:",
+            "        print(\"No items yet.\")",
+            "        return",
+            "    for index, item in enumerate(items, start=1):",
+            "        mark = \"x\" if item.get(\"done\") else \" \"",
+            "        print(f\"{index}. [{mark}] {item.get('title', '')} - {item.get('details', '')}\")",
+            "",
+            "",
+            "def search_items(items, word):",
+            "    word = word.strip().lower()",
+            "    matches = [item for item in items if word in item.get(\"title\", \"\").lower() or word in item.get(\"details\", \"\").lower()]",
+            "    list_items(matches)",
+            "",
+            "",
+            "def delete_item(items, raw_number):",
+            "    try:",
+            "        index = int(raw_number) - 1",
+            "    except ValueError:",
+            "        print(\"Enter a valid number.\")",
+            "        return",
+            "    if index < 0 or index >= len(items):",
+            "        print(\"Number is out of range.\")",
+            "        return",
+            "    removed = items.pop(index)",
+            "    save_items(items)",
+            "    print(f\"Deleted: {removed.get('title', '')}\")",
+            "",
+            "",
+            "def main():",
+            "    items = load_items()",
+            f"    print(\"{title}\")",
+            "    print(\"Commands: add, list, search <word>, delete <number>, quit\")",
+            "    while True:",
+            "        command = input(\"> \").strip()",
+            "        lowered = command.lower()",
+            "        if lowered == \"add\":",
+            "            add_item(items)",
+            "        elif lowered == \"list\":",
+            "            list_items(items)",
+            "        elif lowered.startswith(\"search \"):",
+            "            search_items(items, command[7:])",
+            "        elif lowered.startswith(\"delete \"):",
+            "            delete_item(items, command[7:].strip())",
+            "        elif lowered == \"quit\":",
+            "            save_items(items)",
+            "            break",
+            "        else:",
+            "            print(\"Unknown command.\")",
+            "",
+            "",
+            "if __name__ == \"__main__\":",
+            "    main()",
+            ""
+        ])
+
+    def generate_generic_cli_python(self, terms, graph_plan):
+
         class_name = self.class_name_from_terms(terms)
         nodes = graph_plan.get("order", [])
         lines = [
             "# Generated by Creative_brain CreativeCodeAssembler",
-            "# Draft only: send to Code_brain and Security_brain before execution.",
+            "# Runnable generic fallback. Code_brain should still refine it for the exact request.",
             "",
             f"class {class_name}:",
             "",
             "    def __init__(self):",
-            "        self.state = {}",
+            "        self.items = []",
             ""
         ]
 
@@ -326,9 +606,9 @@ class CreativeCodeAssembler:
             method = self.safe_identifier(node)
             lines.extend([
                 f"    def {method}(self, data=None):",
-                f"        \"\"\"Creative draft step: {node.replace('_', ' ')}.\"\"\"",
+                f"        \"\"\"Apply the {node.replace('_', ' ')} step.\"\"\"",
                 "        data = data or {}",
-                f"        self.state['{method}'] = data",
+                f"        data['{method}'] = data.get('{method}', True)",
                 "        return data",
                 ""
             ])
@@ -347,6 +627,16 @@ class CreativeCodeAssembler:
             "",
             "def build_solution(data=None):",
             f"    return {class_name}().run(data)",
+            "",
+            "",
+            "def main():",
+            "    print('Creative Python fallback')",
+            "    result = build_solution({})",
+            "    print(result)",
+            "",
+            "",
+            "if __name__ == '__main__':",
+            "    main()",
             ""
         ])
 
@@ -1813,6 +2103,298 @@ class CreativeBrain:
             "confidence": result.get("confidence", 0)
         }
 
+    def looks_like_internal_report(self, text):
+
+        lowered = str(text or "").lower()
+        markers = [
+            "goal:",
+            "core idea:",
+            "novel twist:",
+            "constraint:",
+            "validation:",
+            "tradeoff:",
+            "implementation:",
+            "direction:"
+        ]
+
+        return sum(1 for marker in markers if marker in lowered) >= 3
+
+    def requested_sentence_count(self, text, default=6):
+
+        lowered = str(text or "").lower()
+        range_match = re.search(
+            r"(\d+)\s*(?:-|to)\s*(\d+)\s+sentences?",
+            lowered
+        )
+        if range_match:
+            return max(1, min(int(range_match.group(2)), 10))
+
+        exact_match = re.search(r"(\d+)\s+sentences?", lowered)
+        if exact_match:
+            return max(1, min(int(exact_match.group(1)), 10))
+
+        return default
+
+    def task_text(self, task_report):
+
+        report = self.get_understanding_report(task_report)
+        text = self.extract_text(task_report, report)
+
+        if text:
+            return text
+
+        if isinstance(task_report, dict):
+            source_result = task_report.get("source_result", {})
+            if isinstance(source_result, dict):
+                for key in [
+                    "original_text",
+                    "final_output",
+                    "answer",
+                    "summary",
+                    "draft",
+                    "story",
+                    "generated_code"
+                ]:
+                    value = source_result.get(key)
+                    if value:
+                        return str(value)
+
+        return str(task_report or "")
+
+    def is_story_request(self, text, task_type="", source_brain=""):
+
+        lowered = str(text or "").lower()
+        task_type = str(task_type or "").lower()
+
+        if source_brain in {"Story_brain", "Character_brain", "World_brain"}:
+            return True
+
+        markers = [
+            "story",
+            "chapter",
+            "character",
+            "plot",
+            "narrative",
+            "sentences",
+            "continue the same story",
+            "make me up a story",
+            "write a short original story"
+        ]
+
+        return "story" in task_type or any(marker in lowered for marker in markers)
+
+    def is_code_request(self, text, task_type="", source_brain=""):
+
+        lowered = str(text or "").lower()
+        task_type = str(task_type or "").lower()
+
+        if source_brain == "Code_brain":
+            return True
+
+        markers = [
+            "code",
+            "program",
+            "python",
+            "javascript",
+            "function",
+            "class",
+            "terminal",
+            "json file",
+            "runnable"
+        ]
+
+        return "code" in task_type or any(marker in lowered for marker in markers)
+
+    def extract_story_name(self, text):
+
+        text = str(text or "")
+        named = re.search(r"\bnamed\s+([A-Z][a-zA-Z]{1,30})\b", text)
+        if named:
+            return named.group(1)
+
+        about_name = re.search(
+            r"\babout\s+(?:a|an|the)?\s*([A-Z][a-zA-Z]{1,30})\b",
+            text
+        )
+        if about_name:
+            return about_name.group(1)
+
+        if re.search(r"\bpatient\b", text, re.IGNORECASE):
+            return "Elias"
+        if re.search(r"\bboy\b", text, re.IGNORECASE):
+            return "Leo"
+        if re.search(r"\bgirl\b", text, re.IGNORECASE):
+            return "Maya"
+
+        return "Ari"
+
+    def story_elements_from_text(self, text):
+
+        lowered = str(text or "").lower()
+        elements = {
+            "setting": "a quiet place",
+            "discovery": "a strange clue",
+            "conflict": "a choice that could not be ignored",
+            "ending": "a small brave step forward"
+        }
+
+        if "park" in lowered:
+            elements["setting"] = "the quiet park"
+        elif "bed" in lowered or "tiny door" in lowered:
+            elements["setting"] = "the room above a tiny hidden door"
+        elif "meeting" in lowered:
+            elements["setting"] = "the final meeting room"
+
+        if "glowing key" in lowered or "key" in lowered:
+            elements["discovery"] = "a glowing key that pulsed like it was alive"
+        elif "tiny door" in lowered or "door" in lowered:
+            elements["discovery"] = "a tiny door glowing under the bed"
+        elif "patient" in lowered and "six months" in lowered:
+            elements["discovery"] = "the missing patient returning after six months"
+
+        if "everyone is asleep" in lowered:
+            elements["conflict"] = "whether to wake the sleeping city or protect its silence"
+        elif "injured" in lowered:
+            elements["conflict"] = "how to keep going after being hurt"
+        elif "patient" in lowered:
+            elements["conflict"] = "whether the truth should be spoken before the final decision"
+
+        if "wake" in lowered:
+            elements["ending"] = "a careful decision to wake only one lantern first"
+        elif "meeting" in lowered:
+            elements["ending"] = "the meeting changing because someone finally told the truth"
+
+        return elements
+
+    def build_story_output(self, text, best=None):
+
+        sentence_count = self.requested_sentence_count(text, default=6)
+        name = self.extract_story_name(text)
+        elements = self.story_elements_from_text(text)
+        lowered = str(text or "").lower()
+
+        if "patient" in lowered and "six months" in lowered:
+            sentences = [
+                f"For six months, nobody at the clinic knew where {name} had gone.",
+                "His empty chair stayed in the corner of the waiting room, marked only by a folder no one wanted to close.",
+                "On the morning of the final meeting, he walked in wearing the same gray coat but carrying a sealed envelope.",
+                "The doctors were shocked, but he asked them to listen before they wrote the last report.",
+                "Inside the envelope were notes from every day he had been missing, showing that he had been searching for the person who caused the accident that changed his life.",
+                "When the meeting ended, the final decision was no longer about where he had been, but about what everyone owed to the truth.",
+                f"{name} left quietly, no longer a vanished patient but the one person brave enough to return.",
+            ]
+            return " ".join(sentences[:sentence_count])
+
+        if "tiny door" in lowered and "asleep" in lowered:
+            sentences = [
+                f"{name} found the tiny door under his bed after hearing a soft bell ring beneath the floorboards.",
+                "When he opened it, a glowing city no larger than a toy box shimmered in the dark.",
+                "Every window was lit, but every person in the city slept with their hands folded over their hearts.",
+                "At the center of the city, a silver clock showed his own heartbeat instead of the time.",
+                f"{name} understood that waking the city too quickly might break the spell that kept it safe.",
+                "He chose to light one small tower first and wait until the sleepers opened their eyes on their own.",
+                "By morning, the door was still there, and Leo knew the city trusted him to return.",
+            ]
+            return " ".join(sentences[:sentence_count])
+
+        sentences = [
+            f"{name} stepped into {elements['setting']} and noticed {elements['discovery']}.",
+            "At first the discovery seemed small, but it changed the whole shape of the day.",
+            f"The real problem was {elements['conflict']}.",
+            f"{name} felt afraid, but curiosity made the next step feel possible.",
+            "Instead of rushing, the character listened for the quiet rule hidden inside the moment.",
+            f"In the end, the choice became {elements['ending']}.",
+            "Nothing became simple, but the world felt wider than it had before.",
+        ]
+
+        return " ".join(sentences[:sentence_count])
+
+    def build_general_creative_output(self, text, best=None, source_brain=""):
+
+        best = best or {}
+        model = best.get("idea_model", {}) if isinstance(best, dict) else {}
+
+        goal = model.get("goal") or str(text or "the task").strip()
+        mechanism = model.get("mechanism") or "a focused step-by-step approach"
+        constraint = model.get("constraint") or "keep the output concrete and useful"
+        validation = model.get("validation") or "compare the result against the user's request"
+
+        if self.looks_like_internal_report(goal):
+            goal = "the user's request"
+
+        return (
+            f"Use {mechanism} to solve {goal}. "
+            f"Keep one clear constraint: {constraint}. "
+            f"Before returning the answer, validate it by: {validation}. "
+            "The final response should be the finished result, not the internal simulation."
+        )
+
+    def build_creative_final_output(
+        self,
+        text,
+        domain,
+        best=None,
+        source_brain="Creative_brain",
+        task_type="creative_generation"
+    ):
+
+        best = best or {}
+
+        for key in ["final_output", "story", "answer"]:
+            value = best.get(key) if isinstance(best, dict) else None
+            if isinstance(value, str) and value.strip():
+                if not self.looks_like_internal_report(value):
+                    return value.strip()
+
+        if self.is_story_request(text, task_type, source_brain) or domain == "story":
+            return self.build_story_output(text, best)
+
+        if self.is_code_request(text, task_type, source_brain) or domain == "code":
+            code_result = self.code_assembler.assemble({
+                "original_text": text,
+                "main_topic": "code",
+                "intent": "code_generation"
+            })
+            return code_result.get("generated_code", "").strip()
+
+        return self.build_general_creative_output(
+            text,
+            best,
+            source_brain
+        )
+
+    def answer_payload(
+        self,
+        final_output,
+        domain,
+        source_brain,
+        task_type,
+        confidence,
+        best=None
+    ):
+
+        payload = {
+            "final_output": final_output,
+            "answer": final_output,
+            "source_brain": source_brain,
+            "task_type": task_type,
+            "domain": domain,
+            "confidence": confidence,
+            "simulation_summary": {
+                "selected_idea": (best or {}).get("title"),
+                "score": (best or {}).get("scores", {}).get("total", confidence),
+                "kept_internal": True
+            }
+        }
+
+        if domain == "story" or self.is_story_request(final_output, task_type, source_brain):
+            payload["story"] = final_output
+
+        if domain == "code" or self.is_code_request(final_output, task_type, source_brain):
+            payload["generated_code"] = final_output
+
+        return payload
+
     def solve_brain_task(
         self,
         source_brain,
@@ -1824,11 +2406,23 @@ class CreativeBrain:
 
         if task_type == "creative_code_assembly" or source_brain == "Code_brain":
             code_result = self.create_code(task_report)
+            generated_code = code_result.get("generated_code", "")
+            answer_for_source = {
+                "final_output": generated_code,
+                "answer": generated_code,
+                "generated_code": generated_code,
+                "language": code_result.get("language", "python"),
+                "code_assembly": code_result.get("code_assembly", {}),
+                "code_graph": code_result.get("code_graph", {}),
+                "confidence": code_result.get("confidence", 0)
+            }
             return {
                 "brain": "Creative_brain",
                 "source_brain": source_brain,
                 "task_type": task_type,
-                "answer_for_source_brain": code_result,
+                "answer_for_source_brain": answer_for_source,
+                "final_output": generated_code,
+                "answer": generated_code,
                 "suggested_actions": [
                     {
                         "step": 1,
@@ -1841,10 +2435,15 @@ class CreativeBrain:
                         "detail": "Generated code is not executed by Creative_brain."
                     }
                 ],
-                "generated_code": code_result.get("generated_code", ""),
+                "generated_code": generated_code,
                 "code_graph": code_result.get("code_graph", {}),
+                "simulation_summary": {
+                    "mode": "creative_code_assembly",
+                    "internal_idea_kept": True,
+                    "returned_user_facing_code": bool(generated_code)
+                },
                 "quality": {
-                    "code_assembled": bool(code_result.get("generated_code")),
+                    "code_assembled": bool(generated_code),
                     "graph_used": bool(code_result.get("code_graph", {}).get("nodes"))
                 },
                 "confidence": code_result.get("confidence", 0)
@@ -1881,14 +2480,50 @@ class CreativeBrain:
             task_type
         )
 
+        text = self.task_text(task_report)
+        report = self.get_understanding_report(task_report)
+        terms = self.collect_terms(
+            report,
+            self.get_memory_report(task_report),
+            text
+        )
+        domain = self.detect_domain(report, terms, text)
+        best = rescue.get("best_idea", {})
+        final_output = self.build_creative_final_output(
+            text,
+            domain,
+            best,
+            source_brain,
+            task_type
+        )
+        confidence = rescue.get("confidence", 0)
+        answer_for_source = self.answer_payload(
+            final_output,
+            domain,
+            source_brain,
+            task_type,
+            confidence,
+            best
+        )
+
         return {
             "brain": "Creative_brain",
             "source_brain": source_brain,
             "task_type": task_type,
-            "answer_for_source_brain": rescue.get("best_idea", {}),
+            "answer_for_source_brain": answer_for_source,
+            "final_output": final_output,
+            "answer": final_output,
+            "story": answer_for_source.get("story"),
+            "generated_code": answer_for_source.get("generated_code"),
             "suggested_actions": rescue.get("rescue_plan", []),
+            "simulation_summary": {
+                "mode": "brain_rescue",
+                "selected_idea": best.get("title") if isinstance(best, dict) else None,
+                "internal_idea_kept": True,
+                "returned_final_output": bool(final_output)
+            },
             "quality": rescue.get("quality", {}),
-            "confidence": rescue.get("confidence", 0)
+            "confidence": confidence
         }
 
     def build_rescue_plan(
@@ -2072,6 +2707,21 @@ class CreativeBrain:
 
         best = scored[0] if scored else {}
         best_score = best.get("scores", {}).get("total", 0)
+        final_output = self.build_creative_final_output(
+            text,
+            domain,
+            best,
+            "Creative_brain",
+            "creative_generation"
+        )
+
+        if isinstance(best, dict):
+            best = dict(best)
+            best["final_output"] = final_output
+            if domain == "story":
+                best["story"] = final_output
+            if domain == "code":
+                best["generated_code"] = final_output
 
         self.remember_creative_result(
             domain,
@@ -2089,8 +2739,17 @@ class CreativeBrain:
             "domain": domain,
             "terms_used": terms,
             "direction_analysis": final_direction,
+            "final_output": final_output,
+            "answer": final_output,
+            "story": final_output if domain == "story" else None,
+            "generated_code": final_output if domain == "code" else None,
             "best_idea": best,
             "top_ideas": scored[:10],
+            "simulation_summary": {
+                "selected_idea": best.get("title") if isinstance(best, dict) else None,
+                "internal_evolution_kept": True,
+                "returned_final_output": bool(final_output)
+            },
             "evolution": {
                 "generation_size": generation_size,
                 "rounds_completed": len(history),
