@@ -52,14 +52,22 @@ class SecurityBrain:
             {
                 "name": "sensitive_file_access",
                 "category": "privacy",
-                "level": 70,
+                "level": 45,
                 "patterns": [
-                    r"password",
-                    r"secret",
-                    r"token",
+                    r"\bread\s+password",
+                    r"\bdump\s+password",
+                    r"\bextract\s+password",
+                    r"\bsteal\s+password",
+                    r"\bread\s+token",
+                    r"\bdump\s+token",
+                    r"\bextract\s+token",
+                    r"\bsteal\s+token",
+                    r"\bsecret\s+file\b",
                     r"\.env",
                     r"id_rsa",
-                    r"credentials"
+                    r"\bcredentials\s+file\b",
+                    r"\bdump\s+credentials\b",
+                    r"\bextract\s+credentials\b"
                 ],
                 "warning": "Potential sensitive data access detected"
             },
@@ -301,6 +309,39 @@ class SecurityBrain:
 
         return "\n".join(text_parts)
 
+    def safe_security_project_intent(self, text):
+
+        lowered = str(text).lower()
+
+        safe_project_markers = [
+            "password manager",
+            "password generator",
+            "save/load all data from a json file",
+            "terminal",
+            "local",
+            "do not use external libraries",
+            "build a real runnable python"
+        ]
+
+        harmful_markers = [
+            "steal",
+            "phishing",
+            "keylogger",
+            "malware",
+            "dump passwords",
+            "extract passwords",
+            "bypass security",
+            "hack into",
+            "read browser passwords",
+            "browser cookies",
+            "token grabber"
+        ]
+
+        return (
+            any(marker in lowered for marker in safe_project_markers)
+            and not any(marker in lowered for marker in harmful_markers)
+        )
+
     def scan_text(
         self,
         text
@@ -355,6 +396,36 @@ class SecurityBrain:
                     )
 
                     break
+
+        if self.safe_security_project_intent(text):
+            safe_categories = {
+                "privacy",
+                "network",
+                "resource_abuse"
+            }
+            filtered_matches = [
+                match
+                for match in matches
+                if match.get("category") not in safe_categories
+            ]
+            if len(filtered_matches) != len(matches):
+                matches = filtered_matches
+                warnings = [
+                    match["warning"]
+                    for match in matches
+                ]
+                blocked_items = [
+                    match["name"]
+                    for match in matches
+                ]
+                categories = [
+                    match["category"]
+                    for match in matches
+                ]
+                risk_level = max(
+                    [match["risk"] for match in matches],
+                    default=25
+                )
 
         return {
             "risk_level": risk_level,

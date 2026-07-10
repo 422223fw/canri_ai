@@ -218,10 +218,16 @@ class QualityControlBrain:
             ("search_title_body_tag", ["search notes by title", "search by title", "search notes by word", "search notes", "search by tag", "title, body, or tag"]),
             ("export_txt", ["export", "txt file", "readable txt", "notes_export.txt"]),
             ("old_json_compatibility", ["compatible with old", "old notes", "same notes.json format", "keep the same notes.json"]),
+            ("expense_amount", ["amount", "amount spent"]),
+            ("expense_category", ["category", "search expenses by category"]),
+            ("expense_description", ["description"]),
+            ("search_expense_category", ["search expenses by category", "search by category"]),
+            ("expense_total", ["total amount spent", "show the total", "total spent"]),
+            ("expenses_json", ["expenses.json"]),
             ("json_persistence", ["json file", "notes.json", "save notes", "load notes", "save tasks", "load tasks"]),
-            ("delete_item", ["delete a note", "delete notes", "delete a task", "delete task"]),
-            ("list_items", ["list notes", "list tasks", "list all"]),
-            ("add_item", ["add notes", "add note", "add tasks", "add task"])
+            ("delete_item", ["delete a note", "delete notes", "delete a task", "delete task", "delete an expense", "delete expense"]),
+            ("list_items", ["list notes", "list tasks", "list all", "list all expenses"]),
+            ("add_item", ["add notes", "add note", "add tasks", "add task", "add expenses", "add an expense", "add expense"])
         ]
 
         for feature, signals in checks:
@@ -390,7 +396,25 @@ class QualityControlBrain:
             return "def export_" in lowered and ".txt" in lowered and "write_text" in lowered
 
         if feature == "old_json_compatibility":
-            return "normalize_" in lowered and '"tags": []' in lowered or "item.get(\"text\"" in lowered
+            return ("normalize_" in lowered and '"tags": []' in lowered) or "item.get(\"text\"" in lowered
+
+        if feature == "expense_amount":
+            return '"amount"' in lowered and "float(" in lowered
+
+        if feature == "expense_category":
+            return '"category"' in lowered
+
+        if feature == "expense_description":
+            return '"description"' in lowered
+
+        if feature == "search_expense_category":
+            return "def search" in lowered and "category" in lowered and ".lower()" in lowered
+
+        if feature == "expense_total":
+            return ("def show_total" in lowered or "total =" in lowered) and "sum(" in lowered
+
+        if feature == "expenses_json":
+            return "expenses.json" in lowered
 
         if feature == "json_persistence":
             return "json.loads" in lowered and "json.dumps" in lowered and "write_text" in lowered
