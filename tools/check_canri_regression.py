@@ -14,6 +14,7 @@ PACKAGE_DIR = PROJECT_ROOT / "main_ai_canri"
 sys.path.insert(0, str(PACKAGE_DIR))
 
 from Code_brain import CodeBrain  # noqa: E402
+from Fact_Check_brain import FactCheckBrain  # noqa: E402
 from Math_brain import MathBrain  # noqa: E402
 from Quality_Control_brain import QualityControlBrain  # noqa: E402
 from Response_brain import ResponseBrain  # noqa: E402
@@ -111,11 +112,67 @@ def test_response_blocks_bad_quality():
     assert_true("did not pass Canri's quality check" in text, "Response should not present bad code as final.")
 
 
+def test_quality_catches_wrong_program_kind():
+    prompt = "Build a real runnable Python expense tracker for the terminal."
+    qc = QualityControlBrain()
+    quality = qc.process({
+        "original_text": prompt,
+        "understanding": {
+            "main_topic": "code",
+            "intent": "code_generation",
+            "original_text": prompt
+        },
+        "results": {
+            "Code_brain": {
+                "brain": "Code_brain",
+                "program_kind": "json_cli",
+                "generated_code": "def main():\n    pass\n",
+                "confidence": 70
+            }
+        }
+    })
+
+    issue_text = " ".join(issue["problem"] for issue in quality.get("issues", []))
+    assert_true(not quality["passed"], "Quality should fail wrong program kind.")
+    assert_true("Wrong program kind" in issue_text, "Quality should explain the wrong program kind.")
+
+
+def test_fact_check_evidence_coverage():
+    fact_check = FactCheckBrain()
+    coverage = fact_check.evidence_coverage([
+        {
+            "source_brain": "Data_context",
+            "source_type": "local_data_json",
+            "trust_score": 80,
+            "name": "Knowledge_sources.json"
+        },
+        {
+            "source_brain": "Knowledge_database",
+            "source_type": "local_knowledge_article",
+            "trust_score": 82,
+            "name": "Python"
+        },
+        {
+            "source_brain": "UnderstandingDk",
+            "source_type": "local_dictionary",
+            "trust_score": 74,
+            "name": "python"
+        }
+    ])
+
+    assert_true(coverage["data_context"] == 1, "Fact check should count Data_context evidence.")
+    assert_true(coverage["knowledge_database"] == 1, "Fact check should count Knowledge_database evidence.")
+    assert_true(coverage["dictionary"] == 1, "Fact check should count dictionary evidence.")
+    assert_true(coverage["strong_sources"] >= 2, "Fact check should count strong sources.")
+
+
 def main():
     tests = [
         test_expense_tracker_code_and_quality,
         test_quadratic_math,
         test_response_blocks_bad_quality,
+        test_quality_catches_wrong_program_kind,
+        test_fact_check_evidence_coverage,
     ]
 
     for test in tests:

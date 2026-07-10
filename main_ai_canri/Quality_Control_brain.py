@@ -7,6 +7,7 @@ It does not answer the user directly. It produces feedback for Manager_brain
 so weak or incomplete specialist results can be retried once before response.
 """
 
+import ast
 import json
 import re
 from datetime import datetime, timezone
@@ -178,6 +179,7 @@ class QualityControlBrain:
             "wants_percentages": "percentage" in lowered or "percentages" in lowered or "percent" in lowered,
             "wants_history": "history" in lowered,
             "wants_steps": "step by step" in lowered or "steps" in lowered,
+            "requested_sentence_count": self.extract_requested_sentence_count(lowered),
             "expected_program_kind": self.detect_expected_program_kind(lowered),
             "requested_code_features": self.extract_requested_code_features(lowered),
             "needs_local_data": any(
@@ -209,6 +211,16 @@ class QualityControlBrain:
         }
 
         return requirements
+
+    def extract_requested_sentence_count(self, lowered):
+
+        match = re.search(r"\b(\d+)\s*(?:more\s+)?sentences?\b", lowered)
+        if not match:
+            return None
+        try:
+            return int(match.group(1))
+        except ValueError:
+            return None
 
     def detect_expected_program_kind(self, lowered):
 
@@ -355,6 +367,26 @@ class QualityControlBrain:
             )
             return
 
+        if self.has_placeholder_code(code):
+            self.add_issue(
+                issues,
+                "Code_brain",
+                "high",
+                "Generated code still contains placeholders or empty helper behavior.",
+                "Replace placeholders with real working logic that satisfies the requested features."
+            )
+
+        syntax_error = self.python_syntax_error(code)
+        if syntax_error:
+            self.add_issue(
+                issues,
+                "Code_brain",
+                "critical",
+                "Generated Python code has a syntax error.",
+                "Fix the code so it can be parsed by Python before returning it.",
+                syntax_error
+            )
+
         expected_kind = requirements.get("expected_program_kind")
         actual_kind = result.get("program_kind")
         if expected_kind and actual_kind and expected_kind != actual_kind:
@@ -412,6 +444,51 @@ class QualityControlBrain:
                 "The user asked for history, but the code does not track calculation history.",
                 "Add a history list and save it to JSON."
             )
+
+    def has_placeholder_code(self, code):
+
+        lowered = str(code).lower()
+        placeholder_markers = [
+            "todo",
+            "placeholder",
+            "not implemented",
+            "helper, production draft",
+            "helper, planner ready",
+            "helper, creative ready"
+        ]
+
+        if any(marker in lowered for marker in placeholder_markers):
+            return True
+
+        if "return data" in lowered and (
+            lowered.count("return data") >= 2
+            or "helper" in lowered
+            or "production_draft" in lowered
+        ):
+            return True
+
+        if re.search(r"def\s+\w+\([^)]*\):\s*(?:\"\"\".*?\"\"\"\s*)?pass\b", str(code), re.DOTALL):
+            return True
+
+        return False
+
+    def python_syntax_error(self, code):
+
+        text = str(code).strip()
+        if text.startswith("```"):
+            match = re.search(r"```(?:python)?\s*(.*?)```", text, re.DOTALL | re.IGNORECASE)
+            if match:
+                text = match.group(1).strip()
+
+        if not re.search(r"\b(import|from|def|class|if __name__|print\()", text):
+            return None
+
+        try:
+            ast.parse(text)
+        except SyntaxError as error:
+            return f"line {error.lineno}: {error.msg}"
+
+        return None
 
     def code_feature_present(self, feature, code):
 
@@ -629,6 +706,27 @@ class QualityControlBrain:
                 "Convert the selected creative result into the final story text."
             )
 
+        requested_sentence_count = requirements.get("requested_sentence_count")
+        if requested_sentence_count:
+            sentence_count = self.count_sentences(output)
+            if sentence_count and abs(sentence_count - requested_sentence_count) > 1:
+                self.add_issue(
+                    issues,
+                    "Story_brain",
+                    "medium",
+                    f"Story sentence count is off: requested {requested_sentence_count}, got about {sentence_count}.",
+                    "Rewrite the final story to match the requested sentence count more closely."
+                )
+
+    def count_sentences(self, text):
+
+        sentences = [
+            sentence.strip()
+            for sentence in re.split(r"[.!?]+", str(text))
+            if sentence.strip()
+        ]
+        return len(sentences)
+
     def audit_response_risk(self, results, requirements, issues):
         response = results.get("Response_brain")
         if not isinstance(response, dict):
@@ -663,6 +761,32 @@ class QualityControlBrain:
                 "Response exposed a creative simulation report instead of the final requested result.",
                 "Show the final result, not internal creative report fields."
             )
+
+        if requirements["code_only"]:
+            has_code_block = "```" in text or re.search(r"\b(import|from|def|class)\s+[a-zA-Z_]", text)
+            if not has_code_block:
+                self.add_issue(
+                    issues,
+                    "Response_brain",
+                    "high",
+                    "The final response does not look like code even though the user asked for code only.",
+                    "Return only the final code block or raw code."
+                )
+
+            forbidden_response_markers = [
+                "here is a first code structure draft",
+                "main pieces:",
+                "plan:",
+                "quality note:"
+            ]
+            if any(marker in lowered for marker in forbidden_response_markers):
+                self.add_issue(
+                    issues,
+                    "Response_brain",
+                    "medium",
+                    "The final code-only response contains notes, plan text, or quality chatter.",
+                    "For code-only requests, show the code only after Quality_Control passes."
+                )
 
     def text_from_result(self, result):
 
