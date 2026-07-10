@@ -1331,6 +1331,87 @@ class ManagerBrain:
                             "results": recheck_results
                         })
 
+            if phase_name == "response" and "Quality_Control_brain" in self.brains:
+                final_recheck_results = self.execute_quality_recheck(
+                    data,
+                    report,
+                    memory_report,
+                    all_results,
+                    shared_knowledge,
+                    shared_dictionary,
+                    shared_data_context
+                )
+
+                if final_recheck_results:
+                    all_results.update(final_recheck_results)
+                    phase_results.append({
+                        "phase": "final_quality_gate",
+                        "brains": list(final_recheck_results.keys()),
+                        "results": final_recheck_results
+                    })
+
+                    final_quality = final_recheck_results.get("Quality_Control_brain", {})
+                    if isinstance(final_quality, dict) and final_quality.get("needs_retry"):
+                        final_retry_results = self.execute_quality_retry(
+                            data,
+                            report,
+                            memory_report,
+                            all_results,
+                            final_quality,
+                            shared_knowledge,
+                            shared_dictionary,
+                            shared_data_context
+                        )
+
+                        if final_retry_results:
+                            all_results.update(final_retry_results)
+                            phase_results.append({
+                                "phase": "final_quality_retry",
+                                "brains": list(final_retry_results.keys()),
+                                "results": final_retry_results,
+                                "quality_feedback": final_quality.get("retry_requests", [])
+                            })
+
+                            final_recheck_results = self.execute_quality_recheck(
+                                data,
+                                report,
+                                memory_report,
+                                all_results,
+                                shared_knowledge,
+                                shared_dictionary,
+                                shared_data_context
+                            )
+                            if final_recheck_results:
+                                all_results.update(final_recheck_results)
+                                phase_results.append({
+                                    "phase": "final_quality_recheck",
+                                    "brains": list(final_recheck_results.keys()),
+                                    "results": final_recheck_results
+                                })
+
+                    refreshed_response = self.execute(
+                        ["Response_brain"],
+                        {
+                            **data,
+                            "results": all_results,
+                            "knowledge": shared_knowledge,
+                            "dictionary": shared_dictionary,
+                            "data_context": shared_data_context,
+                            "shared_context": shared_brain_context
+                        } if isinstance(data, dict) else data,
+                        report,
+                        memory_report,
+                        "final_response_refresh"
+                    )
+
+                    if refreshed_response:
+                        all_results.update(refreshed_response)
+                        phase_results.append({
+                            "phase": "final_response_refresh",
+                            "brains": list(refreshed_response.keys()),
+                            "results": refreshed_response
+                        })
+
         return all_results, phase_results
 
     def retry_brains_from_quality(self, quality_result):

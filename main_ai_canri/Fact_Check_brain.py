@@ -434,10 +434,12 @@ class FactCheckBrain:
 
         scores = [item.get("trust_score", 0) for item in evidence]
         average = sum(scores) / max(len(scores), 1)
-        diversity_bonus = min(len({item.get("name") for item in evidence}) * 3, 15)
-        strong_count = sum(1 for score in scores if score >= 90)
+        source_names = {item.get("name") for item in evidence if item.get("name")}
+        source_types = {item.get("source_type") for item in evidence if item.get("source_type")}
+        diversity_bonus = min(len(source_names) * 2 + len(source_types) * 3, 18)
+        strong_count = sum(1 for score in scores if score >= 75)
 
-        return min(100, round(average + diversity_bonus + strong_count * 2, 2))
+        return min(100, round(average + diversity_bonus + strong_count * 3, 2))
 
     def claim_terms(self, text):
 
@@ -507,7 +509,19 @@ class FactCheckBrain:
 
         return links
 
-    def build_fact_summary(self, verdict, confidence, claims, evidence, warnings, claim_evidence_links):
+    def support_ratio(self, claims, claim_evidence_links):
+
+        if not claims:
+            return 0
+
+        supported = sum(
+            1
+            for link in claim_evidence_links
+            if link.get("best_support_score", 0) >= 35
+        )
+        return round(supported / max(len(claims[:20]), 1), 2)
+
+    def build_fact_summary(self, verdict, confidence, claims, evidence, warnings, claim_evidence_links, coverage=None):
 
         lines = [
             f"Verdict: {verdict}",
@@ -516,9 +530,19 @@ class FactCheckBrain:
             f"Evidence sources: {len(evidence)}"
         ]
 
-        supported = sum(1 for link in claim_evidence_links if link.get("best_support_score", 0) > 0)
+        supported = sum(1 for link in claim_evidence_links if link.get("best_support_score", 0) >= 35)
         if claims:
             lines.append(f"Claims with local/source support: {supported}/{len(claims[:20])}")
+
+        if isinstance(coverage, dict):
+            lines.append(
+                "Evidence coverage: "
+                f"DATA={coverage.get('data_context', 0)}, "
+                f"Knowledge={coverage.get('knowledge_database', 0)}, "
+                f"Dictionary={coverage.get('dictionary', 0)}, "
+                f"Research/external={coverage.get('research_or_external', 0)}, "
+                f"Strong={coverage.get('strong_sources', 0)}"
+            )
 
         if warnings:
             lines.append("Warnings: " + "; ".join(warnings[:4]))
@@ -593,9 +617,11 @@ class FactCheckBrain:
 
         return "negative" if any(marker in f" {lowered} " for marker in negative_markers) else "positive"
 
-    def detect_warnings(self, claims, evidence, conflicts, topic_risk):
+    def detect_warnings(self, claims, evidence, conflicts, topic_risk, claim_evidence_links=None, coverage=None):
 
         warnings = []
+        claim_evidence_links = claim_evidence_links or []
+        coverage = coverage or {}
 
         if not claims:
             warnings.append("No clear factual claims found")
@@ -603,10 +629,19 @@ class FactCheckBrain:
         if not evidence:
             warnings.append("No external or local source evidence found")
 
+        if claims and self.support_ratio(claims, claim_evidence_links) < 0.45:
+            warnings.append("Most claims have weak direct evidence support")
+
+        if evidence and not coverage.get("strong_sources"):
+            warnings.append("No strong evidence source found")
+
         if conflicts:
             warnings.append("Conflicting claims detected")
 
-        if topic_risk.get("requires_strong_sources") and self.evidence_score(evidence) < 90:
+        if topic_risk.get("requires_strong_sources") and (
+            self.evidence_score(evidence) < 90
+            or not coverage.get("strong_sources")
+        ):
             warnings.append("High-stakes topic requires stronger sources")
 
         for claim in claims:
@@ -619,14 +654,37 @@ class FactCheckBrain:
 
     # ---------- scoring ----------
 
-    def calculate_confidence(self, claims, evidence, conflicts, warnings, data, results, topic_risk):
+    def calculate_confidence(
+        self,
+        claims,
+        evidence,
+        conflicts,
+        warnings,
+        data,
+        results,
+        topic_risk,
+        claim_evidence_links=None,
+        coverage=None
+    ):
 
         score = 35
+        claim_evidence_links = claim_evidence_links or []
+        coverage = coverage or {}
 
         if claims:
             score += min(len(claims) * 2, 12)
 
         score += self.evidence_score(evidence) * 0.45
+        score += self.support_ratio(claims, claim_evidence_links) * 18
+
+        if coverage.get("strong_sources"):
+            score += min(coverage.get("strong_sources", 0) * 4, 14)
+
+        if coverage.get("has_local_support"):
+            score += 5
+
+        if coverage.get("has_external_or_research_support"):
+            score += 7
 
         verified_brains = 0
         confidence_values = []
@@ -646,7 +704,10 @@ class FactCheckBrain:
         score -= len(conflicts) * 18
         score -= len(warnings) * 5
 
-        if topic_risk.get("requires_strong_sources") and self.evidence_score(evidence) < 90:
+        if topic_risk.get("requires_strong_sources") and (
+            self.evidence_score(evidence) < 90
+            or not coverage.get("strong_sources")
+        ):
             score -= 18
 
         return max(0, min(round(score, 2), 100))
@@ -762,8 +823,16 @@ class FactCheckBrain:
         evidence.extend(local_data_evidence)
         conflicts = self.detect_conflicts(claims)
         topic_risk = self.detect_topic_risk(text, report)
-        warnings = self.detect_warnings(claims, evidence, conflicts, topic_risk)
         claim_evidence_links = self.link_claims_to_evidence(claims, evidence)
+        coverage = self.evidence_coverage(evidence)
+        warnings = self.detect_warnings(
+            claims,
+            evidence,
+            conflicts,
+            topic_risk,
+            claim_evidence_links,
+            coverage
+        )
         confidence = self.calculate_confidence(
             claims,
             evidence,
@@ -771,19 +840,21 @@ class FactCheckBrain:
             warnings,
             data,
             results,
-            topic_risk
+            topic_risk,
+            claim_evidence_links,
+            coverage
         )
         verdict = self.verdict_from_confidence(confidence, conflicts, topic_risk)
         verified = verdict in {"verified", "likely_true"} and not conflicts
         recommendations = self.build_recommendations(verdict, warnings, topic_risk)
-        coverage = self.evidence_coverage(evidence)
         final_output = self.build_fact_summary(
             verdict,
             confidence,
             claims,
             evidence,
             warnings,
-            claim_evidence_links
+            claim_evidence_links,
+            coverage
         )
 
         self.update_statistics(verdict, confidence)
