@@ -2105,9 +2105,11 @@ if __name__ == "__main__":
 
         checks = [
             ("weather_app", ["weather", "temperature", "humidity", "forecast"]),
+            ("expense_tracker", ["expense tracker", "expenses", "amount spent", "total amount", "search expenses", "category"]),
             ("todo_app", ["to-do", "todo", "task list", "tasks", "mark a task"]),
             ("contact_book", ["contact", "phone book", "address book", "email book"]),
             ("notes_app", ["notes", "note taking", "save notes", "notebook"]),
+            ("password_manager", ["password manager", "accounts", "account names", "view one account"]),
             ("quiz_game", ["quiz", "question game", "multiple choice"]),
             ("guessing_game", ["guessing game", "guess number", "number game"]),
             ("password_generator", ["password generator", "generate password", "random password"]),
@@ -2715,6 +2717,372 @@ if __name__ == "__main__":
 
         if program_kind == "notes_app":
             return self.build_notes_app_code()
+
+        if program_kind == "password_manager":
+            return '''import json
+from pathlib import Path
+
+
+ACCOUNTS_FILE = Path("accounts.json")
+
+
+def load_accounts():
+    if not ACCOUNTS_FILE.exists():
+        return []
+
+    try:
+        data = json.loads(ACCOUNTS_FILE.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        print("Could not read accounts.json, starting with an empty list.")
+        return []
+
+    if not isinstance(data, list):
+        return []
+
+    accounts = []
+    for item in data:
+        if isinstance(item, dict) and item.get("name"):
+            accounts.append({
+                "name": str(item.get("name", "")),
+                "username": str(item.get("username", "")),
+                "password": str(item.get("password", "")),
+                "notes": str(item.get("notes", ""))
+            })
+
+    return accounts
+
+
+def save_accounts(accounts):
+    ACCOUNTS_FILE.write_text(
+        json.dumps(accounts, indent=2, ensure_ascii=False),
+        encoding="utf-8"
+    )
+
+
+def add_account(accounts):
+    name = input("Account name: ").strip()
+    username = input("Username: ").strip()
+    password = input("Password: ").strip()
+    notes = input("Notes: ").strip()
+
+    if not name or not password:
+        print("Account name and password are required.")
+        return
+
+    accounts.append({
+        "name": name,
+        "username": username,
+        "password": password,
+        "notes": notes
+    })
+    save_accounts(accounts)
+    print("Account saved.")
+
+
+def list_accounts(accounts):
+    if not accounts:
+        print("No accounts saved.")
+        return
+
+    for index, account in enumerate(accounts, start=1):
+        print(f"{index}. {account['name']}")
+
+
+def search_accounts(accounts, keyword):
+    keyword = keyword.strip().lower()
+    if not keyword:
+        print("Search keyword cannot be empty.")
+        return
+
+    matches = [
+        (index, account)
+        for index, account in enumerate(accounts, start=1)
+        if keyword in account.get("name", "").lower()
+    ]
+
+    if not matches:
+        print("No matching accounts found.")
+        return
+
+    for index, account in matches:
+        print(f"{index}. {account['name']}")
+
+
+def get_account_index(accounts, raw_index):
+    try:
+        index = int(raw_index) - 1
+    except ValueError:
+        print("Please enter a valid account number.")
+        return None
+
+    if index < 0 or index >= len(accounts):
+        print("Account number is out of range.")
+        return None
+
+    return index
+
+
+def view_account(accounts, raw_index):
+    index = get_account_index(accounts, raw_index)
+    if index is None:
+        return
+
+    account = accounts[index]
+    print(f"Account: {account['name']}")
+    print(f"Username: {account.get('username', '')}")
+    print(f"Password: {account.get('password', '')}")
+    if account.get("notes"):
+        print(f"Notes: {account['notes']}")
+
+
+def delete_account(accounts, raw_index):
+    index = get_account_index(accounts, raw_index)
+    if index is None:
+        return
+
+    removed = accounts.pop(index)
+    save_accounts(accounts)
+    print(f"Deleted account: {removed['name']}")
+
+
+def print_help():
+    print("Commands:")
+    print("  add                Add a new account")
+    print("  list               List account names")
+    print("  search <keyword>   Search accounts by name")
+    print("  view <number>      View one account")
+    print("  delete <number>    Delete an account")
+    print("  help               Show commands")
+    print("  quit               Save and exit")
+
+
+def main():
+    accounts = load_accounts()
+    print("Terminal Password Manager")
+    print("Warning: this simple demo stores passwords in plain JSON.")
+    print("Use it only for learning or test data, not real passwords.")
+    print_help()
+
+    while True:
+        command = input("> ").strip()
+        lower = command.lower()
+
+        if lower == "add":
+            add_account(accounts)
+        elif lower == "list":
+            list_accounts(accounts)
+        elif lower.startswith("search "):
+            search_accounts(accounts, command[7:].strip())
+        elif lower.startswith("view "):
+            view_account(accounts, command[5:].strip())
+        elif lower.startswith("delete "):
+            delete_account(accounts, command[7:].strip())
+        elif lower == "help":
+            print_help()
+        elif lower == "quit":
+            save_accounts(accounts)
+            print("Accounts saved. Goodbye.")
+            break
+        else:
+            print("Unknown command. Type 'help' for commands.")
+
+
+if __name__ == "__main__":
+    main()
+'''
+
+        if program_kind == "expense_tracker":
+            return '''import json
+from pathlib import Path
+
+
+EXPENSES_FILE = Path("expenses.json")
+
+
+def load_expenses():
+    if not EXPENSES_FILE.exists():
+        return []
+
+    try:
+        data = json.loads(EXPENSES_FILE.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        print("Could not read expenses.json, starting with an empty list.")
+        return []
+
+    if not isinstance(data, list):
+        return []
+
+    expenses = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        try:
+            amount = float(item.get("amount", 0))
+        except (TypeError, ValueError):
+            amount = 0.0
+        expenses.append({
+            "amount": amount,
+            "category": str(item.get("category", "uncategorized")).strip() or "uncategorized",
+            "description": str(item.get("description", "")).strip()
+        })
+
+    return expenses
+
+
+def save_expenses(expenses):
+    EXPENSES_FILE.write_text(
+        json.dumps(expenses, indent=2, ensure_ascii=False),
+        encoding="utf-8"
+    )
+
+
+def format_amount(amount):
+    return f"{amount:.2f}"
+
+
+def add_expense(expenses):
+    raw_amount = input("Amount: ").strip()
+    category = input("Category: ").strip()
+    description = input("Description: ").strip()
+
+    try:
+        amount = float(raw_amount)
+    except ValueError:
+        print("Amount must be a number.")
+        return
+
+    if amount < 0:
+        print("Amount cannot be negative.")
+        return
+
+    if not category:
+        category = "uncategorized"
+
+    expenses.append({
+        "amount": amount,
+        "category": category,
+        "description": description
+    })
+    save_expenses(expenses)
+    print("Expense saved.")
+
+
+def list_expenses(expenses):
+    if not expenses:
+        print("No expenses yet.")
+        return
+
+    for index, expense in enumerate(expenses, start=1):
+        print(
+            f"{index}. "
+            f"{format_amount(expense['amount'])} | "
+            f"{expense['category']} | "
+            f"{expense.get('description', '')}"
+        )
+
+
+def search_by_category(expenses, category):
+    category = category.strip().lower()
+    if not category:
+        print("Category cannot be empty.")
+        return
+
+    matches = [
+        (index, expense)
+        for index, expense in enumerate(expenses, start=1)
+        if category in expense.get("category", "").lower()
+    ]
+
+    if not matches:
+        print("No matching expenses found.")
+        return
+
+    for index, expense in matches:
+        print(
+            f"{index}. "
+            f"{format_amount(expense['amount'])} | "
+            f"{expense['category']} | "
+            f"{expense.get('description', '')}"
+        )
+
+
+def show_total(expenses):
+    total = sum(expense.get("amount", 0) for expense in expenses)
+    print(f"Total spent: {format_amount(total)}")
+
+
+def get_expense_index(expenses, raw_index):
+    try:
+        index = int(raw_index) - 1
+    except ValueError:
+        print("Please enter a valid expense number.")
+        return None
+
+    if index < 0 or index >= len(expenses):
+        print("Expense number is out of range.")
+        return None
+
+    return index
+
+
+def delete_expense(expenses, raw_index):
+    index = get_expense_index(expenses, raw_index)
+    if index is None:
+        return
+
+    removed = expenses.pop(index)
+    save_expenses(expenses)
+    print(
+        "Deleted expense: "
+        f"{format_amount(removed['amount'])} | "
+        f"{removed['category']} | "
+        f"{removed.get('description', '')}"
+    )
+
+
+def print_help():
+    print("Commands:")
+    print("  add                  Add an expense")
+    print("  list                 List all expenses")
+    print("  search <category>    Search expenses by category")
+    print("  total                Show total amount spent")
+    print("  delete <number>      Delete an expense")
+    print("  help                 Show commands")
+    print("  quit                 Save and exit")
+
+
+def main():
+    expenses = load_expenses()
+    print("Expense Tracker")
+    print_help()
+
+    while True:
+        command = input("> ").strip()
+        lower = command.lower()
+
+        if lower == "add":
+            add_expense(expenses)
+        elif lower == "list":
+            list_expenses(expenses)
+        elif lower.startswith("search "):
+            search_by_category(expenses, command[7:].strip())
+        elif lower == "total":
+            show_total(expenses)
+        elif lower.startswith("delete "):
+            delete_expense(expenses, command[7:].strip())
+        elif lower == "help":
+            print_help()
+        elif lower == "quit":
+            save_expenses(expenses)
+            print("Expenses saved. Goodbye.")
+            break
+        else:
+            print("Unknown command. Type 'help' for commands.")
+
+
+if __name__ == "__main__":
+    main()
+'''
 
         if program_kind == "notes_app":
             return '''import json
