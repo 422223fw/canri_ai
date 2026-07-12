@@ -415,6 +415,90 @@ def build_shared_data_context(query, limit=12):
     return context
 
 
+def context_view_for_brain(context, brain_name, max_sources=6):
+    """Return a compact, domain-filtered view without losing the full context."""
+
+    if not isinstance(context, dict):
+        return {}
+
+    brain_domains = {
+        "Code_brain": {"code", "technology", "security"},
+        "Math_brain": {"math", "reasoning"},
+        "Story_brain": {"creative", "language"},
+        "Creative_brain": {"creative", "planner", "language", "game", "code"},
+        "Fact_Check_brain": {"knowledge", "science", "geography", "technology", "security"},
+        "Research_brain": {"knowledge", "science", "geography", "technology"},
+        "Language_brain": {"language"},
+        "Memory_brain": {"memory"},
+        "Security_brain": {"security", "code", "technology"},
+        "Vision_brain": {"vision"},
+        "Voice_brain": {"voice", "vision"},
+        "Image_brain": {"vision", "creative"},
+        "Game_brain": {"game", "creative", "code"},
+        "Planner_brain": {"planner", "reasoning"},
+        "Reasoning_brain": {"reasoning", "knowledge", "math"},
+    }
+    unrestricted = {
+        "Manager_brain",
+        "Quality_Control_brain",
+        "Response_brain",
+        "Learning_brain"
+    }
+    wanted = brain_domains.get(brain_name, set())
+    query_domains = set(context.get("domains", []))
+
+    matches = []
+    for match in context.get("matches", []):
+        if not isinstance(match, dict):
+            continue
+        file_name = normalize_text(match.get("file", ""))
+        matched_terms = set(match.get("matched_terms", []))
+        relevant = brain_name in unrestricted or not wanted
+        if wanted and query_domains.intersection(wanted):
+            relevant = True
+        if wanted and any(
+            domain in file_name
+            or matched_terms.intersection(DOMAIN_HINTS.get(domain, []))
+            for domain in wanted
+        ):
+            relevant = True
+        if relevant:
+            matches.append(compact_match_for_brains(match))
+        if len(matches) >= max_sources:
+            break
+
+    if not matches and context.get("matches"):
+        matches = [
+            compact_match_for_brains(item)
+            for item in context.get("matches", [])[:2]
+            if isinstance(item, dict)
+        ]
+
+    evidence = []
+    for match in matches:
+        for item in match.get("value_matches", [])[:2]:
+            if isinstance(item, dict) and item.get("text"):
+                evidence.append({
+                    "file": match.get("file"),
+                    "path": item.get("path"),
+                    "text": str(item.get("text", ""))[:260],
+                    "matched_terms": item.get("matched_terms", [])[:6]
+                })
+
+    return {
+        "available": bool(matches),
+        "brain": brain_name,
+        "query_terms": context.get("query_terms", [])[:30],
+        "domains": context.get("domains", [])[:12],
+        "matches": matches,
+        "evidence_snippets": evidence[:8],
+        "profiled_files": context.get("profiled_files", 0),
+        "total_profiled_bytes": context.get("total_profiled_bytes", 0),
+        "selection_policy": "domain_filtered_lazy_context",
+        "full_context_available_to_manager": True
+    }
+
+
 def best_data_sources(query, limit=5):
     context = build_shared_data_context(query, limit=limit)
     return [

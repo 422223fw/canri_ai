@@ -239,6 +239,62 @@ class FactCheckBrain:
 
         return clean[:80]
 
+    def classify_claim(self, claim):
+
+        text = str(claim.get("text", "") if isinstance(claim, dict) else claim).strip()
+        lowered = f" {text.lower()} "
+        opinion_markers = [
+            " i think ", " i believe ", " in my opinion ", " seems ",
+            " beautiful ", " boring ", " amazing ", " best ", " worst ",
+            " should ", " ought to ", " prefer ", " feels "
+        ]
+        prediction_markers = [
+            " will probably ", " may become ", " is expected to ",
+            " likely to ", " forecast ", " predict "
+        ]
+        recommendation_markers = [
+            " should ", " recommend ", " advice ", " better to ", " try to "
+        ]
+
+        if any(marker in lowered for marker in recommendation_markers):
+            kind = "recommendation"
+            verifiable = False
+        elif any(marker in lowered for marker in opinion_markers):
+            kind = "opinion"
+            verifiable = False
+        elif any(marker in lowered for marker in prediction_markers):
+            kind = "prediction"
+            verifiable = True
+        else:
+            kind = "factual_claim"
+            verifiable = True
+
+        return {
+            "text": text,
+            "kind": kind,
+            "verifiable": verifiable,
+            "reason": f"classified_as_{kind}"
+        }
+
+    def classify_claims(self, claims):
+
+        classified = []
+        counts = {
+            "factual_claim": 0,
+            "opinion": 0,
+            "prediction": 0,
+            "recommendation": 0
+        }
+        for claim in claims:
+            classification = self.classify_claim(claim)
+            enriched = dict(claim)
+            enriched["classification"] = classification["kind"]
+            enriched["verifiable"] = classification["verifiable"]
+            enriched["classification_reason"] = classification["reason"]
+            classified.append(enriched)
+            counts[classification["kind"]] = counts.get(classification["kind"], 0) + 1
+        return classified, counts
+
     # ---------- evidence ----------
 
     def collect_evidence(self, data, results):
@@ -817,16 +873,18 @@ class FactCheckBrain:
         results = self.get_results(data)
         text = self.extract_text(data)
         claims = self.collect_claims(data, results)
+        claims, claim_type_counts = self.classify_claims(claims)
+        verifiable_claims = [claim for claim in claims if claim.get("verifiable")]
         evidence = self.collect_evidence(data, results)
         evidence.extend(self.collect_context_evidence(data))
         local_data_evidence = self.collect_local_data_evidence(text, report, claims)
         evidence.extend(local_data_evidence)
         conflicts = self.detect_conflicts(claims)
         topic_risk = self.detect_topic_risk(text, report)
-        claim_evidence_links = self.link_claims_to_evidence(claims, evidence)
+        claim_evidence_links = self.link_claims_to_evidence(verifiable_claims, evidence)
         coverage = self.evidence_coverage(evidence)
         warnings = self.detect_warnings(
-            claims,
+            verifiable_claims,
             evidence,
             conflicts,
             topic_risk,
@@ -834,7 +892,7 @@ class FactCheckBrain:
             coverage
         )
         confidence = self.calculate_confidence(
-            claims,
+            verifiable_claims,
             evidence,
             conflicts,
             warnings,
@@ -845,6 +903,9 @@ class FactCheckBrain:
             coverage
         )
         verdict = self.verdict_from_confidence(confidence, conflicts, topic_risk)
+        if claims and not verifiable_claims:
+            verdict = "opinion_not_fact_checkable"
+            confidence = 100
         verified = verdict in {"verified", "likely_true"} and not conflicts
         recommendations = self.build_recommendations(verdict, warnings, topic_risk)
         final_output = self.build_fact_summary(
@@ -865,6 +926,8 @@ class FactCheckBrain:
             "verdict": verdict,
             "confidence": confidence,
             "claim_count": len(claims),
+            "verifiable_claim_count": len(verifiable_claims),
+            "claim_type_counts": claim_type_counts,
             "claims_checked": claims[:20],
             "evidence_count": len(evidence),
             "evidence_score": self.evidence_score(evidence),
@@ -879,7 +942,18 @@ class FactCheckBrain:
             "conflicts": conflicts,
             "warnings": warnings,
             "topic_risk": topic_risk,
-            "needs_research": verdict in {"uncertain", "not_verified", "needs_research"},
+            "needs_research": bool(verifiable_claims) and verdict in {"uncertain", "not_verified", "needs_research"},
+            "reliability": {
+                "level": (
+                    "high" if confidence >= 85
+                    else "medium" if confidence >= 65
+                    else "low"
+                ),
+                "score": confidence,
+                "verdict": verdict,
+                "source_coverage": coverage,
+                "opinion_separated": claim_type_counts.get("opinion", 0) + claim_type_counts.get("recommendation", 0)
+            },
             "suggested_next_brains": [
                 brain_name
                 for brain_name in [

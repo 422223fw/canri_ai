@@ -1260,6 +1260,33 @@ class ResponseBrain:
 
         return text
 
+    def strict_output_request(self, report, user_text):
+
+        contract = report.get("request_contract", {}) if isinstance(report, dict) else {}
+        constraints = contract.get("output_constraints", {}) if isinstance(contract, dict) else {}
+        lowered = str(user_text).lower()
+        return bool(
+            constraints.get("only_output")
+            or any(
+                marker in lowered
+                for marker in [
+                    "only output", "only return", "code only",
+                    "do not output a plan", "not a plan or explanation"
+                ]
+            )
+        )
+
+    def strip_internal_output(self, text):
+
+        value = str(text or "").strip()
+        value = re.sub(
+            r"\n\s*(?:Quality note|Internal note|Simulation summary):.*$",
+            "",
+            value,
+            flags=re.IGNORECASE | re.DOTALL
+        ).strip()
+        return value
+
     # ---------- statistics ----------
 
     def update_statistics(self, primary_brain, confidence, blocked):
@@ -1284,6 +1311,7 @@ class ResponseBrain:
         user_text = self.extract_user_text(data, report)
         self._active_focus_terms = self.user_focus_terms(user_text)
         safety = self.safety_status(results)
+        strict_output = self.strict_output_request(report, user_text)
 
         if safety["blocked"]:
             display_text = BLOCKED_SAFETY_HINTS.get(
@@ -1370,17 +1398,14 @@ class ResponseBrain:
             else:
                 display_text = "אין לי עדיין מידע מספיק כדי לבנות תשובה."
 
-            display_text = self.add_verification_note(
-                display_text,
-                results,
-                report,
-                primary_brain
-            )
-            display_text = self.add_quality_note(
-                display_text,
-                results
-            )
-            display_text = self.adapt_tone(display_text, results)
+            if not strict_output:
+                display_text = self.add_verification_note(
+                    display_text,
+                    results,
+                    report,
+                    primary_brain
+                )
+                display_text = self.adapt_tone(display_text, results)
 
             confidence_values = [
                 result.get("confidence")
@@ -1390,6 +1415,7 @@ class ResponseBrain:
             ]
             confidence = round(sum(confidence_values) / len(confidence_values), 2) if confidence_values else 55
 
+        display_text = self.strip_internal_output(display_text)
         display_text = self.final_polish(display_text)
 
         self.update_statistics(
@@ -1409,6 +1435,7 @@ class ResponseBrain:
             "quality": self.quality_status(results),
             "used_results": sorted(results.keys()),
             "screen_ready": True,
+            "strict_output": strict_output,
             "rules": [
                 "Return one clear answer for the screen.",
                 "Do not invent facts that no brain provided.",

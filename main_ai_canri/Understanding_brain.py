@@ -1577,6 +1577,188 @@ class UnderstandingBrain:
 
         return features
 
+    def extract_output_constraints(self, text, intent):
+
+        lowered = str(text).lower()
+        forbidden = []
+        forbidden_rules = {
+            "plan": ["do not output a plan", "without a plan", "not a plan"],
+            "modules": ["do not output modules", "without modules"],
+            "variants": ["do not output variants", "without variants"],
+            "helpers": ["do not output helpers", "without helpers"],
+            "placeholders": ["do not output placeholders", "without placeholders"],
+            "drafts": ["do not output draft", "not a draft", "without draft"],
+            "explanation": ["do not output an explanation", "no explanation"],
+            "notes": ["do not output notes", "no notes"],
+        }
+
+        for name, markers in forbidden_rules.items():
+            if any(marker in lowered for marker in markers):
+                forbidden.append(name)
+
+        only_output = None
+        only_match = re.search(
+            r"only\s+output\s+(?:the\s+)?([^\n.!?]{2,100})",
+            lowered
+        )
+        if only_match:
+            only_output = only_match.group(1).strip(" ,;:")
+
+        requested_format = OUTPUT_RULES.get(intent, "answer")
+        if "code" in str(only_output or "") or any(
+            marker in lowered
+            for marker in ["code only", "only code", "final working python code"]
+        ):
+            requested_format = "code"
+        elif "table" in lowered:
+            requested_format = "table"
+        elif "json" in lowered and any(marker in lowered for marker in ["return json", "output json", "as json"]):
+            requested_format = "json"
+        elif any(marker in lowered for marker in ["bullet list", "as a list", "numbered list"]):
+            requested_format = "list"
+        elif "step by step" in lowered:
+            requested_format = "step_by_step"
+
+        sentence_count = None
+        sentence_match = re.search(r"\b(\d+)\s*(?:more\s+)?sentences?\b", lowered)
+        if sentence_match:
+            sentence_count = int(sentence_match.group(1))
+
+        return {
+            "requested_format": requested_format,
+            "only_output": only_output,
+            "forbidden_sections": forbidden,
+            "sentence_count": sentence_count,
+            "must_be_runnable": any(
+                marker in lowered
+                for marker in ["real runnable", "must run", "working program", "working code", "runnable"]
+            ),
+            "must_be_final": any(
+                marker in lowered
+                for marker in ["final full", "final working", "only output", "final story", "final answer"]
+            ),
+            "wants_steps": "step by step" in lowered or "show the steps" in lowered,
+        }
+
+    def extract_atomic_requirements(self, text, features, output_constraints):
+
+        raw = str(text).replace("\r\n", "\n")
+        clauses = []
+
+        for line in raw.split("\n"):
+            line = re.sub(r"^\s*(?:[-*]|\d+[.)])\s*", "", line).strip()
+            if not line:
+                continue
+            lowered = line.lower()
+            if (
+                re.match(r"^(?:the\s+)?(?:program|story|answer|response|code)\s+must\b", lowered)
+                or re.match(r"^(?:must|include|add|support|use|handle|keep|show|return|only)\b", lowered)
+                or re.match(r"^(?:the\s+user\s+can)\b", lowered)
+                or re.search(r"\bmust\s+(?:include|support|use|handle|let|contain|run)\b", lowered)
+            ):
+                clauses.append(line)
+
+        if not clauses:
+            for sentence in re.split(r"(?<=[.!?])\s+", raw):
+                lowered = sentence.lower()
+                if any(marker in lowered for marker in [" must ", " should ", " only output ", " needs to "]):
+                    clauses.append(sentence.strip())
+
+        requirements = []
+        seen = set()
+        for clause in clauses:
+            normalized = re.sub(r"\s+", " ", clause).strip(" .")
+            key = normalized.lower()
+            if not normalized or key in seen:
+                continue
+            seen.add(key)
+            requirements.append({
+                "id": f"explicit_{len(requirements) + 1}",
+                "text": normalized,
+                "kind": "explicit_constraint"
+            })
+
+        for feature in features:
+            requirements.append({
+                "id": f"feature_{feature}",
+                "text": f"Implement requested feature: {feature}",
+                "kind": "feature",
+                "feature": feature
+            })
+
+        if output_constraints.get("must_be_runnable"):
+            requirements.append({
+                "id": "runnable_output",
+                "text": "The result must be runnable and complete.",
+                "kind": "output_constraint"
+            })
+        if output_constraints.get("only_output"):
+            requirements.append({
+                "id": "only_output",
+                "text": f"Only return {output_constraints['only_output']}.",
+                "kind": "output_constraint"
+            })
+
+        unique = []
+        ids = set()
+        for requirement in requirements:
+            if requirement["id"] in ids:
+                continue
+            ids.add(requirement["id"])
+            unique.append(requirement)
+        return unique[:40]
+
+    def build_request_contract(
+        self,
+        text,
+        main_topic,
+        intent,
+        requested_action,
+        entities,
+        features,
+        semantic_frame
+    ):
+
+        lowered = str(text).lower()
+        continuation_markers = [
+            "continue", "same", "previous", "earlier", "above",
+            "improve it", "fix it", "add to it", "that code", "this code",
+            "the story", "more sentences", "from the code you just wrote"
+        ]
+        output_constraints = self.extract_output_constraints(text, intent)
+        requirements = self.extract_atomic_requirements(
+            text,
+            features,
+            output_constraints
+        )
+
+        return {
+            "action": requested_action.get("action_word") if isinstance(requested_action, dict) else None,
+            "action_kind": requested_action.get("action_kind") if isinstance(requested_action, dict) else None,
+            "target": (
+                requested_action.get("target")
+                if isinstance(requested_action, dict)
+                else None
+            ) or semantic_frame.get("object"),
+            "topic": main_topic,
+            "intent": intent,
+            "entities": entities,
+            "features": features,
+            "requirements": requirements,
+            "output_constraints": output_constraints,
+            "continuation": {
+                "requested": any(marker in lowered for marker in continuation_markers),
+                "markers": [marker for marker in continuation_markers if marker in lowered][:8]
+            },
+            "coverage": {
+                "whole_input_analyzed": True,
+                "word_count": len(self.extract_words(text)),
+                "requirement_count": len(requirements),
+                "entity_count": len(entities),
+                "feature_count": len(features)
+            }
+        }
+
     def possible_tasks(self, main_topic, intent, features, requested_action=None):
 
         tasks = [intent]
@@ -1735,6 +1917,16 @@ class UnderstandingBrain:
             requested_action
         )
 
+        request_contract = self.build_request_contract(
+            text,
+            main_topic,
+            intent,
+            requested_action,
+            entities,
+            features,
+            advanced_understanding.get("semantic_frame", {})
+        )
+
         tasks = self.possible_tasks(
             main_topic,
             intent,
@@ -1766,6 +1958,9 @@ class UnderstandingBrain:
             "features": features,
             "entities": entities,
             "requested_action": requested_action,
+            "request_contract": request_contract,
+            "requirements": request_contract.get("requirements", []),
+            "output_constraints": request_contract.get("output_constraints", {}),
             "advanced_word_tags": advanced_understanding.get(
                 "tokens",
                 []

@@ -291,6 +291,52 @@ class LearningBrain:
             return "uncertain"
         return "weak"
 
+    def learning_eligibility(self, brain_name, result, rating, results, report):
+
+        reasons = []
+        eligible = rating.get("score", 0) >= 75
+        if not eligible:
+            reasons.append("reliability_below_learning_threshold")
+
+        if not isinstance(result, dict) or result.get("error") or result.get("skipped"):
+            eligible = False
+            reasons.append("result_failed_or_skipped")
+
+        quality = results.get("Quality_Control_brain", {})
+        if isinstance(quality, dict) and quality.get("passed") is False:
+            eligible = False
+            reasons.append("quality_control_failed")
+
+        factual_keys = {"facts", "verified_facts", "findings", "claims", "sources", "evidence"}
+        contains_factual_material = isinstance(result, dict) and bool(factual_keys.intersection(result.keys()))
+        fact_check = results.get("Fact_Check_brain", {})
+        if contains_factual_material and brain_name != "Fact_Check_brain":
+            fact_verified = isinstance(fact_check, dict) and (
+                fact_check.get("verified") is True
+                or fact_check.get("verdict") in {"verified", "likely_true", "opinion_not_fact_checkable"}
+            )
+            if not fact_verified:
+                eligible = False
+                reasons.append("factual_output_not_verified")
+
+        if brain_name == "Fact_Check_brain" and isinstance(result, dict):
+            if result.get("verdict") in {"uncertain", "not_verified", "needs_research"}:
+                eligible = False
+                reasons.append("fact_check_not_conclusive")
+
+        if isinstance(result, dict) and result.get("self_reviewed") and not result.get("self_review", {}).get("ready"):
+            eligible = False
+            reasons.append("code_self_review_failed")
+
+        return {
+            "eligible": eligible,
+            "threshold": 75,
+            "scope": "current_chat_and_matching_intent",
+            "topic": report.get("main_topic", "unknown"),
+            "intent": report.get("intent", "unknown"),
+            "reasons": reasons or ["verified_reliable_output"]
+        }
+
     def output_alignment_score(self, brain_name, result, intent):
 
         delta = 0
@@ -382,13 +428,27 @@ class LearningBrain:
 
         for brain_name, result in results.items():
             rating = self.local_reliability_score(brain_name, result, report)
+            eligibility = self.learning_eligibility(
+                brain_name,
+                result,
+                rating,
+                results,
+                report
+            )
+            rating["learning_eligibility"] = eligibility
             reliability[brain_name] = rating
 
             self.update_brain_performance(brain_name, result, rating)
 
-            if rating["level"] in ["strong", "usable"]:
+            if rating["level"] in ["strong", "usable"] and eligibility["eligible"]:
                 learned.append(f"{brain_name} produced {rating['level']} output.")
                 lessons.append(self.build_success_lesson(brain_name, report, rating))
+
+            if rating["level"] in ["strong", "usable"] and not eligibility["eligible"]:
+                weaknesses.append(
+                    f"{brain_name} was not promoted to learned knowledge: "
+                    + ", ".join(eligibility["reasons"])
+                )
 
             if rating["level"] in ["weak", "uncertain"]:
                 weaknesses.append(f"{brain_name} output is {rating['level']}: {', '.join(rating['reasons'])}")
@@ -416,6 +476,8 @@ class LearningBrain:
             "topic": report.get("main_topic", "unknown"),
             "intent": report.get("intent", "unknown"),
             "reliability": rating["score"],
+            "scope": rating.get("learning_eligibility", {}).get("scope", "current_chat_and_matching_intent"),
+            "verification": rating.get("learning_eligibility", {}),
             "lesson": f"For {report.get('intent', 'unknown')} in {report.get('main_topic', 'unknown')}, {brain_name} can be trusted when reliability stays {rating['level']}."
         }
 

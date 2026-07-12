@@ -1,4 +1,5 @@
 import queue
+import shutil
 import threading
 import wave
 import json
@@ -16,6 +17,8 @@ DATA_DIR = Path(__file__).parent / "data"
 UPLOAD_DIR = DATA_DIR / "uploads"
 RECORDING_DIR = UPLOAD_DIR / "recordings"
 CHAT_FILE = DATA_DIR / "Canri_chats.json"
+CHAT_BACKUP_FILE = DATA_DIR / "Canri_chats.backup.json"
+CHAT_TEMP_FILE = DATA_DIR / "Canri_chats.tmp.json"
 
 
 class CanriGraphics:
@@ -706,16 +709,32 @@ class CanriGraphics:
             exist_ok=True
         )
 
-        if CHAT_FILE.exists():
+        for candidate in [CHAT_FILE, CHAT_BACKUP_FILE]:
+            if not candidate.exists():
+                continue
             try:
-                with CHAT_FILE.open("r", encoding="utf-8") as file:
+                with candidate.open("r", encoding="utf-8") as file:
                     loaded = json.load(file)
                 if isinstance(loaded, dict) and isinstance(loaded.get("chats"), list):
                     self.chats = loaded
+                    break
             except (OSError, json.JSONDecodeError):
-                self.chats = {
-                    "chats": []
-                }
+                continue
+
+        valid_chats = []
+        seen_ids = set()
+        for chat in self.chats.get("chats", []):
+            if not isinstance(chat, dict):
+                continue
+            chat_id = str(chat.get("id") or self.make_chat_id())
+            if chat_id in seen_ids:
+                continue
+            seen_ids.add(chat_id)
+            chat["id"] = chat_id
+            chat["title"] = str(chat.get("title") or "Untitled chat")[:80]
+            chat["messages"] = [item for item in chat.get("messages", []) if isinstance(item, dict)]
+            valid_chats.append(chat)
+        self.chats["chats"] = valid_chats[-500:]
 
         self.chat_list.delete(0, "end")
 
@@ -743,7 +762,7 @@ class CanriGraphics:
 
         self.chats["updated_utc"] = datetime.now().isoformat()
 
-        with CHAT_FILE.open("w", encoding="utf-8") as file:
+        with CHAT_TEMP_FILE.open("w", encoding="utf-8") as file:
             json.dump(
                 self.chats,
                 file,
@@ -751,6 +770,14 @@ class CanriGraphics:
                 indent=2
             )
             file.write("\n")
+            file.flush()
+
+        if CHAT_FILE.exists():
+            try:
+                shutil.copy2(CHAT_FILE, CHAT_BACKUP_FILE)
+            except OSError:
+                pass
+        CHAT_TEMP_FILE.replace(CHAT_FILE)
 
     def make_chat_id(self):
 
@@ -762,6 +789,13 @@ class CanriGraphics:
             if chat.get("id") == self.current_chat_id:
                 return chat
 
+        return None
+
+    def chat_by_id(self, chat_id):
+
+        for chat in self.chats.get("chats", []):
+            if chat.get("id") == chat_id:
+                return chat
         return None
 
     def ensure_current_chat(self, first_message=None):
@@ -801,19 +835,31 @@ class CanriGraphics:
 
         return " ".join(words[:6])[:48]
 
-    def append_chat_record(self, role, text, trace_id=None):
+    def append_chat_record(self, role, text, trace_id=None, chat_id=None, attachments=None):
 
-        chat = self.ensure_current_chat(text if role == "USER" else None)
+        chat = self.chat_by_id(chat_id) if chat_id else None
+        if chat is None:
+            chat = self.ensure_current_chat(text if role == "USER" else None)
 
         if role == "USER" and chat.get("title") in ["New chat", "Untitled chat"]:
             chat["title"] = self.make_chat_title(text)
             self.refresh_chat_list_titles()
 
-        chat.setdefault("messages", []).append({
+        record = {
             role: text,
             "created_utc": datetime.now().isoformat(),
             "trace_id": trace_id
-        })
+        }
+        if attachments:
+            record["attachments"] = [
+                {
+                    "path": str(path),
+                    "name": Path(path).name,
+                    "exists": Path(path).exists()
+                }
+                for path in attachments[:20]
+            ]
+        chat.setdefault("messages", []).append(record)
         chat["updated_utc"] = datetime.now().isoformat()
         self.save_chats()
 
@@ -850,6 +896,12 @@ class CanriGraphics:
         for message in chat.get("messages", []):
             if "USER" in message:
                 self.insert_chat_message("You", message.get("USER", ""))
+                attachments = message.get("attachments", [])
+                if attachments:
+                    self.insert_chat_message(
+                        "Files",
+                        "\n".join(f"- {item.get('name', 'file')}" for item in attachments)
+                    )
             if "CANRI" in message:
                 self.insert_chat_message("Canri", message.get("CANRI", ""))
 
@@ -971,9 +1023,14 @@ class CanriGraphics:
             self.add_chat_message("You", message)
 
         chat = self.ensure_current_chat(message)
-        self.append_chat_record("USER", message)
-
         attached_files = list(self.attached_files)
+        chat_id = chat.get("id")
+        self.append_chat_record(
+            "USER",
+            message,
+            chat_id=chat_id,
+            attachments=attached_files
+        )
 
         if attached_files:
             file_lines = "\n".join(
@@ -998,11 +1055,11 @@ class CanriGraphics:
 
         threading.Thread(
             target=self.process_message_in_background,
-            args=(message, attached_files, trace_id),
+            args=(message, attached_files, trace_id, chat_id),
             daemon=True
         ).start()
 
-    def process_message_in_background(self, message, attached_files, trace_id):
+    def process_message_in_background(self, message, attached_files, trace_id, chat_id):
 
         def progress_callback(event):
             self.root.after(
@@ -1016,7 +1073,7 @@ class CanriGraphics:
                     message,
                     attached_files,
                     progress_callback,
-                    self.current_chat_id
+                    chat_id
                 )
             except TypeError:
                 result = self.message_handler(
@@ -1041,7 +1098,7 @@ class CanriGraphics:
 
             self.root.after(
                 0,
-                lambda: self.show_canri_response(text, thinking_trace, trace_id)
+                lambda: self.show_canri_response(text, thinking_trace, trace_id, chat_id)
             )
 
         except Exception as error:
@@ -1058,16 +1115,21 @@ class CanriGraphics:
             )
             self.root.after(
                 0,
-                lambda: self.show_canri_response(f"שגיאה בהרצת המוחות: {error}")
+                lambda error=error, chat_id=chat_id: self.show_canri_response(
+                    f"שגיאה בהרצת המוחות: {error}",
+                    chat_id=chat_id
+                )
             )
 
-    def show_canri_response(self, text, thinking_trace=None, trace_id=None):
+    def show_canri_response(self, text, thinking_trace=None, trace_id=None, chat_id=None):
 
         if thinking_trace and trace_id:
             self.finish_live_thinking_trace(trace_id, thinking_trace)
 
-        self.add_chat_message("Canri", text, thinking_trace, trace_id)
-        self.append_chat_record("CANRI", text, trace_id)
+        if not chat_id or chat_id == self.current_chat_id:
+            self.add_chat_message("Canri", text, thinking_trace, trace_id)
+        self.append_chat_record("CANRI", text, trace_id, chat_id=chat_id)
+        self.refresh_chat_list_titles()
         self.stop_thinking_timer()
 
         elapsed = self.current_thinking_elapsed()

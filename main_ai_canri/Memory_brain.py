@@ -600,6 +600,55 @@ class MemoryBrain:
 
         return any(marker in lowered for marker in markers)
 
+    def relevant_conversation_turns(
+        self,
+        turns,
+        current_topic,
+        current_intent,
+        current_keywords,
+        continuation=False,
+        limit=6
+    ):
+
+        ranked = []
+        for position, turn in enumerate(turns):
+            if not str(turn.get("canri", "")).strip():
+                continue
+            score = 0
+            reasons = []
+            turn_keywords = set(turn.get("keywords", []))
+            overlap = sorted(current_keywords & turn_keywords)
+            if current_topic not in {"", "unknown", "general"} and turn.get("main_topic") == current_topic:
+                score += 35
+                reasons.append("same_topic")
+            if current_intent not in {"", "unknown", "request"} and turn.get("intent") == current_intent:
+                score += 20
+                reasons.append("same_intent")
+            if overlap:
+                score += min(30, len(overlap) * 6)
+                reasons.append("keyword_overlap")
+            recency = max(0, 15 - (len(turns) - position - 1))
+            score += recency
+            if continuation and position == len(turns) - 1:
+                score += 100
+                reasons.append("explicit_continuation_source")
+            if score <= 10 and not continuation:
+                continue
+            ranked.append({
+                "id": turn.get("id"),
+                "user": str(turn.get("user", ""))[:1000],
+                "canri": str(turn.get("canri", ""))[:12000],
+                "main_topic": turn.get("main_topic"),
+                "intent": turn.get("intent"),
+                "keywords": list(turn_keywords)[:30],
+                "score": score,
+                "reasons": reasons,
+                "quality": turn.get("quality", {})
+            })
+
+        ranked.sort(key=lambda item: item["score"], reverse=True)
+        return ranked[:limit]
+
     def build_conversation_report(self, session_id, current_report=None, current_text=""):
 
         bucket = self.conversation_bucket(session_id)
@@ -641,6 +690,14 @@ class MemoryBrain:
         last_intent = last_turn.get("intent", "unknown")
         last_keywords = set(last_turn.get("keywords", []))
         overlap = sorted(current_keywords & last_keywords)[:12]
+        continuation = self.is_continuation_request(current_text)
+        relevant_turns = self.relevant_conversation_turns(
+            completed_turns,
+            current_topic,
+            current_intent,
+            current_keywords,
+            continuation
+        )
         topic_shift = bool(
             current_topic
             and last_topic
@@ -675,7 +732,21 @@ class MemoryBrain:
                 "keywords": list(last_keywords)[:20],
                 "created_utc": last_turn.get("created_utc")
             } if last_turn else {},
-            "continuation_request": self.is_continuation_request(current_text),
+            "continuation_request": continuation,
+            "continuation_source": (
+                {
+                    "turn_id": last_turn.get("id"),
+                    "user": str(last_turn.get("user", ""))[:1000],
+                    "canri": str(last_turn.get("canri", ""))[:12000],
+                    "main_topic": last_topic,
+                    "intent": last_intent,
+                    "quality": last_turn.get("quality", {})
+                }
+                if continuation and last_turn
+                else None
+            ),
+            "relevant_turns": relevant_turns,
+            "relevant_turn_ids": [turn.get("id") for turn in relevant_turns],
             "topic_shift_from_previous": topic_shift,
             "keyword_overlap_with_previous": overlap,
             "usable_previous_code": code_blocks[-1] if code_blocks else None,

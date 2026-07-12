@@ -184,7 +184,88 @@ class CodeSelfReviewer:
 
         return improved, changes
 
-    def review_and_improve(self, code, language="python"):
+    def review_request_alignment(self, code, request_text="", program_kind=None):
+
+        lowered_code = str(code or "").lower()
+        lowered_request = str(request_text or "").lower()
+        checks = []
+
+        def add_check(name, requested, passed, evidence):
+            if requested:
+                checks.append({
+                    "requirement": name,
+                    "passed": bool(passed),
+                    "evidence": evidence
+                })
+
+        add_check(
+            "runnable_entry_point",
+            any(marker in lowered_request for marker in ["runnable", "must run", "terminal", "command line"]),
+            'if __name__ == "__main__"' in lowered_code and "def main(" in lowered_code,
+            "main() and Python main guard"
+        )
+        add_check(
+            "json_persistence",
+            "json" in lowered_request and any(marker in lowered_request for marker in ["save", "load"]),
+            "json.loads" in lowered_code and "json.dumps" in lowered_code,
+            "JSON load and save calls"
+        )
+        add_check(
+            "add_operation",
+            re.search(r"\badd\b", lowered_request) is not None,
+            "def add_" in lowered_code and ".append(" in lowered_code,
+            "add function and append"
+        )
+        add_check(
+            "list_operation",
+            re.search(r"\blist\b", lowered_request) is not None,
+            "def list_" in lowered_code and "enumerate(" in lowered_code,
+            "list function and numbered output"
+        )
+        add_check(
+            "search_operation",
+            re.search(r"\bsearch\b", lowered_request) is not None,
+            "def search" in lowered_code,
+            "search function"
+        )
+        add_check(
+            "delete_operation",
+            re.search(r"\bdelete\b", lowered_request) is not None,
+            "def delete_" in lowered_code and ".pop(" in lowered_code,
+            "delete function and item removal"
+        )
+        add_check(
+            "expense_fields",
+            program_kind == "expense_tracker" or "expense tracker" in lowered_request,
+            all(field in lowered_code for field in ['"amount"', '"category"', '"description"']),
+            "amount, category, and description fields"
+        )
+        add_check(
+            "calculation_steps",
+            "step by step" in lowered_request,
+            "steps" in lowered_code or "step" in lowered_code,
+            "step output"
+        )
+
+        failed = [check for check in checks if not check["passed"]]
+        return {
+            "passed": not failed,
+            "checks": checks,
+            "failed": failed,
+            "coverage": (
+                round(sum(1 for check in checks if check["passed"]) / len(checks) * 100, 2)
+                if checks
+                else 100
+            )
+        }
+
+    def review_and_improve(
+        self,
+        code,
+        language="python",
+        request_text="",
+        program_kind=None
+    ):
 
         first_review = self.review(code, language)
         improved_code, changes = self.improve(
@@ -193,6 +274,22 @@ class CodeSelfReviewer:
             language
         )
         final_review = self.review(improved_code, language)
+        request_alignment = self.review_request_alignment(
+            improved_code,
+            request_text,
+            program_kind
+        )
+        blocking_warning_markers = [
+            "only contains pass",
+            "looks like a stub",
+            "has no real body",
+            "possible placeholder code detected"
+        ]
+        blocking_warnings = [
+            warning
+            for warning in final_review.get("warnings", [])
+            if any(marker in warning.lower() for marker in blocking_warning_markers)
+        ]
 
         return {
             "code": improved_code,
@@ -202,6 +299,10 @@ class CodeSelfReviewer:
             "improved": bool(changes),
             "ready": final_review.get("valid", False)
                 and final_review.get("quality_score", 0) >= 70
+                and request_alignment.get("passed", True)
+                and not blocking_warnings,
+            "request_alignment": request_alignment,
+            "blocking_warnings": blocking_warnings
         }
 
 
@@ -610,7 +711,9 @@ class CodeBrain:
 
         review = self.self_reviewer.review_and_improve(
             code,
-            result.get("language") or "python"
+            result.get("language") or "python",
+            result.get("request_text", ""),
+            result.get("program_kind")
         )
 
         result["generated_code"] = review.get(
@@ -624,6 +727,10 @@ class CodeBrain:
             "improved": review.get("improved", False),
             "ready": review.get("ready", False)
         }
+        result["self_review"]["request_alignment"] = review.get(
+            "request_alignment",
+            {}
+        )
         result["self_reviewed"] = True
         result["self_improved"] = review.get(
             "improved",
@@ -3854,6 +3961,7 @@ if __name__ == "__main__":
             "existing_code_detected": bool(existing_code),
             "match_details": [],
             "generated_code": code,
+            "request_text": text,
             "missing": [],
             "needs_creative_brain": False,
             "creative_fallback": None,
@@ -4472,6 +4580,18 @@ if __name__ == "__main__":
             data,
             report
         )
+
+        retry_request = data.get("retry_request", {})
+        retry_instructions = data.get("retry_instructions", [])
+        if (
+            data.get("retry_target") == "Code_brain"
+            and isinstance(retry_request, dict)
+            and retry_instructions
+        ):
+            text = (
+                f"{text}\n\nQuality correction requirements:\n- "
+                + "\n- ".join(str(item) for item in retry_instructions if item)
+            )
 
         terms = self.collect_terms(
             data,

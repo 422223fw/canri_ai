@@ -3,6 +3,7 @@ MAIN.py
 Canri AI
 """
 
+import re
 from uuid import uuid4
 
 from Graphics import start_graphics
@@ -205,6 +206,27 @@ def build_basic_understanding(message, corrected_text):
             break
 
     intent = "question" if "?" in text or any(word in lowered for word in ["what", "how", "why", "מה", "איך", "למה"]) else "request"
+    if main_topic == "code" and any(word in lowered for word in ["build", "write", "create", "implement", "fix", "improve"]):
+        intent = "code_generation"
+    elif main_topic == "math" and any(word in lowered for word in ["solve", "calculate", "equation"]):
+        intent = "math"
+    elif main_topic == "story" and any(word in lowered for word in ["write", "create", "continue", "story"]):
+        intent = "story_creation"
+
+    first_word = re.findall(r"[A-Za-z\u0590-\u05FF]+", text.lower())
+    only_match = re.search(r"only\s+output\s+(?:the\s+)?([^\n.!?]{2,100})", lowered)
+    fallback_requirements = []
+    for line in text.splitlines():
+        clean = re.sub(r"^\s*(?:[-*]|\d+[.)])\s*", "", line).strip()
+        if clean and (
+            re.match(r"^(?:must|include|add|support|use|show|return|only)\b", clean.lower())
+            or " must " in clean.lower()
+        ):
+            fallback_requirements.append({
+                "id": f"fallback_{len(fallback_requirements) + 1}",
+                "text": clean,
+                "kind": "explicit_constraint"
+            })
 
     return {
         "original_text": message,
@@ -221,7 +243,30 @@ def build_basic_understanding(message, corrected_text):
         ],
         "possible_tasks": [
             intent
-        ]
+        ],
+        "request_contract": {
+            "action": first_word[0] if first_word else None,
+            "topic": main_topic,
+            "intent": intent,
+            "requirements": fallback_requirements,
+            "output_constraints": {
+                "requested_format": "code" if intent == "code_generation" else "answer",
+                "only_output": only_match.group(1).strip() if only_match else None,
+                "forbidden_sections": [
+                    name
+                    for name, marker in [
+                        ("plan", "do not output a plan"),
+                        ("placeholders", "do not output placeholders"),
+                        ("explanation", "do not output an explanation")
+                    ]
+                    if marker in lowered
+                ],
+                "must_be_runnable": "runnable" in lowered or "must run" in lowered
+            },
+            "continuation": {
+                "requested": any(marker in lowered for marker in ["continue", "same code", "same story", "previous"])
+            }
+        }
     }
 
 
