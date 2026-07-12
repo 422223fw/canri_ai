@@ -591,6 +591,13 @@ class ImageBrain:
             "mode": "image_generation",
             "image_file": image_file,
             "asset_type": "svg",
+            "asset_created": bool(image_file and Path(image_file).exists()),
+            "engine_status": {
+                "local_svg_renderer": "available",
+                "external_raster_model": "not_configured",
+                "output_is_real_file": bool(image_file and Path(image_file).exists()),
+                "limitation": "Canri created a real local SVG asset; photorealistic raster generation needs an external image model."
+            },
             "generated_image_prompt": prompt,
             "negative_prompt": negative_prompt,
             "style": {

@@ -2363,6 +2363,58 @@ class CreativeBrain:
             source_brain
         )
 
+    def creative_execution_policy(self, report, text, detected_domain):
+
+        report = report if isinstance(report, dict) else {}
+        intent = str(report.get("intent", "")).lower()
+        topic = str(report.get("main_topic", "")).lower()
+        lowered = str(text or "").lower()
+        explicit_story = intent == "story_creation" or topic == "story" or any(
+            marker in lowered
+            for marker in ["write a story", "create a story", "continue the story", "chapter", "narrative"]
+        )
+        explicit_code = intent in {"code_generation", "code_analysis"} or topic == "code"
+        factual = intent in {"question", "research"} and not any(
+            marker in lowered
+            for marker in ["brainstorm", "invent", "creative idea", "imagine"]
+        )
+
+        if explicit_code:
+            return {
+                "mode": "code_assembly",
+                "domain": "code",
+                "generation_size": 60,
+                "max_rounds": 3,
+                "allow_story": False,
+                "reason": "Code request requires code assembly, never narrative output."
+            }
+        if explicit_story:
+            return {
+                "mode": "story_generation",
+                "domain": "story",
+                "generation_size": 80,
+                "max_rounds": 4,
+                "allow_story": True,
+                "reason": "User explicitly requested narrative content."
+            }
+        if factual:
+            return {
+                "mode": "support_only",
+                "domain": "general",
+                "generation_size": 24,
+                "max_rounds": 2,
+                "allow_story": False,
+                "reason": "Factual requests may use creative problem solving but must not become fiction."
+            }
+        return {
+            "mode": "creative_generation",
+            "domain": detected_domain,
+            "generation_size": 60,
+            "max_rounds": 4,
+            "allow_story": detected_domain == "story",
+            "reason": "Creative generation requested or useful for the selected domain."
+        }
+
     def answer_payload(
         self,
         final_output,
@@ -2488,6 +2540,12 @@ class CreativeBrain:
             text
         )
         domain = self.detect_domain(report, terms, text)
+        execution_policy = self.creative_execution_policy(
+            report,
+            text,
+            domain
+        )
+        domain = execution_policy["domain"]
         best = rescue.get("best_idea", {})
         final_output = self.build_creative_final_output(
             text,
@@ -2679,6 +2737,12 @@ class CreativeBrain:
         text = self.extract_text(data, report)
         terms = self.collect_terms(report, memory_report, text)
         domain = self.detect_domain(report, terms, text)
+        execution_policy = self.creative_execution_policy(
+            report,
+            text,
+            domain
+        )
+        domain = execution_policy["domain"]
         canri_context = self.collect_canri_context(
             domain,
             terms,
@@ -2694,8 +2758,8 @@ class CreativeBrain:
             domain
         )
 
-        generation_size = 100
-        max_rounds = 5
+        generation_size = execution_policy["generation_size"]
+        max_rounds = execution_policy["max_rounds"]
 
         scored, history, stop_reason, final_direction = self.evolve(
             domain,
@@ -2737,6 +2801,7 @@ class CreativeBrain:
             "used_understanding_report": bool(report),
             "used_memory_report": bool(memory_report),
             "domain": domain,
+            "execution_policy": execution_policy,
             "terms_used": terms,
             "direction_analysis": final_direction,
             "final_output": final_output,
@@ -2748,7 +2813,9 @@ class CreativeBrain:
             "simulation_summary": {
                 "selected_idea": best.get("title") if isinstance(best, dict) else None,
                 "internal_evolution_kept": True,
-                "returned_final_output": bool(final_output)
+                "returned_final_output": bool(final_output),
+                "report_separated_from_output": True,
+                "story_output_allowed": execution_policy.get("allow_story", False)
             },
             "evolution": {
                 "generation_size": generation_size,

@@ -342,6 +342,47 @@ class SecurityBrain:
             and not any(marker in lowered for marker in harmful_markers)
         )
 
+    def classify_request_context(self, text):
+
+        lowered = str(text).lower()
+        benign_app_markers = [
+            "expense tracker", "to-do", "todo", "note app", "notes app",
+            "calculator", "calendar", "contact book", "library manager",
+            "flashcards", "inventory app", "weather app", "password manager",
+            "local json", "terminal app", "command-line app"
+        ]
+        harmful_intent_markers = [
+            "steal", "exfiltrate", "phishing", "keylogger", "malware",
+            "ransomware", "hack into", "bypass security", "without permission",
+            "dump passwords", "token grabber", "hide from police"
+        ]
+        defensive_markers = [
+            "defensive", "authorized", "my own system", "sandbox", "training lab",
+            "detect", "prevent", "audit", "secure", "safety review"
+        ]
+
+        harmful_hits = [marker for marker in harmful_intent_markers if marker in lowered]
+        benign_hits = [marker for marker in benign_app_markers if marker in lowered]
+        defensive_hits = [marker for marker in defensive_markers if marker in lowered]
+
+        if harmful_hits:
+            intent = "harmful_or_unauthorized"
+        elif benign_hits:
+            intent = "benign_local_software"
+        elif defensive_hits:
+            intent = "defensive_security"
+        else:
+            intent = "general"
+
+        return {
+            "intent": intent,
+            "benign_app_hits": benign_hits,
+            "harmful_intent_hits": harmful_hits,
+            "defensive_hits": defensive_hits,
+            "allow_normal_software_generation": intent == "benign_local_software",
+            "requires_security_review": intent in {"harmful_or_unauthorized", "defensive_security"}
+        }
+
     def scan_text(
         self,
         text
@@ -354,6 +395,7 @@ class SecurityBrain:
         risk_level = 0
 
         lowered = text.lower()
+        context_classification = self.classify_request_context(text)
 
         for danger in self.danger_patterns:
 
@@ -427,12 +469,48 @@ class SecurityBrain:
                     default=25
                 )
 
+        if context_classification["intent"] == "benign_local_software":
+            never_reduce = {"self_harm", "weapons", "illegal_abuse", "medical_safety", "destructive_code"}
+            preserved = [
+                match
+                for match in matches
+                if match.get("category") in never_reduce
+            ]
+            review_only = [
+                match
+                for match in matches
+                if match.get("category") not in never_reduce
+            ]
+            matches = preserved + [
+                {**match, "risk": min(match.get("risk", 0), 35), "context_adjusted": True}
+                for match in review_only
+            ]
+            warnings = [match["warning"] for match in matches]
+            blocked_items = [match["name"] for match in matches]
+            categories = [match["category"] for match in matches]
+            risk_level = max([match.get("risk", 0) for match in matches], default=0)
+
+        if context_classification["intent"] == "harmful_or_unauthorized" and risk_level < 90:
+            synthetic = {
+                "name": "harmful_intent_context",
+                "category": "illegal_abuse",
+                "risk": 90,
+                "warning": "Harmful or unauthorized intent detected from the full request context",
+                "matched_pattern": ", ".join(context_classification.get("harmful_intent_hits", []))
+            }
+            matches.append(synthetic)
+            warnings.append(synthetic["warning"])
+            blocked_items.append(synthetic["name"])
+            categories.append(synthetic["category"])
+            risk_level = 90
+
         return {
             "risk_level": risk_level,
             "warnings": list(dict.fromkeys(warnings)),
             "blocked_items": list(dict.fromkeys(blocked_items)),
             "categories": list(dict.fromkeys(categories)),
-            "matches": matches
+            "matches": matches,
+            "context_classification": context_classification
         }
 
     def calculate_safe(
@@ -588,6 +666,7 @@ class SecurityBrain:
             "blocked_items": scan["blocked_items"],
             "risk_categories": scan["categories"],
             "matches": scan["matches"][:20],
+            "context_classification": scan.get("context_classification", {}),
             "recommended_action": action,
             "checked_text_length": len(text),
             "confidence": round(confidence, 2),

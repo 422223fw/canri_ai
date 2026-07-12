@@ -150,6 +150,9 @@ class QualityControlBrain:
         lowered = text.lower()
         topic = str(report.get("main_topic", "")).lower()
         intent = str(report.get("intent", "")).lower()
+        contract = report.get("request_contract", {})
+        if not isinstance(contract, dict):
+            contract = {}
 
         requirements = {
             "topic": topic,
@@ -208,9 +211,110 @@ class QualityControlBrain:
                 marker in lowered
                 for marker in ["image file", "photo", "video", "attachment", ".png", ".jpg", ".mp4"]
             ),
+            "atomic_requirements": contract.get("requirements", report.get("requirements", [])),
+            "output_constraints": contract.get("output_constraints", report.get("output_constraints", {})),
+            "continuation": bool(contract.get("continuation", {}).get("requested")),
         }
 
         return requirements
+
+    def requirement_output(self, results, requirements):
+
+        preferred = []
+        if requirements.get("is_code_request"):
+            preferred.append("Code_brain")
+        elif requirements.get("is_math_request"):
+            preferred.append("Math_brain")
+        elif requirements.get("is_story_request"):
+            preferred.extend(["Story_brain", "Creative_brain"])
+        elif requirements.get("is_reliability_request"):
+            preferred.extend(["Research_brain", "Fact_Check_brain"])
+        preferred.append("Response_brain")
+
+        parts = []
+        for brain_name in preferred:
+            text = self.text_from_result(results.get(brain_name, {}))
+            if text:
+                parts.append(text)
+        return "\n".join(parts)
+
+    def atomic_requirement_check(self, requirement, output, results, requirements):
+
+        requirement = requirement if isinstance(requirement, dict) else {"text": str(requirement)}
+        requirement_id = requirement.get("id") or "unnamed_requirement"
+        kind = requirement.get("kind", "explicit_constraint")
+        feature = requirement.get("feature")
+        code_result = results.get("Code_brain", {})
+        code = ""
+        if isinstance(code_result, dict):
+            code = str(code_result.get("generated_code") or code_result.get("code") or "")
+
+        if kind == "feature" and feature:
+            passed = self.code_feature_present(feature, code) if requirements.get("is_code_request") else True
+            return passed, f"feature:{feature}"
+
+        if requirement_id == "runnable_output":
+            syntax_ok = self.python_syntax_error(code) is None if code else False
+            structure_ok = self.code_has_real_structure(code)
+            self_review = code_result.get("self_review", {}) if isinstance(code_result, dict) else {}
+            ready = self_review.get("ready")
+            passed = bool(code and syntax_ok and structure_ok and ready is not False)
+            return passed, "syntax + structure + self-review"
+
+        if requirement_id == "only_output":
+            response = self.text_from_result(results.get("Response_brain", {})) or output
+            forbidden = requirements.get("output_constraints", {}).get("forbidden_sections", [])
+            lowered = response.lower()
+            leaked = self.looks_like_internal_report(response)
+            if "plan" in forbidden and ("main pieces:" in lowered or "plan:" in lowered):
+                leaked = True
+            if requirements.get("code_only") and "quality note:" in lowered:
+                leaked = True
+            return not leaked, "final-output leakage check"
+
+        if kind == "explicit_constraint" and requirements.get("is_code_request"):
+            ignored = {
+                "program", "must", "include", "support", "user", "users", "with",
+                "from", "into", "only", "output", "final", "full", "working",
+                "python", "code", "real", "runnable", "same", "project", "the",
+                "and", "that", "this", "when", "then", "using", "file"
+            }
+            terms = [
+                term
+                for term in re.findall(r"[a-z][a-z0-9_]{2,}", requirement.get("text", "").lower())
+                if term not in ignored
+            ]
+            unique_terms = list(dict.fromkeys(terms))[:14]
+            if not unique_terms:
+                return True, "no lexical terms required"
+            lowered_code = code.lower()
+            found = [term for term in unique_terms if term in lowered_code]
+            threshold = max(1, min(3, (len(unique_terms) + 2) // 3))
+            return len(found) >= threshold, f"matched terms: {', '.join(found)}"
+
+        return True, "covered by specialist and domain checks"
+
+    def audit_atomic_requirements(self, results, requirements, issues):
+
+        output = self.requirement_output(results, requirements)
+        for requirement in requirements.get("atomic_requirements", [])[:40]:
+            passed, evidence = self.atomic_requirement_check(
+                requirement,
+                output,
+                results,
+                requirements
+            )
+            if passed:
+                continue
+            target = "Code_brain" if requirements.get("is_code_request") else "Manager_brain"
+            self.add_issue(
+                issues,
+                target,
+                "high",
+                f"Request requirement failed: {requirement.get('text', requirement.get('id', 'unknown'))}",
+                "Implement this exact requirement and preserve every requirement that already passed.",
+                evidence
+            )
 
     def extract_requested_sentence_count(self, lowered):
 
@@ -601,6 +705,7 @@ class QualityControlBrain:
         success = result.get("success") is True
         confidence = result.get("confidence", 0)
         steps = result.get("steps", [])
+        verification = result.get("verification", {})
 
         if not success:
             self.add_issue(
@@ -629,6 +734,15 @@ class QualityControlBrain:
                 "medium",
                 "Math answer confidence is too low.",
                 "Recheck the calculation and raise confidence only if the answer is correct."
+            )
+
+        if not isinstance(verification, dict) or verification.get("passed") is not True:
+            self.add_issue(
+                issues,
+                "Math_brain",
+                "high",
+                "Math answer was not independently verified.",
+                "Substitute the result back into the original problem and return verification evidence."
             )
 
     def audit_reliability(self, results, requirements, issues):
@@ -976,7 +1090,6 @@ class QualityControlBrain:
 
     def build_retry_requests(self, issues):
         retry_requests = []
-        seen = set()
 
         non_retry_brains = {
             "Response_brain",
@@ -985,19 +1098,38 @@ class QualityControlBrain:
             "Learning_brain"
         }
 
+        grouped = {}
         for issue in issues:
             brain_name = issue.get("target_brain")
-            if not brain_name or brain_name in seen or brain_name in non_retry_brains:
+            if not brain_name or brain_name in non_retry_brains:
                 continue
-
             if issue.get("severity") in {"critical", "high", "medium"}:
-                seen.add(brain_name)
-                retry_requests.append({
-                    "target_brain": brain_name,
-                    "instruction": issue.get("instruction"),
-                    "problem": issue.get("problem"),
-                    "severity": issue.get("severity")
-                })
+                grouped.setdefault(brain_name, []).append(issue)
+
+        severity_order = {"critical": 3, "high": 2, "medium": 1, "low": 0}
+        for brain_name, brain_issues in grouped.items():
+            brain_issues.sort(
+                key=lambda item: severity_order.get(item.get("severity"), 0),
+                reverse=True
+            )
+            retry_requests.append({
+                "target_brain": brain_name,
+                "instruction": " ".join(
+                    str(item.get("instruction", ""))
+                    for item in brain_issues[:8]
+                    if item.get("instruction")
+                ),
+                "problem": " | ".join(
+                    str(item.get("problem", ""))
+                    for item in brain_issues[:8]
+                    if item.get("problem")
+                ),
+                "severity": brain_issues[0].get("severity"),
+                "failed_requirements": [
+                    item.get("problem")
+                    for item in brain_issues[:8]
+                ]
+            })
 
         return retry_requests[:5]
 
@@ -1060,12 +1192,33 @@ class QualityControlBrain:
                 "passed": isinstance(math_result, dict) and math_result.get("success") is True,
                 "target_brain": "Math_brain"
             })
+            checks.append({
+                "requirement": "math_verified",
+                "passed": isinstance(math_result, dict) and math_result.get("verification", {}).get("passed") is True,
+                "target_brain": "Math_brain"
+            })
             if requirements.get("wants_steps"):
                 checks.append({
                     "requirement": "step_by_step",
                     "passed": isinstance(math_result, dict) and bool(math_result.get("steps")),
                     "target_brain": "Math_brain"
                 })
+
+        output = self.requirement_output(results, requirements)
+        for requirement in requirements.get("atomic_requirements", [])[:40]:
+            passed, evidence = self.atomic_requirement_check(
+                requirement,
+                output,
+                results,
+                requirements
+            )
+            checks.append({
+                "requirement": requirement.get("id", requirement.get("text", "explicit_requirement")),
+                "description": requirement.get("text", ""),
+                "passed": passed,
+                "evidence": evidence,
+                "target_brain": "Code_brain" if requirements.get("is_code_request") else "Manager_brain"
+            })
 
         return checks
 
@@ -1086,6 +1239,7 @@ class QualityControlBrain:
         self.audit_domain_mismatch(results, requirements, issues)
         self.audit_context_usage(data, requirements, issues)
         self.audit_internal_report_leakage(results, requirements, issues)
+        self.audit_atomic_requirements(results, requirements, issues)
 
         retry_requests = self.build_retry_requests(issues)
         score = self.quality_score(issues)

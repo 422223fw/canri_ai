@@ -11,13 +11,19 @@ The manager is the internal orchestrator:
 
 import json
 import re
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 try:
-    from Data_context import build_shared_data_context, search_data_context
+    from Data_context import (
+        build_shared_data_context,
+        context_view_for_brain,
+        search_data_context
+    )
 except Exception:
     build_shared_data_context = None
+    context_view_for_brain = None
     search_data_context = None
 
 try:
@@ -60,6 +66,10 @@ ALWAYS_AVAILABLE_SAFETY_BRAINS = [
     "Security_brain"
 ]
 
+REQUEST_TIME_BUDGET_SECONDS = 25.0
+DEFAULT_BRAIN_SOFT_TIMEOUT_SECONDS = 8.0
+MAX_QUALITY_RETRIES_PER_BRAIN = 2
+
 
 class ManagerBrain:
 
@@ -67,6 +77,10 @@ class ManagerBrain:
 
         self.brains = {}
         self.execution_history = []
+        self._request_started = None
+        self._request_deadline = None
+        self._retry_counts = {}
+        self._active_brain_stack = []
         self.company_products = self.load_json(COMPANY_PRODUCTS_FILE, {})
 
         print("Manager Brain Loaded")
@@ -735,6 +749,58 @@ class ManagerBrain:
 
         return topic or "general"
 
+    def routing_decision(self, report, memory_report=None):
+
+        memory_report = memory_report or {}
+        primary = self.primary_domain(report, memory_report)
+        domains = self.focus_domains(
+            self.classify_request(report, memory_report),
+            report,
+            memory_report
+        )
+        contract = report.get("request_contract", {})
+        action = contract.get("action") if isinstance(contract, dict) else None
+        intent = str(report.get("intent", "request"))
+        specialist_map = {
+            "code": "Code_brain",
+            "math": "Math_brain",
+            "story": "Story_brain",
+            "image_generation": "Image_brain",
+            "voice": "Voice_brain",
+            "vision": "Vision_brain",
+            "science": "Science_brain",
+            "geography": "Geography_brain",
+            "technology": "Technology_brain",
+            "history": "History_brain",
+            "language": "Language_brain",
+            "knowledge": "Research_brain",
+            "game": "Game_brain",
+        }
+        primary_brain = specialist_map.get(primary, "Reasoning_brain")
+        supporting = []
+        if primary in {"knowledge", "science", "geography", "technology", "history"}:
+            supporting.extend(["Research_brain", "Fact_Check_brain"])
+        if primary == "story":
+            supporting.extend(["Creative_brain", "Character_brain", "World_brain"])
+        if primary == "code":
+            supporting.extend(["Planner_brain", "Quality_Control_brain"])
+        if primary == "math":
+            supporting.extend(["Reasoning_brain", "Quality_Control_brain"])
+
+        return {
+            "primary_domain": primary,
+            "primary_brain": primary_brain,
+            "supporting_brains": list(dict.fromkeys(supporting)),
+            "domains": domains,
+            "action": action,
+            "intent": intent,
+            "continuation": bool(
+                isinstance(contract, dict)
+                and contract.get("continuation", {}).get("requested")
+            ),
+            "reason": f"intent={intent}; primary_domain={primary}; specialist={primary_brain}"
+        }
+
     def focus_domains(self, domains, report, memory_report):
 
         primary = self.primary_domain(report, memory_report)
@@ -970,7 +1036,15 @@ class ManagerBrain:
         except Exception:
             pass
 
-    def build_context(self, original_data, report, memory_report, phase, results):
+    def build_context(
+        self,
+        original_data,
+        report,
+        memory_report,
+        phase,
+        results,
+        brain_name=None
+    ):
 
         context = {}
 
@@ -979,6 +1053,13 @@ class ManagerBrain:
         else:
             context["original_text"] = str(original_data)
 
+        combined_results = {}
+        if isinstance(context.get("results"), dict):
+            combined_results.update(context["results"])
+        if isinstance(results, dict):
+            combined_results.update(results)
+        context["results"] = combined_results
+
         context["understanding"] = report
         context["memory"] = memory_report
         context["dictionary"] = context.get("dictionary") or self.build_dictionary_context(
@@ -986,11 +1067,19 @@ class ManagerBrain:
             report,
             memory_report
         )
-        context["data_context"] = context.get("data_context") or self.build_local_data_context(
+        full_data_context = context.get("full_data_context") or context.get("data_context") or self.build_local_data_context(
             original_data,
             report,
             memory_report
         )
+        context["full_data_context"] = full_data_context
+        if context_view_for_brain is not None and brain_name:
+            context["data_context"] = context_view_for_brain(
+                full_data_context,
+                brain_name
+            )
+        else:
+            context["data_context"] = full_data_context
         context["knowledge"] = context.get("knowledge") or self.build_knowledge_context(
             original_data,
             report,
@@ -1006,7 +1095,8 @@ class ManagerBrain:
         )
         context["manager_context"] = {
             "phase": phase,
-            "previous_results": results,
+            "target_brain": brain_name,
+            "previous_results": combined_results,
             "available_brains": sorted(self.brains.keys()),
             "dictionary": context["dictionary"],
             "data_context": context["data_context"],
@@ -1016,7 +1106,15 @@ class ManagerBrain:
                 memory_report.get("conversation", {})
                 if isinstance(memory_report, dict)
                 else {}
-            )
+            ),
+            "performance_budget": {
+                "request_budget_seconds": REQUEST_TIME_BUDGET_SECONDS,
+                "brain_soft_timeout_seconds": DEFAULT_BRAIN_SOFT_TIMEOUT_SECONDS,
+                "remaining_seconds": max(
+                    0,
+                    round(self._request_deadline - time.perf_counter(), 3)
+                ) if self._request_deadline else None
+            }
         }
 
         return context
@@ -1028,6 +1126,26 @@ class ManagerBrain:
         memory_report = memory_report or self.get_memory_report(data)
 
         for brain_name in selected_brains:
+
+            if (
+                self._request_deadline
+                and time.perf_counter() >= self._request_deadline
+                and brain_name not in {"Quality_Control_brain", "Response_brain"}
+            ):
+                results[brain_name] = {
+                    "skipped": True,
+                    "reason": "request_time_budget_exceeded",
+                    "timeout": True
+                }
+                continue
+
+            if brain_name in self._active_brain_stack:
+                results[brain_name] = {
+                    "skipped": True,
+                    "reason": "brain_recursion_prevented",
+                    "loop_prevented": True
+                }
+                continue
 
             if brain_name not in self.brains:
                 results[brain_name] = {
@@ -1058,17 +1176,27 @@ class ManagerBrain:
                 report,
                 memory_report,
                 phase,
-                results
+                results,
+                brain_name
             )
 
             try:
+                started = time.perf_counter()
+                self._active_brain_stack.append(brain_name)
                 result = brain.process(context)
+                elapsed = time.perf_counter() - started
                 result = self.attach_creative_help_if_needed(
                     brain_name,
                     result,
                     context,
                     phase
                 )
+                if isinstance(result, dict):
+                    result["performance"] = {
+                        "elapsed_seconds": round(elapsed, 4),
+                        "soft_timeout_seconds": DEFAULT_BRAIN_SOFT_TIMEOUT_SECONDS,
+                        "slow": elapsed > DEFAULT_BRAIN_SOFT_TIMEOUT_SECONDS
+                    }
                 results[brain_name] = result
                 self.emit_progress(
                     data,
@@ -1099,6 +1227,11 @@ class ManagerBrain:
                     phase,
                     error_result
                 )
+            finally:
+                if self._active_brain_stack and self._active_brain_stack[-1] == brain_name:
+                    self._active_brain_stack.pop()
+                elif brain_name in self._active_brain_stack:
+                    self._active_brain_stack.remove(brain_name)
 
         return results
 
@@ -1445,7 +1578,9 @@ class ManagerBrain:
         shared_knowledge,
         shared_dictionary,
         shared_data_context,
-        quality_result
+        quality_result,
+        target_brain=None,
+        retry_request=None
     ):
 
         if isinstance(data, dict):
@@ -1459,7 +1594,19 @@ class ManagerBrain:
         retry_context["knowledge"] = shared_knowledge
         retry_context["dictionary"] = shared_dictionary
         retry_context["data_context"] = shared_data_context
+        retry_context["full_data_context"] = shared_data_context
         retry_context["quality_feedback"] = quality_result
+        retry_context["retry_target"] = target_brain
+        retry_context["retry_request"] = retry_request or {}
+        retry_context["retry_instructions"] = [
+            item.get("instruction")
+            for item in quality_result.get("retry_requests", [])
+            if isinstance(item, dict)
+            and (not target_brain or item.get("target_brain") == target_brain)
+            and item.get("instruction")
+        ]
+        if target_brain:
+            retry_context["previous_attempt"] = all_results.get(target_brain)
 
         return retry_context
 
@@ -1480,31 +1627,51 @@ class ManagerBrain:
         if not retry_brains:
             return {}
 
-        retry_context = self.build_retry_context(
-            data,
-            all_results,
-            shared_knowledge,
-            shared_dictionary,
-            shared_data_context,
-            quality_result
-        )
+        retry_results = {}
+        requests_by_brain = {
+            item.get("target_brain"): item
+            for item in quality_result.get("retry_requests", [])
+            if isinstance(item, dict) and item.get("target_brain")
+        }
 
-        self.emit_progress(
-            retry_context,
-            "quality_retry",
-            "Quality control requested a targeted retry",
-            "Quality_Control_brain",
-            "quality_retry",
-            quality_result
-        )
+        for brain_name in retry_brains:
+            if self._retry_counts.get(brain_name, 0) >= MAX_QUALITY_RETRIES_PER_BRAIN:
+                retry_results[brain_name] = {
+                    "skipped": True,
+                    "reason": "quality_retry_limit_reached",
+                    "retry_limit": MAX_QUALITY_RETRIES_PER_BRAIN
+                }
+                continue
+            self._retry_counts[brain_name] = self._retry_counts.get(brain_name, 0) + 1
+            retry_request = requests_by_brain.get(brain_name, {})
+            retry_context = self.build_retry_context(
+                data,
+                all_results,
+                shared_knowledge,
+                shared_dictionary,
+                shared_data_context,
+                quality_result,
+                brain_name,
+                retry_request
+            )
+            self.emit_progress(
+                retry_context,
+                "quality_retry",
+                f"Retrying {brain_name}: {retry_request.get('problem', 'quality issue')}",
+                brain_name,
+                "quality_retry",
+                quality_result
+            )
+            result = self.execute(
+                [brain_name],
+                retry_context,
+                report,
+                memory_report,
+                "quality_retry"
+            )
+            retry_results.update(result)
 
-        return self.execute(
-            retry_brains,
-            retry_context,
-            report,
-            memory_report,
-            "quality_retry"
-        )
+        return retry_results
 
     def execute_quality_recheck(
         self,
@@ -1576,6 +1743,11 @@ class ManagerBrain:
 
     def process(self, data):
 
+        self._request_started = time.perf_counter()
+        self._request_deadline = self._request_started + REQUEST_TIME_BUDGET_SECONDS
+        self._retry_counts = {}
+        self._active_brain_stack = []
+
         report = self.get_understanding_report(data)
         memory_report = self.get_memory_report(data)
         shared_knowledge = self.build_knowledge_context(
@@ -1625,6 +1797,7 @@ class ManagerBrain:
             "used_understanding_report": bool(report),
             "used_memory_report": bool(memory_report),
             "primary_domain": self.primary_domain(report, memory_report),
+            "routing_decision": self.routing_decision(report, memory_report),
             "domains_detected": self.classify_request(report, memory_report),
             "domains_used": self.focus_domains(
                 self.classify_request(report, memory_report),
@@ -1709,6 +1882,13 @@ class ManagerBrain:
             "results": results,
             "phase_results": phase_results,
             "system_confidence": self.estimate_system_confidence(results),
+            "performance": {
+                "elapsed_seconds": round(time.perf_counter() - self._request_started, 4),
+                "budget_seconds": REQUEST_TIME_BUDGET_SECONDS,
+                "within_budget": time.perf_counter() <= self._request_deadline,
+                "retry_counts": dict(self._retry_counts),
+                "loop_prevention": True
+            },
             "suggested_next_brains": self.collect_suggested_next_brains(results),
             "missing_or_skipped": {
                 name: result

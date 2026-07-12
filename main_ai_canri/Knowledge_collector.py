@@ -21,6 +21,7 @@ import re
 import ssl
 import threading
 import time
+from collections import OrderedDict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
@@ -37,10 +38,16 @@ SOURCES_FILE = DATA_DIR / "Knowledge_sources.json"
 STATS_FILE = DATA_DIR / "Knowledge_statistics.json"
 
 MAX_DATABASE_BYTES = int(1.5 * 1024 * 1024 * 1024)
+MAX_SEARCH_CACHE_ENTRIES = 256
 DEFAULT_BATCH_SIZE = 3
 DEFAULT_SLEEP_SECONDS = 30
 DEFAULT_UPDATE_AFTER_DAYS = 7
 USER_AGENT = "CanriAIKnowledgeCollector/1.0 (local educational project)"
+
+_INDEX_CACHE = None
+_INDEX_CACHE_SIGNATURE = None
+_SEARCH_CACHE = OrderedDict()
+_KNOWLEDGE_CACHE_LOCK = threading.RLock()
 
 TRUSTED_SOURCES = {
     "wikipedia_en": {
@@ -138,6 +145,23 @@ def write_json(path: Path, data) -> None:
 
 def database_size() -> int:
     return DB_FILE.stat().st_size if DB_FILE.exists() else 0
+
+
+def load_knowledge_index_cached():
+    global _INDEX_CACHE, _INDEX_CACHE_SIGNATURE
+
+    signature = None
+    if INDEX_FILE.exists():
+        stat = INDEX_FILE.stat()
+        signature = (stat.st_size, int(stat.st_mtime_ns))
+
+    with _KNOWLEDGE_CACHE_LOCK:
+        if _INDEX_CACHE is not None and signature == _INDEX_CACHE_SIGNATURE:
+            return _INDEX_CACHE
+        _INDEX_CACHE = read_json(INDEX_FILE, {"articles": {}, "terms": {}})
+        _INDEX_CACHE_SIGNATURE = signature
+        _SEARCH_CACHE.clear()
+        return _INDEX_CACHE
 
 
 def classify_error(error_text: str) -> str:
@@ -507,8 +531,14 @@ class KnowledgeCollector:
 
 
 def search_knowledge(query: str, limit: int = 5) -> List[Dict[str, object]]:
-    index = read_json(INDEX_FILE, {"articles": {}, "terms": {}})
+    index = load_knowledge_index_cached()
     terms = text_terms(query, limit=20)
+    cache_key = (tuple(terms), int(limit), _INDEX_CACHE_SIGNATURE)
+    with _KNOWLEDGE_CACHE_LOCK:
+        cached = _SEARCH_CACHE.get(cache_key)
+        if cached is not None:
+            _SEARCH_CACHE.move_to_end(cache_key)
+            return [dict(item) for item in cached]
     scores = {}
 
     for term in terms:
@@ -533,6 +563,12 @@ def search_knowledge(query: str, limit: int = 5) -> List[Dict[str, object]]:
             "stored_utc": meta.get("stored_utc"),
             "version": meta.get("version")
         })
+
+    with _KNOWLEDGE_CACHE_LOCK:
+        _SEARCH_CACHE[cache_key] = [dict(item) for item in results]
+        _SEARCH_CACHE.move_to_end(cache_key)
+        while len(_SEARCH_CACHE) > MAX_SEARCH_CACHE_ENTRIES:
+            _SEARCH_CACHE.popitem(last=False)
 
     return results
 

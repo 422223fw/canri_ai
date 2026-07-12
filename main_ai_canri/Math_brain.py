@@ -780,7 +780,106 @@ class MathBrain:
             "confidence": 96
         }
 
-    def result(self, success, answer=None, steps=None, result_type="unknown", confidence=0, warning=None):
+    def verify_solution(self, text, solved):
+
+        result_type = solved.get("type")
+        answer = solved.get("answer")
+        tolerance = 1e-8
+
+        try:
+            if result_type == "arithmetic":
+                expression = self.extract_math_expression(text)
+                expected = self.safe_eval(expression)
+                passed = abs(float(answer) - float(expected)) <= tolerance
+                return {
+                    "passed": passed,
+                    "method": "independent_expression_evaluation",
+                    "residual": abs(float(answer) - float(expected))
+                }
+
+            if result_type == "linear_equation":
+                cleaned = self.normalize_expression(text).replace(" ", "")
+                match = re.search(
+                    r"([+-]?\d*(?:\.\d+)?)x([+-]\d+(?:\.\d+)?)?=([+-]?\d+(?:\.\d+)?)",
+                    cleaned
+                )
+                if match:
+                    a_text = match.group(1)
+                    a = 1.0 if a_text in {"", "+"} else -1.0 if a_text == "-" else float(a_text)
+                    b = float(match.group(2) or 0)
+                    c = float(match.group(3))
+                    residual = abs(a * float(answer) + b - c)
+                    return {
+                        "passed": residual <= tolerance,
+                        "method": "substitution_into_linear_equation",
+                        "residual": residual
+                    }
+
+            if result_type == "quadratic_equation" and isinstance(answer, list):
+                cleaned = self.normalize_expression(text).replace(" ", "")
+                start = cleaned.find("x**2")
+                while start > 0 and cleaned[start - 1] in "0123456789.+-":
+                    start -= 1
+                left_side, right_side = cleaned[start:].split("=", 1)
+                right_match = re.match(r"[+\-0-9.x*]+", right_side)
+                right_side = right_match.group(0) if right_match else right_side
+                left = self.parse_quadratic_side(left_side)
+                right = self.parse_quadratic_side(right_side)
+                a = left["x2"] - right["x2"]
+                b = left["x"] - right["x"]
+                c = left["constant"] - right["constant"]
+                residuals = [abs(a * float(root) ** 2 + b * float(root) + c) for root in answer]
+                return {
+                    "passed": bool(residuals) and max(residuals) <= tolerance,
+                    "method": "substitute_roots_into_quadratic",
+                    "residuals": residuals
+                }
+
+            if result_type == "system_equations" and isinstance(answer, dict):
+                equations = re.findall(r"[^,;\n]+=[^,;\n]+", self.normalize_expression(text))
+                residuals = []
+                for equation in equations[:2]:
+                    parsed = self.parse_linear_xy_equation(equation.replace(" ", ""))
+                    if parsed:
+                        a, b, c = parsed
+                        residuals.append(abs(a * float(answer["x"]) + b * float(answer["y"]) - c))
+                if residuals:
+                    return {
+                        "passed": max(residuals) <= tolerance,
+                        "method": "substitute_solution_into_system",
+                        "residuals": residuals
+                    }
+
+            numeric_values = []
+            if isinstance(answer, (int, float)):
+                numeric_values = [float(answer)]
+            elif isinstance(answer, list):
+                numeric_values = [float(item) for item in answer if isinstance(item, (int, float))]
+            elif isinstance(answer, dict):
+                numeric_values = [float(item) for item in answer.values() if isinstance(item, (int, float))]
+
+            return {
+                "passed": bool(answer is not None) and all(math.isfinite(item) for item in numeric_values),
+                "method": "finite_result_and_solver_invariant",
+                "residual": None
+            }
+        except (ArithmeticError, KeyError, TypeError, ValueError):
+            return {
+                "passed": False,
+                "method": "verification_failed",
+                "residual": None
+            }
+
+    def result(
+        self,
+        success,
+        answer=None,
+        steps=None,
+        result_type="unknown",
+        confidence=0,
+        warning=None,
+        verification=None
+    ):
         response = {
             "brain": "Math_brain",
             "success": success,
@@ -790,11 +889,14 @@ class MathBrain:
             "steps": steps or [],
             "confidence": confidence,
             "warning": warning,
+            "verification": verification or {"passed": False, "method": "not_run"},
             "final_output": None,
             "suggested_next_brains": ["Response_brain"]
         }
 
         if success:
+            if response["verification"].get("passed") is False:
+                response["confidence"] = min(response["confidence"], 55)
             response["final_output"] = (
                 f"Answer: {response['formatted_answer']}\n"
                 + "\n".join(f"{index}. {step}" for index, step in enumerate(response["steps"], start=1))
@@ -826,12 +928,14 @@ class MathBrain:
         for solver in solvers:
             solved = solver(text)
             if solved:
+                verification = self.verify_solution(text, solved)
                 return self.result(
                     True,
                     solved["answer"],
                     solved["steps"],
                     solved["type"],
-                    solved["confidence"]
+                    solved["confidence"],
+                    verification=verification
                 )
 
         return self.result(

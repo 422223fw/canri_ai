@@ -14,6 +14,8 @@ It identifies and describes files. It does not execute files.
 """
 
 import json
+import hashlib
+import mimetypes
 import os
 import re
 import struct
@@ -277,6 +279,22 @@ class VisionBrain:
         if not path or not path.exists() or not path.is_file():
             return None
 
+    def file_fingerprint(self, path, chunk_size=1024 * 1024):
+
+        if not path or not path.exists() or not path.is_file():
+            return None
+        digest = hashlib.sha256()
+        try:
+            with path.open("rb") as file:
+                while True:
+                    chunk = file.read(chunk_size)
+                    if not chunk:
+                        break
+                    digest.update(chunk)
+            return digest.hexdigest()
+        except OSError:
+            return None
+
         try:
             return path.stat().st_size
         except OSError:
@@ -531,9 +549,14 @@ class VisionBrain:
             "is_file": is_file,
             "extension": extension,
             "category": category,
-            "mime": magic.get("mime") if magic else profile.get("mime_family"),
+            "mime": (
+                magic.get("mime")
+                if magic
+                else profile.get("mime_family") or mimetypes.guess_type(str(path_value))[0]
+            ),
             "magic_signature": magic.get("signature") if magic else None,
             "size_bytes": size,
+            "sha256": self.file_fingerprint(path) if is_file else None,
             "dimensions": dimensions,
             "content_analysis": content_analysis,
             "capability_summary": self.build_file_capability_summary(category, content_analysis),
@@ -544,7 +567,17 @@ class VisionBrain:
             "needs_security": risk_score >= 40 or category in ["executable", "archive", "model"],
             "suggested_tasks": profile.get("expected_tasks", []),
             "suggested_next_brains": profile.get("next_brains", self.default_next_brains(category, risk_score)),
-            "warnings": list(dict.fromkeys(warnings))
+            "warnings": list(dict.fromkeys(warnings)),
+            "analysis_status": {
+                "real_file_read": is_file,
+                "metadata_extracted": bool(header or content_analysis or dimensions),
+                "deep_vision_engine_available": False,
+                "limitation": (
+                    "Metadata and safe text/header analysis completed; object recognition needs an external vision model."
+                    if category in {"image", "video"}
+                    else None
+                )
+            }
         }
 
     def risk_level(self, score):
@@ -689,6 +722,12 @@ class VisionBrain:
             "answer": human_summary,
             "final_output": human_summary,
             "files": analyzed_files,
+            "engine_status": {
+                "metadata_engine": "available",
+                "text_file_engine": "available",
+                "deep_image_model": "not_configured",
+                "video_frame_model": "not_configured"
+            },
             "confidence": min(confidence, 100),
             "needs_security": summary["needs_security"],
             "suggested_next_brains": list(dict.fromkeys(suggested_next)),

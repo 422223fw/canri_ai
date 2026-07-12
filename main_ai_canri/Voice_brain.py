@@ -14,6 +14,7 @@ it reports that transcription is required.
 """
 
 import json
+import hashlib
 import os
 import re
 import wave
@@ -197,6 +198,22 @@ class VoiceBrain:
     def get_file_size(self, path):
 
         if not path or not path.exists() or not path.is_file():
+            return None
+
+    def file_fingerprint(self, path, chunk_size=1024 * 1024):
+
+        if not path or not path.exists() or not path.is_file():
+            return None
+        digest = hashlib.sha256()
+        try:
+            with path.open("rb") as file:
+                while True:
+                    chunk = file.read(chunk_size)
+                    if not chunk:
+                        break
+                    digest.update(chunk)
+            return digest.hexdigest()
+        except OSError:
             return None
 
         try:
@@ -470,6 +487,7 @@ class VoiceBrain:
             "mime": magic.get("mime") if magic else None,
             "magic_signature": magic.get("signature") if magic else None,
             "size_bytes": size,
+            "sha256": self.file_fingerprint(path) if is_file else None,
             "metadata": metadata,
             "audio_quality": audio_quality,
             "requested_tasks": tasks,
@@ -479,6 +497,13 @@ class VoiceBrain:
             "needs_video_audio_extraction": needs_extraction,
             "transcript": None,
             "transcription_available": False,
+            "engine_status": {
+                "wav_metadata": "available" if extension == "wav" and is_file else "not_applicable",
+                "speech_to_text": "not_configured",
+                "video_audio_extractor": "not_configured" if needs_extraction else "not_required",
+                "real_file_read": is_file,
+                "failure_disclosed": bool(needs_transcription or needs_extraction)
+            },
             "risk_score": risk_score,
             "risk_level": self.risk_level(risk_score),
             "needs_security": needs_security,
@@ -645,6 +670,11 @@ class VoiceBrain:
             "answer": human_summary,
             "final_output": human_summary,
             "media": analyzed_media,
+            "engine_status": {
+                "metadata_engine": "available",
+                "speech_to_text": "not_configured",
+                "video_audio_extraction": "not_configured"
+            },
             "confidence": min(confidence, 100),
             "needs_security": summary["needs_security"],
             "needs_transcription_engine": summary["needs_transcription_engine"],
