@@ -21,6 +21,7 @@ from Manager_brain import ManagerBrain  # noqa: E402
 from Memory_brain import MemoryBrain  # noqa: E402
 from Quality_Control_brain import QualityControlBrain  # noqa: E402
 from Response_brain import ResponseBrain  # noqa: E402
+from Spelling_brain import SpellingBrain  # noqa: E402
 from Understanding_brain import UnderstandingBrain  # noqa: E402
 from Data_context import context_view_for_brain  # noqa: E402
 
@@ -293,6 +294,40 @@ def test_understanding_builds_complete_request_contract():
     assert_true(bool(contract.get("global_picture", {}).get("goal")), "Understanding should preserve the global goal.")
 
 
+def test_inline_code_punctuation_and_function_spelling():
+    spelling = SpellingBrain()
+    understanding = UnderstandingBrain()
+
+    corrected = spelling.process("Use the prnit() function in Python.")
+    assert_true("print()" in corrected["corrected_text"], "Spelling should correct a close known function name.")
+
+    custom = spelling.process("Call calculate_total() after loading data.")
+    assert_true("calculate_total()" in custom["corrected_text"], "Spelling must preserve a possible custom function.")
+
+    report = understanding.process("Explain print(name) and then use input().")
+    assert_true(report.get("main_topic") == "code", "Inline function calls should route as code context.")
+    assert_true(report.get("code_context", {}).get("has_code"), "Understanding should mark inline code.")
+    calls = [
+        item.get("identifier")
+        for item in report.get("code_context", {}).get("function_calls", [])
+    ]
+    assert_true("print" in calls and "input" in calls, "Understanding should preserve function-call identifiers.")
+    punctuation = report.get("punctuation_analysis", {}).get("counts", {})
+    assert_true(punctuation.get("(", 0) >= 2, "Understanding should interpret code punctuation.")
+
+
+def test_company_and_product_context_is_expanded():
+    manager = ManagerBrain()
+    report = UnderstandingBrain().process("Which company makes PyCharm and what is it?")
+    context = manager.build_dictionary_context(
+        {"original_text": "Which company makes PyCharm and what is it?"},
+        report,
+        {}
+    )
+    matches = context.get("product_matches", [])
+    assert_true(any(item.get("company") == "JetBrains" for item in matches), "Product lookup should connect PyCharm to JetBrains.")
+
+
 def test_manager_routes_specialists_without_domain_leakage():
     understanding = UnderstandingBrain()
     manager = ManagerBrain()
@@ -470,6 +505,8 @@ def main():
         test_creative_code_returns_real_code,
         test_creative_uses_indexed_snippets_and_dictionary_entries,
         test_understanding_builds_complete_request_contract,
+        test_inline_code_punctuation_and_function_spelling,
+        test_company_and_product_context_is_expanded,
         test_manager_routes_specialists_without_domain_leakage,
         test_memory_keeps_continuation_inside_one_session,
         test_data_context_is_filtered_per_brain,

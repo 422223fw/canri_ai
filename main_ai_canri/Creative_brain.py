@@ -49,6 +49,8 @@ ALWAYS_CANRI_DATA_FILES = [
 DOMAIN_CANRI_DATA_FILES = {
     "code": [
         "code.json",
+        "Code_terms_dictionary.json",
+        "Punctuation_dictionary.json",
         "Code_dependency_graph.json",
         "Code_composition_tables.json",
         "Code_assembly_patterns.json",
@@ -92,6 +94,7 @@ DOMAIN_CANRI_DATA_FILES = {
         "Abbreviations.json"
     ],
     "language": [
+        "Punctuation_dictionary.json",
         "Translation_dictionary.json",
         "Synonyms.json",
         "Antonyms.json",
@@ -130,6 +133,8 @@ DOMAIN_CANRI_DATA_FILES = {
         "Voice_processing_tasks.json"
     ],
     "general": [
+        "Company_products.json",
+        "Punctuation_dictionary.json",
         "Translation_dictionary.json",
         "Synonyms.json",
         "Articles.json",
