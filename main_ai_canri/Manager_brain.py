@@ -336,6 +336,44 @@ class ManagerBrain:
 
         return context
 
+    def build_scanner_view(self, knowledge, brain_name):
+        """Provide every brain a small relevant evidence pack, never the full database."""
+
+        factual_brains = {
+            "Research_brain", "Fact_Check_brain", "Reasoning_brain", "Science_brain",
+            "Geography_brain", "History_brain", "Technology_brain", "Learning_brain",
+            "Quality_Control_brain", "Collaboration_brain"
+        }
+        matches = []
+        if isinstance(knowledge, dict):
+            for item in knowledge.get("matches", [])[:5]:
+                if not isinstance(item, dict):
+                    continue
+                matches.append({
+                    "article_id": item.get("article_id"),
+                    "title": item.get("title"),
+                    "summary": str(item.get("summary", ""))[:700],
+                    "content_excerpt": str(item.get("content_excerpt", ""))[:1400],
+                    "trust_score": item.get("trust_score", 0),
+                    "score": item.get("score", 0),
+                    "source_count": item.get("source_count", 0),
+                    "sources": item.get("sources", [])[:3]
+                })
+
+        required = brain_name in factual_brains and bool(matches)
+        return {
+            "brain": brain_name,
+            "available": bool(matches),
+            "required_for_answer": required,
+            "matches": matches,
+            "retrieval": "indexed_jsonl_excerpt",
+            "policy": (
+                "Use relevant scanner evidence and preserve its sources. Separate evidence from inference."
+                if required else
+                "Use scanner evidence only when it helps the current task; ignore unrelated articles."
+            )
+        }
+
     def build_dictionary_context(self, original_data, report, memory_report):
 
         query = self.extract_query_text(
@@ -525,6 +563,9 @@ class ManagerBrain:
                 knowledge_matches.append({
                     "title": item.get("title"),
                     "summary": str(item.get("summary", ""))[:500],
+                    "content_excerpt": str(item.get("content_excerpt", ""))[:1000],
+                    "trust_score": item.get("trust_score", 0),
+                    "source_count": item.get("source_count", 0),
                     "score": item.get("score"),
                     "sources": item.get("sources", [])[:2]
                 })
@@ -1103,6 +1144,11 @@ class ManagerBrain:
             report,
             memory_report
         )
+        context["knowledge_context"] = context["knowledge"]
+        context["scanner_knowledge"] = self.build_scanner_view(
+            context["knowledge"],
+            brain_name
+        )
         context["shared_context"] = context.get("shared_context") or self.build_shared_brain_context(
             original_data,
             report,
@@ -1119,6 +1165,7 @@ class ManagerBrain:
             "dictionary": context["dictionary"],
             "data_context": context["data_context"],
             "knowledge": context["knowledge"],
+            "scanner_knowledge": context["scanner_knowledge"],
             "shared_context": context["shared_context"],
             "conversation": (
                 memory_report.get("conversation", {})
@@ -1135,6 +1182,12 @@ class ManagerBrain:
                     round(self._request_deadline - time.perf_counter(), 3)
                 ) if self._request_deadline else None
             }
+        }
+
+        context["execution_contract"]["scanner_grounding"] = {
+            "required": context["scanner_knowledge"]["required_for_answer"],
+            "available": context["scanner_knowledge"]["available"],
+            "instruction": context["scanner_knowledge"]["policy"]
         }
 
         return context
@@ -1301,6 +1354,23 @@ class ManagerBrain:
                     phase
                 )
                 if isinstance(result, dict):
+                    scanner_view = context.get("scanner_knowledge", {})
+                    result["scanner_context"] = {
+                        "received": bool(scanner_view.get("available")),
+                        "required": bool(scanner_view.get("required_for_answer")),
+                        "article_ids": [
+                            item.get("article_id")
+                            for item in scanner_view.get("matches", [])
+                            if isinstance(item, dict) and item.get("article_id")
+                        ],
+                        "sources": list(dict.fromkeys(
+                            source.get("source_id")
+                            for item in scanner_view.get("matches", [])
+                            if isinstance(item, dict)
+                            for source in item.get("sources", [])
+                            if isinstance(source, dict) and source.get("source_id")
+                        ))
+                    }
                     result["performance"] = {
                         "elapsed_seconds": round(elapsed, 4),
                         "soft_timeout_seconds": DEFAULT_BRAIN_SOFT_TIMEOUT_SECONDS,

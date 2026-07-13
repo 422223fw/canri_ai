@@ -6,6 +6,8 @@ Canri AI
 import json
 import re
 from pathlib import Path
+
+from Scanner_knowledge import scanner_evidence
 from urllib.parse import quote_plus
 
 
@@ -517,6 +519,7 @@ class HistoryBrain:
         raw_text = self.extract_text(
             data
         )
+        scanner_articles = scanner_evidence(data, limit=5)
 
         text = self.normalize_text(
             raw_text
@@ -588,6 +591,8 @@ class HistoryBrain:
                 question_type
             ),
             "source_count": len(source_links),
+            "scanner_articles_found": len(scanner_articles),
+            "scanner_evidence": scanner_articles,
             "verified": False,
             "reasoning_used": True,
             "confidence": confidence,

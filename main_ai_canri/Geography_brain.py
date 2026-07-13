@@ -16,6 +16,8 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
+from Scanner_knowledge import scanner_evidence
+
 
 DATA_DIR = Path(__file__).parent / "data"
 PLACES_PATH = DATA_DIR / "Geography_places.json"
@@ -957,6 +959,7 @@ class GeographyBrain:
             terms,
             text
         )
+        scanner_articles = scanner_evidence(data, limit=5)
 
         intent = self.detect_geography_intent(
             report,
@@ -1015,9 +1018,18 @@ class GeographyBrain:
             "terms_used": terms,
             "confidence": confidence,
             "local_knowledge_found": len(local_matches),
-            "facts": self.build_facts(
-                local_matches
-            ),
+            "facts": self.build_facts(local_matches) + [
+                {
+                    "text": item.get("text"),
+                    "title": item.get("title"),
+                    "trust_score": item.get("trust_score"),
+                    "sources": item.get("sources", [])
+                }
+                for item in scanner_articles
+                if item.get("text")
+            ],
+            "scanner_articles_found": len(scanner_articles),
+            "scanner_evidence": scanner_articles,
             "local_matches": [
                 {
                     "type": match["type"],

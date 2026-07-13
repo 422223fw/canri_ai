@@ -18,6 +18,8 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
+from Scanner_knowledge import scanner_evidence
+
 
 DATA_DIR = Path(__file__).parent / "data"
 TERMS_PATH = DATA_DIR / "Technology_terms.json"
@@ -1065,6 +1067,7 @@ class TechnologyBrain:
         local_matches = self.search_local_knowledge(
             terms
         )
+        scanner_articles = scanner_evidence(data, limit=5)
 
         confidence = self.calculate_confidence(
             local_matches,
@@ -1112,6 +1115,8 @@ class TechnologyBrain:
             "terms_used": terms,
             "confidence": confidence,
             "local_knowledge_found": len(local_matches),
+            "scanner_articles_found": len(scanner_articles),
+            "scanner_evidence": scanner_articles,
             "local_matches": [
                 {
                     "type": match["type"],

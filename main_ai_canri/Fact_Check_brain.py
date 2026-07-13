@@ -408,9 +408,9 @@ class FactCheckBrain:
             if not isinstance(item, dict):
                 continue
             sources = item.get("sources", [])
-            trust = 78
-            if sources and isinstance(sources[0], dict):
-                trust = sources[0].get("trust_score", sources[0].get("source_trust", trust))
+            trust = item.get("trust_score", 78)
+            if not trust and sources and isinstance(sources[0], dict):
+                trust = sources[0].get("trust_score", sources[0].get("source_trust", 78))
             try:
                 trust = float(trust)
             except (TypeError, ValueError):
@@ -422,7 +422,15 @@ class FactCheckBrain:
                 "source_type": "local_knowledge_article",
                 "trust_score": max(50, min(round(trust, 2), 90)),
                 "supports": item.get("terms", [])[:12],
-                "notes": str(item.get("summary", ""))[:500]
+                "notes": (
+                    str(item.get("content_excerpt", ""))[:900]
+                    or str(item.get("summary", ""))[:500]
+                ),
+                "sample": [{
+                    "summary": str(item.get("summary", ""))[:500],
+                    "source_count": item.get("source_count", len(sources)),
+                    "sources": sources[:3]
+                }]
             })
 
         for entry in dictionary.get("entries", [])[:10]:
