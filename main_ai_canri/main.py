@@ -40,6 +40,7 @@ from Image_brain import brain as image_brain
 from Learning_brain import brain as learning_brain
 from Fact_Check_brain import brain as fact_check_brain
 from Quality_Control_brain import brain as quality_control_brain
+from Collaboration_brain import brain as collaboration_brain
 from Planner_brain import brain as planner_brain
 from Emotion_brain import brain as emotion_brain
 
@@ -160,6 +161,11 @@ def register_all_brains():
     manager_brain.register_brain(
         "Quality_Control_brain",
         quality_control_brain
+    )
+
+    manager_brain.register_brain(
+        "Collaboration_brain",
+        collaboration_brain
     )
 
     manager_brain.register_brain(

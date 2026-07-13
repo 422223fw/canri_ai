@@ -14,6 +14,7 @@ PACKAGE_DIR = PROJECT_ROOT / "main_ai_canri"
 sys.path.insert(0, str(PACKAGE_DIR))
 
 from Code_brain import CodeBrain  # noqa: E402
+from Collaboration_brain import CollaborationBrain  # noqa: E402
 from Creative_brain import CreativeBrain  # noqa: E402
 from Fact_Check_brain import FactCheckBrain  # noqa: E402
 from Math_brain import MathBrain  # noqa: E402
@@ -494,6 +495,51 @@ def test_manager_shares_results_inside_same_phase():
     assert_true(results["Second_brain"]["saw_first"] == "first result", "Brains in one phase must see earlier results.")
 
 
+def test_collaboration_brain_runs_bounded_peer_dialogue():
+    class ConsultingBrain:
+        def __init__(self, name):
+            self.name = name
+
+        def process(self, data):
+            dialogue = data.get("brain_dialogue", {})
+            return {
+                "brain": self.name,
+                "answer": f"{self.name} improved its result",
+                "saw_peer_messages": len(dialogue.get("peer_messages", [])),
+                "answered_question": bool(dialogue.get("question")),
+            }
+
+    manager = ManagerBrain()
+    coordinator = CollaborationBrain()
+    manager.register_brain("Collaboration_brain", coordinator)
+    manager.register_brain("Code_brain", ConsultingBrain("Code_brain"))
+    manager.register_brain("Planner_brain", ConsultingBrain("Planner_brain"))
+    manager.register_brain("Reasoning_brain", ConsultingBrain("Reasoning_brain"))
+    report = {"main_topic": "code", "intent": "code_generation"}
+    initial_results = {
+        "Code_brain": {"brain": "Code_brain", "code": "print('hello')"},
+        "Planner_brain": {"brain": "Planner_brain", "plan": ["write", "check"]},
+        "Reasoning_brain": {"brain": "Reasoning_brain", "analysis": "Check requirements"},
+    }
+    planning = coordinator.process({
+        "understanding": report,
+        "routing_decision": manager.routing_decision(report, {}),
+        "results": initial_results,
+    })
+    replies, consensus = manager.execute_collaboration_round(
+        {"original_text": "Write Python code", "results": initial_results},
+        report,
+        {},
+        initial_results,
+        planning,
+    )
+    assert_true(len(planning["consultation_requests"]) == 3, "Consultation should include the relevant team.")
+    assert_true(all(item.get("saw_peer_messages") for item in replies.values()), "Every participant must see peer messages.")
+    assert_true(all(item.get("answered_question") for item in replies.values()), "Every participant must receive a question.")
+    assert_true(consensus and consensus["round"] == "consensus", "Coordinator must consolidate the replies.")
+    assert_true(consensus["bounded"], "Internal dialogue must be bounded.")
+
+
 def main():
     tests = [
         test_expense_tracker_code_and_quality,
@@ -514,6 +560,7 @@ def main():
         test_code_self_review_checks_request_alignment,
         test_manager_builds_targeted_retry_context,
         test_manager_shares_results_inside_same_phase,
+        test_collaboration_brain_runs_bounded_peer_dialogue,
     ]
 
     for test in tests:

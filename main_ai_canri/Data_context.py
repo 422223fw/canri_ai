@@ -453,12 +453,14 @@ def context_view_for_brain(context, brain_name, max_sources=6):
         "Game_brain": {"game", "creative", "code"},
         "Planner_brain": {"planner", "reasoning"},
         "Reasoning_brain": {"reasoning", "knowledge", "math"},
+        "Collaboration_brain": {"reasoning", "knowledge", "planner", "code", "creative", "math"},
     }
     unrestricted = {
         "Manager_brain",
         "Quality_Control_brain",
         "Response_brain",
         "Learning_brain",
+        "Collaboration_brain",
         "Creative_brain"
     }
     if brain_name == "Creative_brain":
