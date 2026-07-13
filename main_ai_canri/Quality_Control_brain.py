@@ -155,6 +155,7 @@ class QualityControlBrain:
             contract = {}
 
         requirements = {
+            "has_request_contract": bool(contract),
             "topic": topic,
             "intent": intent,
             "is_code_request": topic == "code" or intent in {"code_generation", "code_analysis"},
@@ -213,6 +214,8 @@ class QualityControlBrain:
             ),
             "atomic_requirements": contract.get("requirements", report.get("requirements", [])),
             "output_constraints": contract.get("output_constraints", report.get("output_constraints", {})),
+            "global_picture": contract.get("global_picture", report.get("global_picture", {})),
+            "detail_inventory": contract.get("detail_inventory", report.get("detail_inventory", {})),
             "continuation": bool(contract.get("continuation", {}).get("requested")),
         }
 
@@ -297,7 +300,7 @@ class QualityControlBrain:
     def audit_atomic_requirements(self, results, requirements, issues):
 
         output = self.requirement_output(results, requirements)
-        for requirement in requirements.get("atomic_requirements", [])[:40]:
+        for requirement in requirements.get("atomic_requirements", [])[:80]:
             passed, evidence = self.atomic_requirement_check(
                 requirement,
                 output,
@@ -314,6 +317,74 @@ class QualityControlBrain:
                 f"Request requirement failed: {requirement.get('text', requirement.get('id', 'unknown'))}",
                 "Implement this exact requirement and preserve every requirement that already passed.",
                 evidence
+            )
+
+    def audit_small_details(self, results, requirements, issues):
+
+        inventory = requirements.get("detail_inventory", {})
+        if not isinstance(inventory, dict):
+            inventory = {}
+        global_picture = requirements.get("global_picture", {})
+        if (
+            requirements.get("has_request_contract")
+            and (not isinstance(global_picture, dict) or not global_picture.get("goal"))
+        ):
+            self.add_issue(
+                issues,
+                "Understanding_brain",
+                "high",
+                "The request has no preserved global goal.",
+                "Rebuild the request contract with a global picture before routing."
+            )
+
+        output = self.requirement_output(results, requirements)
+        code_result = results.get("Code_brain", {})
+        code = ""
+        if isinstance(code_result, dict):
+            code = str(code_result.get("generated_code") or code_result.get("code") or "")
+
+        if requirements.get("is_code_request"):
+            lowered_code = code.lower()
+            for file_name in inventory.get("file_names", [])[:12]:
+                if str(file_name).lower() in lowered_code:
+                    continue
+                self.add_issue(
+                    issues,
+                    "Code_brain",
+                    "high",
+                    f"Requested file detail is missing: {file_name}",
+                    f"Use the exact requested file name {file_name} in the final program.",
+                    "detail_inventory.file_names"
+                )
+
+        if requirements.get("is_story_request"):
+            lowered_output = output.lower()
+            ignored_names = {
+                "write", "create", "continue", "story", "only", "canri"
+            }
+            for entity in inventory.get("named_entities", [])[:12]:
+                normalized = str(entity).strip().lower()
+                if not normalized or normalized in ignored_names or normalized in lowered_output:
+                    continue
+                self.add_issue(
+                    issues,
+                    "Story_brain",
+                    "high",
+                    f"Requested named detail is missing: {entity}",
+                    f"Preserve the requested name or named element exactly: {entity}.",
+                    "detail_inventory.named_entities"
+                )
+
+        explicit_count = inventory.get("coverage", {}).get("explicit_detail_count", 0)
+        atomic_count = len(requirements.get("atomic_requirements", []))
+        if explicit_count and atomic_count < explicit_count:
+            self.add_issue(
+                issues,
+                "Understanding_brain",
+                "high",
+                "Some small prompt details were not converted into checkable requirements.",
+                "Rebuild atomic requirements from every explicit detail before answering.",
+                f"details={explicit_count}, requirements={atomic_count}"
             )
 
     def extract_requested_sentence_count(self, lowered):
@@ -1240,6 +1311,7 @@ class QualityControlBrain:
         self.audit_context_usage(data, requirements, issues)
         self.audit_internal_report_leakage(results, requirements, issues)
         self.audit_atomic_requirements(results, requirements, issues)
+        self.audit_small_details(results, requirements, issues)
 
         retry_requests = self.build_retry_requests(issues)
         score = self.quality_score(issues)

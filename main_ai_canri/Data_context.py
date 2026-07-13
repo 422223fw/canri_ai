@@ -15,6 +15,8 @@ from pathlib import Path
 
 
 DATA_DIR = Path(__file__).parent / "data"
+UNDERSTANDING_DATA_DIR = Path(__file__).parent / "UnderstandingDk" / "data"
+DATA_ROOTS = (DATA_DIR, UNDERSTANDING_DATA_DIR)
 
 MAX_FULL_READ_BYTES = 2_000_000
 MAX_SAMPLE_BYTES = 220_000
@@ -71,11 +73,14 @@ def terms_from_text(text, limit=80):
 
 def file_signature():
     items = []
-    for path in DATA_DIR.glob("*"):
-        if not path.is_file() or path.suffix.lower() in SKIP_EXTENSIONS:
+    for root in DATA_ROOTS:
+        if not root.exists():
             continue
-        stat = path.stat()
-        items.append((path.name, stat.st_size, int(stat.st_mtime)))
+        for path in root.glob("*"):
+            if not path.is_file() or path.suffix.lower() in SKIP_EXTENSIONS:
+                continue
+            stat = path.stat()
+            items.append((str(path), stat.st_size, int(stat.st_mtime)))
     return tuple(sorted(items))
 
 
@@ -219,8 +224,8 @@ def profile_file(path):
     return profile
 
 
-def load_json_for_search(file_name):
-    path = DATA_DIR / file_name
+def load_json_for_search(path_value):
+    path = Path(path_value)
     if not path.exists() or path.suffix.lower() != ".json":
         return None
     if path.stat().st_size > MAX_FULL_READ_BYTES:
@@ -239,10 +244,19 @@ def build_data_profile(force=False):
         return _DATA_PROFILE_CACHE
 
     profiles = []
-    for path in sorted(DATA_DIR.glob("*")):
-        if not path.is_file() or path.suffix.lower() in SKIP_EXTENSIONS:
+    for root in DATA_ROOTS:
+        if not root.exists():
             continue
-        profiles.append(profile_file(path))
+        for path in sorted(root.glob("*")):
+            if not path.is_file() or path.suffix.lower() in SKIP_EXTENSIONS:
+                continue
+            profile = profile_file(path)
+            profile["source_group"] = (
+                "understanding_dictionaries"
+                if root == UNDERSTANDING_DATA_DIR
+                else "canri_data"
+            )
+            profiles.append(profile)
 
     _DATA_PROFILE_CACHE = profiles
     _DATA_PROFILE_SIGNATURE = signature
@@ -287,7 +301,7 @@ def search_data_context(query, limit=10):
         summary = profile.get("summary", {})
         value_matches = []
         if score > 0:
-            data = load_json_for_search(profile.get("file", ""))
+            data = load_json_for_search(profile.get("path", ""))
             if data is not None:
                 value_matches = search_json_values(data, query_terms)
                 if value_matches:
@@ -295,6 +309,7 @@ def search_data_context(query, limit=10):
 
         scored.append({
             "file": profile.get("file"),
+            "source_group": profile.get("source_group"),
             "bytes": profile.get("bytes"),
             "score": score,
             "shape": summary.get("shape"),
@@ -334,6 +349,7 @@ def compact_match_for_brains(match):
 
     return {
         "file": match.get("file"),
+        "source_group": match.get("source_group"),
         "score": match.get("score", 0),
         "shape": match.get("shape"),
         "items": match.get("items"),
@@ -442,8 +458,11 @@ def context_view_for_brain(context, brain_name, max_sources=6):
         "Manager_brain",
         "Quality_Control_brain",
         "Response_brain",
-        "Learning_brain"
+        "Learning_brain",
+        "Creative_brain"
     }
+    if brain_name == "Creative_brain":
+        max_sources = max(max_sources, 12)
     wanted = brain_domains.get(brain_name, set())
     query_domains = set(context.get("domains", []))
 
@@ -452,6 +471,11 @@ def context_view_for_brain(context, brain_name, max_sources=6):
         if not isinstance(match, dict):
             continue
         file_name = normalize_text(match.get("file", ""))
+        if brain_name == "Creative_brain" and any(
+            marker in file_name
+            for marker in [" rule", " rules", "risk rule", "safety rule", "release criteria"]
+        ):
+            continue
         matched_terms = set(match.get("matched_terms", []))
         relevant = brain_name in unrestricted or not wanted
         if wanted and query_domains.intersection(wanted):

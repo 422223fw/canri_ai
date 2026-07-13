@@ -220,6 +220,52 @@ def test_creative_code_returns_real_code():
     assert_true("production_draft" not in lowered, "Creative code fallback should not return placeholder variants.")
 
 
+def test_creative_uses_indexed_snippets_and_dictionary_entries():
+    creative = CreativeBrain()
+    report = {
+        "words": [{
+            "word": "butterfly",
+            "exists": True,
+            "type": "noun",
+            "meanings": ["an insect with broad wings"],
+            "forms": {},
+            "connections": ["insect", "wing"]
+        }]
+    }
+    context = creative.collect_indexed_project_context({
+        "data_context": {
+            "matches": [
+                {
+                    "file": "Company_products.json",
+                    "score": 20,
+                    "matched_terms": ["product"],
+                    "sample": ["company"],
+                    "value_matches": [{
+                        "path": "products[0]",
+                        "text": "Example product",
+                        "matched_terms": ["product"]
+                    }]
+                },
+                {
+                    "file": "Security_rules.json",
+                    "score": 30,
+                    "matched_terms": ["security"],
+                    "sample": [],
+                    "value_matches": []
+                }
+            ]
+        }
+    }, report, ["butterfly", "product"])
+
+    assert_true("Company_products.json" in context, "Creative brain should consume indexed project snippets.")
+    assert_true("Security_rules.json" not in context, "Creative brain should exclude rule files from general retrieval.")
+    assert_true("UnderstandingDk::butterfly" in context, "Creative brain should reuse exact dictionary results.")
+    assert_true(
+        not context["Company_products.json"].get("full_file_loaded"),
+        "Creative context must not report whole-file loading."
+    )
+
+
 def test_understanding_builds_complete_request_contract():
     prompt = (
         "Build a real runnable Python expense tracker.\n"
@@ -236,6 +282,15 @@ def test_understanding_builds_complete_request_contract():
     constraints = contract.get("output_constraints", {})
     assert_true(constraints.get("requested_format") == "code", "Understanding should detect code-only output.")
     assert_true("plan" in constraints.get("forbidden_sections", []), "Understanding should preserve forbidden output sections.")
+    details = contract.get("detail_inventory", {})
+    assert_true("expenses.json" in details.get("file_names", []), "Understanding should preserve exact file names.")
+    detail_text = " ".join(
+        item.get("text", "")
+        for item in details.get("explicit_details", [])
+    ).lower()
+    for expected in ["amount", "category", "description", "save", "load"]:
+        assert_true(expected in detail_text, f"Understanding should preserve the small detail: {expected}.")
+    assert_true(bool(contract.get("global_picture", {}).get("goal")), "Understanding should preserve the global goal.")
 
 
 def test_manager_routes_specialists_without_domain_leakage():
@@ -413,6 +468,7 @@ def main():
         test_fact_check_evidence_coverage,
         test_creative_story_returns_final_story,
         test_creative_code_returns_real_code,
+        test_creative_uses_indexed_snippets_and_dictionary_entries,
         test_understanding_builds_complete_request_contract,
         test_manager_routes_specialists_without_domain_leakage,
         test_memory_keeps_continuation_inside_one_session,
