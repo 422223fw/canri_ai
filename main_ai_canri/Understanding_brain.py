@@ -1640,34 +1640,166 @@ class UnderstandingBrain:
             "wants_steps": "step by step" in lowered or "show the steps" in lowered,
         }
 
-    def extract_atomic_requirements(self, text, features, output_constraints):
+    def extract_requirement_clauses(self, text):
 
         raw = str(text).replace("\r\n", "\n")
         clauses = []
+        command_starts = {
+            "add", "analyze", "build", "check", "continue", "create",
+            "delete", "do", "edit", "explain", "export", "find", "fix",
+            "generate", "give", "handle", "include", "keep", "list",
+            "load", "make", "mark", "only", "output", "return", "save",
+            "search", "show", "solve", "support", "use", "verify", "write"
+        }
 
-        for line in raw.split("\n"):
-            line = re.sub(r"^\s*(?:[-*]|\d+[.)])\s*", "", line).strip()
-            if not line:
+        def add_clause(value, source="line"):
+            normalized = re.sub(r"\s+", " ", str(value)).strip(" .,:;-")
+            if len(normalized) < 2:
+                return
+            key = normalized.lower()
+            if any(item["text"].lower() == key for item in clauses):
+                return
+            clauses.append({
+                "text": normalized,
+                "source": source
+            })
+
+        for line_number, line in enumerate(raw.split("\n"), start=1):
+            had_list_marker = bool(re.match(r"^\s*(?:[-*]|\d+[.)])\s+", line))
+            cleaned = re.sub(r"^\s*(?:[-*]|\d+[.)])\s*", "", line).strip()
+            if not cleaned:
                 continue
-            lowered = line.lower()
-            if (
-                re.match(r"^(?:the\s+)?(?:program|story|answer|response|code)\s+must\b", lowered)
-                or re.match(r"^(?:must|include|add|support|use|handle|keep|show|return|only)\b", lowered)
-                or re.match(r"^(?:the\s+user\s+can)\b", lowered)
-                or re.search(r"\bmust\s+(?:include|support|use|handle|let|contain|run)\b", lowered)
-            ):
-                clauses.append(line)
 
-        if not clauses:
-            for sentence in re.split(r"(?<=[.!?])\s+", raw):
+            lowered = cleaned.lower()
+            first_word_match = re.match(r"[a-z]+", lowered)
+            first_word = first_word_match.group(0) if first_word_match else ""
+            requirement_line = (
+                line_number == 1
+                or had_list_marker
+                or first_word in command_starts
+                or " must " in f" {lowered} "
+                or " should " in f" {lowered} "
+                or "the user can" in lowered
+                or "do not" in lowered
+                or "without" in lowered
+            )
+            if not requirement_line:
+                continue
+
+            add_clause(cleaned, f"line_{line_number}")
+
+            # Preserve every item in explicit comma/semicolon lists. This is
+            # especially important for prompts such as "add, list, search...".
+            if "," in cleaned or ";" in cleaned:
+                pieces = re.split(r"\s*[,;]\s*|\s+and\s+", cleaned)
+                if len(pieces) > 1:
+                    for piece in pieces:
+                        piece = re.sub(
+                            r"^(?:the\s+user\s+can|the\s+program\s+must|must|should)\s+",
+                            "",
+                            piece,
+                            flags=re.IGNORECASE
+                        )
+                        if 2 <= len(piece.split()) <= 24:
+                            add_clause(piece, f"list_item_line_{line_number}")
+
+        if len(clauses) <= 1:
+            for sentence_number, sentence in enumerate(
+                re.split(r"(?<=[.!?])\s+", raw),
+                start=1
+            ):
                 lowered = sentence.lower()
-                if any(marker in lowered for marker in [" must ", " should ", " only output ", " needs to "]):
-                    clauses.append(sentence.strip())
+                if any(
+                    marker in lowered
+                    for marker in [" must ", " should ", " only output ", " needs to ", " do not "]
+                ):
+                    add_clause(sentence, f"sentence_{sentence_number}")
+
+        return clauses[:80]
+
+    def extract_detail_inventory(
+        self,
+        text,
+        entities,
+        output_constraints,
+        advanced_understanding
+    ):
+
+        raw = str(text)
+        requirement_clauses = self.extract_requirement_clauses(raw)
+        semantic_frame = advanced_understanding.get("semantic_frame", {})
+
+        numbers = []
+        for match in re.finditer(r"\b\d+(?:\.\d+)?\b", raw):
+            line_start = raw.rfind("\n", 0, match.start()) + 1
+            before_on_line = raw[line_start:match.start()]
+            after_number = raw[match.end():match.end() + 1]
+            if not before_on_line.strip() and after_number in {".", ")"}:
+                continue
+            start = max(0, match.start() - 35)
+            end = min(len(raw), match.end() + 35)
+            numbers.append({
+                "value": match.group(0),
+                "context": re.sub(r"\s+", " ", raw[start:end]).strip()
+            })
+
+        file_names = list(dict.fromkeys(
+            match.group(0)
+            for match in re.finditer(
+                r"\b[\w.-]+\.(?:jsonl?|py|txt|csv|md|html?|css|js|ts|xml|ya?ml)\b",
+                raw,
+                flags=re.IGNORECASE
+            )
+        ))
+        quoted_values = list(dict.fromkeys(
+            value.strip()
+            for match in re.finditer(r"['\"]([^'\"\n]{1,80})['\"]", raw)
+            for value in [match.group(1)]
+            if value.strip()
+        ))
+        negative_constraints = [
+            item["text"]
+            for item in requirement_clauses
+            if any(
+                marker in item["text"].lower()
+                for marker in ["do not", "don't", "never", "without", "no external", "only output"]
+            )
+        ]
+
+        named_entities = []
+        for entity in entities:
+            value = str(entity.get("text", "")).strip()
+            if not value or value.lower() in ACTION_COMMANDS:
+                continue
+            if value not in named_entities:
+                named_entities.append(value)
+
+        return {
+            "explicit_details": requirement_clauses,
+            "numbers": numbers[:30],
+            "file_names": file_names[:30],
+            "quoted_values": quoted_values[:30],
+            "named_entities": named_entities[:30],
+            "negative_constraints": negative_constraints[:30],
+            "actions": semantic_frame.get("actions", [])[:30],
+            "targets": semantic_frame.get("targets", [])[:30],
+            "modifiers": semantic_frame.get("modifiers", [])[:30],
+            "output_constraints": output_constraints,
+            "coverage": {
+                "explicit_detail_count": len(requirement_clauses),
+                "number_count": len(numbers),
+                "file_name_count": len(file_names),
+                "named_entity_count": len(named_entities),
+                "negative_constraint_count": len(negative_constraints)
+            }
+        }
+
+    def extract_atomic_requirements(self, text, features, output_constraints):
 
         requirements = []
         seen = set()
-        for clause in clauses:
-            normalized = re.sub(r"\s+", " ", clause).strip(" .")
+        for clause in self.extract_requirement_clauses(text):
+            normalized = clause["text"]
             key = normalized.lower()
             if not normalized or key in seen:
                 continue
@@ -1675,7 +1807,8 @@ class UnderstandingBrain:
             requirements.append({
                 "id": f"explicit_{len(requirements) + 1}",
                 "text": normalized,
-                "kind": "explicit_constraint"
+                "kind": "explicit_constraint",
+                "source": clause.get("source", "prompt")
             })
 
         for feature in features:
@@ -1706,7 +1839,7 @@ class UnderstandingBrain:
                 continue
             ids.add(requirement["id"])
             unique.append(requirement)
-        return unique[:40]
+        return unique[:80]
 
     def build_request_contract(
         self,
@@ -1716,7 +1849,8 @@ class UnderstandingBrain:
         requested_action,
         entities,
         features,
-        semantic_frame
+        semantic_frame,
+        advanced_understanding
     ):
 
         lowered = str(text).lower()
@@ -1730,6 +1864,17 @@ class UnderstandingBrain:
             text,
             features,
             output_constraints
+        )
+        detail_inventory = self.extract_detail_inventory(
+            text,
+            entities,
+            output_constraints,
+            advanced_understanding
+        )
+
+        first_line = next(
+            (line.strip() for line in str(text).splitlines() if line.strip()),
+            str(text).strip()
         )
 
         return {
@@ -1746,6 +1891,19 @@ class UnderstandingBrain:
             "features": features,
             "requirements": requirements,
             "output_constraints": output_constraints,
+            "global_picture": {
+                "goal": first_line[:500],
+                "action": requested_action.get("action_word") if isinstance(requested_action, dict) else None,
+                "target": (
+                    requested_action.get("target")
+                    if isinstance(requested_action, dict)
+                    else None
+                ) or semantic_frame.get("object"),
+                "topic": main_topic,
+                "intent": intent,
+                "requested_format": output_constraints.get("requested_format")
+            },
+            "detail_inventory": detail_inventory,
             "continuation": {
                 "requested": any(marker in lowered for marker in continuation_markers),
                 "markers": [marker for marker in continuation_markers if marker in lowered][:8]
@@ -1755,7 +1913,11 @@ class UnderstandingBrain:
                 "word_count": len(self.extract_words(text)),
                 "requirement_count": len(requirements),
                 "entity_count": len(entities),
-                "feature_count": len(features)
+                "feature_count": len(features),
+                "small_detail_count": detail_inventory.get("coverage", {}).get(
+                    "explicit_detail_count",
+                    0
+                )
             }
         }
 
@@ -1924,7 +2086,8 @@ class UnderstandingBrain:
             requested_action,
             entities,
             features,
-            advanced_understanding.get("semantic_frame", {})
+            advanced_understanding.get("semantic_frame", {}),
+            advanced_understanding
         )
 
         tasks = self.possible_tasks(
@@ -1961,6 +2124,8 @@ class UnderstandingBrain:
             "request_contract": request_contract,
             "requirements": request_contract.get("requirements", []),
             "output_constraints": request_contract.get("output_constraints", {}),
+            "global_picture": request_contract.get("global_picture", {}),
+            "detail_inventory": request_contract.get("detail_inventory", {}),
             "advanced_word_tags": advanced_understanding.get(
                 "tokens",
                 []
@@ -1998,7 +2163,8 @@ class UnderstandingBrain:
                 "Treat verbs as requested actions unless the user explicitly asks for a definition.",
                 "Use nouns as targets and adjectives/adverbs as constraints or style.",
                 "Return a structured report that every specialist brain can consume.",
-                "Keep intent, topic, requested features, and routing hints explicit."
+                "Keep intent, topic, requested features, and routing hints explicit.",
+                "Preserve the global goal and every small explicit detail as separate contract data."
             ]
         }
 

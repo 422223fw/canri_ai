@@ -1061,6 +1061,17 @@ class ManagerBrain:
         context["results"] = combined_results
 
         context["understanding"] = report
+        request_contract = report.get("request_contract", {}) if isinstance(report, dict) else {}
+        context["execution_contract"] = {
+            "global_picture": request_contract.get("global_picture", {}),
+            "detail_inventory": request_contract.get("detail_inventory", {}),
+            "requirements": request_contract.get("requirements", []),
+            "output_constraints": request_contract.get("output_constraints", {}),
+            "instruction": (
+                "Satisfy the global goal and then verify every small detail. "
+                "Do not discard a detail merely because the main topic is correct."
+            )
+        }
         context["memory"] = memory_report
         context["dictionary"] = context.get("dictionary") or self.build_dictionary_context(
             original_data,
@@ -1107,6 +1118,7 @@ class ManagerBrain:
                 if isinstance(memory_report, dict)
                 else {}
             ),
+            "execution_contract": context["execution_contract"],
             "performance_budget": {
                 "request_budget_seconds": REQUEST_TIME_BUDGET_SECONDS,
                 "brain_soft_timeout_seconds": DEFAULT_BRAIN_SOFT_TIMEOUT_SECONDS,

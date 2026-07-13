@@ -16,6 +16,12 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
+try:
+    from Data_context import build_shared_data_context, context_view_for_brain
+except (ImportError, ModuleNotFoundError):
+    build_shared_data_context = None
+    context_view_for_brain = None
+
 
 DATA_DIR = Path(__file__).parent / "data"
 SEEDS_FILE = DATA_DIR / "Creative_seed_bank.json"
@@ -809,11 +815,24 @@ class CreativeBrain:
                 continue
 
             try:
-                index[file_name] = self.summarize_canri_file(file_name)
-            except Exception:
+                stat = path.stat()
                 index[file_name] = {
-                    "count": 0,
-                    "sample_terms": []
+                    "bytes": stat.st_size,
+                    "modified_ns": stat.st_mtime_ns,
+                    "sample_terms": [
+                        term
+                        for term in re.findall(r"[a-zA-Z][a-zA-Z0-9_-]{2,}", path.stem.lower())
+                        if term not in GENERIC_TERMS
+                    ],
+                    "indexed": True,
+                    "loaded": False
+                }
+            except OSError:
+                index[file_name] = {
+                    "bytes": 0,
+                    "sample_terms": [],
+                    "indexed": False,
+                    "loaded": False
                 }
 
         return index
@@ -840,7 +859,6 @@ class CreativeBrain:
                 "used": False
             }
 
-        data = self.load_json(path, {})
         sample_terms = []
         matched_terms = []
         terms = [
@@ -849,37 +867,28 @@ class CreativeBrain:
             if term
         ]
 
-        if isinstance(data, dict):
-            count = len(data)
-            iterable = list(data.items())[:400]
+        try:
+            with path.open("r", encoding="utf-8", errors="replace") as file:
+                sample = file.read(160_000)
+        except OSError:
+            sample = ""
 
-            for key, value in iterable:
-                key_text = str(key)
-                sample_terms.append(key_text)
-                searchable = f"{key_text} {self.preview_json_value(value)}".lower()
-                if terms and any(term in searchable for term in terms[:40]):
-                    matched_terms.append(key_text)
-
-        elif isinstance(data, list):
-            count = len(data)
-            iterable = data[:400]
-
-            for item in iterable:
-                term = self.item_name(item)
-                if term:
-                    sample_terms.append(term)
-
-                searchable = self.preview_json_value(item).lower()
-                if term and terms and any(key in searchable for key in terms[:40]):
-                    matched_terms.append(term)
-        else:
-            count = 0
+        searchable = sample.lower()
+        sample_terms = list(dict.fromkeys(
+            re.findall(r'"(?:word|name|title|term|type|category)"\s*:\s*"([^"\n]{1,80})"', sample)
+        ))[:sample_limit]
+        for term in terms[:40]:
+            if term in searchable:
+                matched_terms.append(term)
 
         return {
-            "count": count,
+            "count": None,
             "sample_terms": [term for term in sample_terms if term][:sample_limit],
             "matched_terms": [term for term in matched_terms if term][:sample_limit],
-            "used": True
+            "used": bool(sample),
+            "bytes_read": len(sample.encode("utf-8", errors="ignore")),
+            "full_file_loaded": False,
+            "retrieval_mode": "bounded_sample_fallback"
         }
 
     def preview_json_value(self, value):
@@ -938,6 +947,142 @@ class CreativeBrain:
 
         return context
 
+    def collect_indexed_project_context(self, data, report, terms):
+
+        data = data if isinstance(data, dict) else {}
+        indexed = data.get("data_context")
+
+        if not isinstance(indexed, dict) or not indexed.get("matches"):
+            full_context = data.get("full_data_context")
+            if isinstance(full_context, dict) and full_context.get("matches"):
+                indexed = full_context
+
+        if (
+            (not isinstance(indexed, dict) or not indexed.get("matches"))
+            and build_shared_data_context is not None
+        ):
+            query = " ".join(str(term) for term in terms[:60])
+            indexed = build_shared_data_context(query, limit=16)
+
+        if isinstance(indexed, dict) and context_view_for_brain is not None:
+            indexed = context_view_for_brain(
+                indexed,
+                "Creative_brain",
+                max_sources=12
+            )
+
+        context = {}
+        for match in (indexed or {}).get("matches", [])[:12]:
+            if not isinstance(match, dict):
+                continue
+            file_name = str(match.get("file", "")).strip()
+            normalized_name = file_name.lower().replace("_", " ")
+            if not file_name or any(
+                marker in normalized_name
+                for marker in [" rules", " rule", "risk rule", "safety rule", "release criteria"]
+            ):
+                continue
+
+            snippets = []
+            for item in match.get("value_matches", [])[:5]:
+                if isinstance(item, dict) and item.get("text"):
+                    snippets.append({
+                        "path": item.get("path"),
+                        "text": str(item.get("text", ""))[:360],
+                        "matched_terms": item.get("matched_terms", [])[:8]
+                    })
+
+            context[file_name] = {
+                "count": match.get("items"),
+                "sample_terms": match.get("sample", [])[:20],
+                "matched_terms": match.get("matched_terms", [])[:20],
+                "snippets": snippets,
+                "score": match.get("score", 0),
+                "source_group": match.get("source_group", "canri_data"),
+                "used": True,
+                "full_file_loaded": False,
+                "retrieval_mode": "indexed_relevant_snippets"
+            }
+
+        knowledge = data.get("knowledge", {})
+        if isinstance(knowledge, dict):
+            for match in knowledge.get("matches", [])[:6]:
+                if not isinstance(match, dict):
+                    continue
+                title = str(match.get("title", "knowledge article")).strip()
+                context[f"Knowledge_database::{title}"] = {
+                    "count": 1,
+                    "sample_terms": [title],
+                    "matched_terms": [
+                        term for term in terms[:40]
+                        if term in f"{title} {match.get('summary', '')}".lower()
+                    ],
+                    "snippets": [{
+                        "title": title,
+                        "summary": str(match.get("summary", ""))[:900],
+                        "sources": match.get("sources", [])[:4]
+                    }],
+                    "source_group": "knowledge_index",
+                    "used": True,
+                    "full_file_loaded": False,
+                    "retrieval_mode": "knowledge_index_lookup"
+                }
+
+        dictionary_context = data.get("dictionary", {})
+        if isinstance(dictionary_context, dict):
+            selected_items = []
+            selected_items.extend(dictionary_context.get("entries", [])[:20])
+            selected_items.extend(dictionary_context.get("company_matches", [])[:8])
+            selected_items.extend(dictionary_context.get("product_matches", [])[:8])
+            for item in selected_items:
+                if not isinstance(item, dict):
+                    continue
+                name = str(
+                    item.get("word")
+                    or item.get("name")
+                    or item.get("product")
+                    or item.get("company")
+                    or "dictionary item"
+                ).strip()
+                context[f"Dictionary_context::{name}"] = {
+                    "count": 1,
+                    "sample_terms": [name, str(item.get("type", ""))],
+                    "matched_terms": [name.lower()],
+                    "snippets": [item],
+                    "source_group": "dictionary_and_products",
+                    "used": True,
+                    "full_file_loaded": False,
+                    "retrieval_mode": "manager_selected_lookup"
+                }
+
+        # Understanding_brain already performed exact indexed dictionary,
+        # grammar, and connection lookups. Reuse only those selected entries.
+        for word_info in report.get("words", [])[:60]:
+            if not isinstance(word_info, dict) or not word_info.get("exists"):
+                continue
+            word = str(word_info.get("word", "")).strip().lower()
+            if not word:
+                continue
+            context[f"UnderstandingDk::{word}"] = {
+                "count": 1,
+                "sample_terms": [word, str(word_info.get("type", ""))],
+                "matched_terms": [word],
+                "snippets": [{
+                    "source": "main_dictionary + Grammar_dictionary + Connections_Dictionary",
+                    "word": word,
+                    "type": word_info.get("type"),
+                    "meanings": word_info.get("meanings", [])[:3],
+                    "forms": word_info.get("forms", {}),
+                    "connections": word_info.get("connections", [])[:10]
+                }],
+                "source_group": "understanding_dictionaries",
+                "used": True,
+                "full_file_loaded": False,
+                "retrieval_mode": "exact_dictionary_lookup"
+            }
+
+        return context
+
     def terms_from_canri_context(self, canri_context):
 
         terms = []
@@ -945,6 +1090,14 @@ class CreativeBrain:
         for file_info in canri_context.values():
             terms.extend(file_info.get("matched_terms", [])[:20])
             terms.extend(file_info.get("sample_terms", [])[:6])
+            for snippet in file_info.get("snippets", [])[:4]:
+                snippet_text = self.preview_json_value(snippet)
+                terms.extend(
+                    re.findall(
+                        r"[a-zA-Z][a-zA-Z0-9_-]{2,}",
+                        snippet_text.lower()
+                    )[:14]
+                )
 
         clean = []
         for term in terms:
@@ -952,7 +1105,7 @@ class CreativeBrain:
             if term and term not in clean and term not in GENERIC_TERMS:
                 clean.append(term)
 
-        return clean[:80]
+        return clean[:120]
 
     # ---------- input ----------
 
@@ -2743,11 +2896,17 @@ class CreativeBrain:
             domain
         )
         domain = execution_policy["domain"]
-        canri_context = self.collect_canri_context(
-            domain,
-            terms,
-            data if isinstance(data, dict) else {}
+        canri_context = self.collect_indexed_project_context(
+            data,
+            report,
+            terms
         )
+        if not canri_context:
+            canri_context = self.collect_canri_context(
+                domain,
+                terms,
+                data if isinstance(data, dict) else {}
+            )
         canri_terms = self.terms_from_canri_context(canri_context)
         terms = list(dict.fromkeys(terms + canri_terms))[:160]
         direction = self.analyze_direction(
@@ -2844,20 +3003,25 @@ class CreativeBrain:
             },
             "canri_data_used": canri_context,
             "canri_data_strategy": {
-                "mode": "domain_retrieval",
-                "loaded_learning_files": all(
-                    file_name in canri_context
-                    for file_name in [
-                        "Learning_history.json",
-                        "Learning_statistics.json",
-                        "Learning_rules.json",
-                        "Improvement_queue.json",
-                        "Brain_performance.json"
-                    ]
+                "mode": "project_wide_indexed_retrieval",
+                "full_files_loaded": any(
+                    bool(file_info.get("full_file_loaded"))
+                    for file_info in canri_context.values()
+                    if isinstance(file_info, dict)
+                ),
+                "rules_files_excluded": True,
+                "understanding_dictionaries_available": any(
+                    str(file_name).startswith("UnderstandingDk::")
+                    or file_info.get("source_group") == "understanding_dictionaries"
+                    for file_name, file_info in canri_context.items()
+                    if isinstance(file_info, dict)
                 ),
                 "files_considered": len(canri_context),
                 "domain": domain,
-                "reason": "load learning and memory always, then load domain files only when relevant"
+                "reason": (
+                    "search all project data sources, exclude rule files, and return only "
+                    "the highest-scoring snippets plus exact dictionary lookups"
+                )
             },
             "creative_memory": {
                 "ideas_stored": len(self.creative_memory.get("ideas", [])),
