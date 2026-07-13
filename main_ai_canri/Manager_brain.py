@@ -69,6 +69,7 @@ ALWAYS_AVAILABLE_SAFETY_BRAINS = [
 REQUEST_TIME_BUDGET_SECONDS = 25.0
 DEFAULT_BRAIN_SOFT_TIMEOUT_SECONDS = 8.0
 MAX_QUALITY_RETRIES_PER_BRAIN = 2
+MAX_COLLABORATION_PARTICIPANTS = 3
 
 
 class ManagerBrain:
@@ -875,6 +876,12 @@ class ManagerBrain:
                 "brains": []
             },
             {
+                "phase": "brain_collaboration",
+                "brains": [
+                    "Collaboration_brain"
+                ]
+            },
+            {
                 "phase": "verification",
                 "brains": [
                     "Fact_Check_brain",
@@ -1119,6 +1126,7 @@ class ManagerBrain:
                 else {}
             ),
             "execution_contract": context["execution_contract"],
+            "brain_dialogue": context.get("brain_dialogue", {}),
             "performance_budget": {
                 "request_budget_seconds": REQUEST_TIME_BUDGET_SECONDS,
                 "brain_soft_timeout_seconds": DEFAULT_BRAIN_SOFT_TIMEOUT_SECONDS,
@@ -1130,6 +1138,95 @@ class ManagerBrain:
         }
 
         return context
+
+    def execute_collaboration_round(
+        self,
+        data,
+        report,
+        memory_report,
+        all_results,
+        collaboration_result
+    ):
+        """Run one bounded reply round using questions prepared by Collaboration_brain."""
+
+        if not isinstance(collaboration_result, dict):
+            return {}, None
+
+        requests = collaboration_result.get("consultation_requests", [])
+        if not isinstance(requests, list) or not requests:
+            return {}, None
+
+        replies = {}
+        for request in requests[:MAX_COLLABORATION_PARTICIPANTS]:
+            if not isinstance(request, dict):
+                continue
+            target = request.get("target_brain")
+            if (
+                not target
+                or target == "Collaboration_brain"
+                or target not in self.brains
+            ):
+                continue
+            if self._request_deadline and time.perf_counter() >= self._request_deadline:
+                break
+
+            dialogue_context = dict(data) if isinstance(data, dict) else {
+                "original_text": str(data)
+            }
+            dialogue_context["results"] = dict(all_results)
+            dialogue_context["collaboration_round"] = "response"
+            dialogue_context["collaboration_request"] = request
+            dialogue_context["brain_dialogue"] = {
+                "round": 1,
+                "question": request.get("question"),
+                "peer_messages": request.get("peer_messages", []),
+                "participants": collaboration_result.get("participants", []),
+                "instruction": (
+                    "Answer the consultation question, use relevant peer findings, and improve your "
+                    "result without changing the user's goal or dropping requirements."
+                )
+            }
+
+            # Existing specialist retry interfaces also receive the consultation as actionable feedback.
+            dialogue_context["retry_target"] = target
+            dialogue_context["retry_request"] = {
+                "target_brain": target,
+                "problem": "peer consultation requested",
+                "instruction": request.get("question"),
+                "peer_messages": request.get("peer_messages", [])
+            }
+            dialogue_context["retry_instructions"] = [
+                request.get("question"),
+                "Consider the peer messages in brain_dialogue and preserve all original requirements."
+            ]
+
+            result = self.execute(
+                [target],
+                dialogue_context,
+                report,
+                memory_report,
+                "brain_consultation_reply"
+            )
+            replies.update(result)
+            all_results.update(result)
+
+        if not replies:
+            return {}, None
+
+        final_context = dict(data) if isinstance(data, dict) else {
+            "original_text": str(data)
+        }
+        final_context["results"] = dict(all_results)
+        final_context["collaboration_round"] = "consensus"
+        final_context["routing_decision"] = self.routing_decision(report, memory_report)
+        consensus = self.execute(
+            ["Collaboration_brain"],
+            final_context,
+            report,
+            memory_report,
+            "brain_collaboration_consensus"
+        ).get("Collaboration_brain")
+        return replies, consensus
 
     def execute(self, selected_brains, data, report=None, memory_report=None, phase="single"):
 
@@ -1425,6 +1522,31 @@ class ManagerBrain:
             )
 
             all_results.update(results)
+
+            if phase_name == "brain_collaboration":
+                collaboration_result = results.get("Collaboration_brain")
+                collaboration_replies, consensus = self.execute_collaboration_round(
+                    phase_context,
+                    report,
+                    memory_report,
+                    all_results,
+                    collaboration_result
+                )
+                if collaboration_replies:
+                    all_results.update(collaboration_replies)
+                    phase_results.append({
+                        "phase": "brain_consultation_replies",
+                        "brains": list(collaboration_replies),
+                        "results": collaboration_replies
+                    })
+                if isinstance(consensus, dict):
+                    all_results["Collaboration_brain"] = consensus
+                    results["Collaboration_brain"] = consensus
+                    phase_results.append({
+                        "phase": "brain_collaboration_consensus",
+                        "brains": ["Collaboration_brain"],
+                        "results": {"Collaboration_brain": consensus}
+                    })
 
             phase_results.append({
                 "phase": phase_name,
@@ -1792,6 +1914,7 @@ class ManagerBrain:
             data["dictionary"] = shared_dictionary
             data["data_context"] = shared_data_context
             data["shared_context"] = shared_brain_context
+            data["routing_decision"] = self.routing_decision(report, memory_report)
 
         phases = self.build_plan(report, memory_report)
         plan = self.flatten_plan(phases)

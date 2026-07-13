@@ -538,7 +538,8 @@ class ResponseBrain:
                 "Security_brain",
                 "Fact_Check_brain",
                 "Learning_brain",
-                "Emotion_brain"
+                "Emotion_brain",
+                "Collaboration_brain"
             }:
                 continue
             if brain_name == "Creative_brain" and not allow_creative:
@@ -1047,7 +1048,8 @@ class ResponseBrain:
                 "Response_brain",
                 "Security_brain",
                 "Quality_Control_brain",
-                "Learning_brain"
+                "Learning_brain",
+                "Collaboration_brain"
             }:
                 continue
             candidates.append((brain_name, result))
