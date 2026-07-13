@@ -1025,6 +1025,8 @@ class CreativeBrain:
                     "snippets": [{
                         "title": title,
                         "summary": str(match.get("summary", ""))[:900],
+                        "content_excerpt": str(match.get("content_excerpt", ""))[:1400],
+                        "trust_score": match.get("trust_score", 0),
                         "sources": match.get("sources", [])[:4]
                     }],
                     "source_group": "knowledge_index",

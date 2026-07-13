@@ -25,6 +25,7 @@ from Response_brain import ResponseBrain  # noqa: E402
 from Spelling_brain import SpellingBrain  # noqa: E402
 from Understanding_brain import UnderstandingBrain  # noqa: E402
 from Data_context import context_view_for_brain  # noqa: E402
+from Knowledge_collector import KnowledgeCollector  # noqa: E402
 
 
 def assert_true(condition, message):
@@ -540,6 +541,82 @@ def test_collaboration_brain_runs_bounded_peer_dialogue():
     assert_true(consensus["bounded"], "Internal dialogue must be bounded.")
 
 
+def test_scanner_context_reaches_every_brain():
+    class EvidenceAwareBrain:
+        def process(self, data):
+            scanner = data.get("scanner_knowledge", {})
+            return {
+                "brain": "EvidenceAwareBrain",
+                "saw_scanner": scanner.get("available"),
+                "saw_excerpt": bool(scanner.get("matches", [{}])[0].get("content_excerpt")),
+            }
+
+    manager = ManagerBrain()
+    manager.register_brain("Science_brain", EvidenceAwareBrain())
+    knowledge = {
+        "available": True,
+        "matches": [{
+            "article_id": "knowledge_test",
+            "title": "Test evidence",
+            "summary": "A concise evidence summary.",
+            "content_excerpt": "A longer scanner article excerpt used by specialist brains.",
+            "trust_score": 94,
+            "source_count": 2,
+            "sources": [{"source_id": "pubmed"}, {"source_id": "crossref"}],
+        }]
+    }
+    results = manager.execute(
+        ["Science_brain"],
+        {
+            "original_text": "Explain the evidence",
+            "knowledge": knowledge,
+            "dictionary": {},
+            "data_context": {},
+            "full_data_context": {},
+            "shared_context": {},
+        },
+        {"main_topic": "science", "intent": "question"},
+        {},
+        "scanner_test",
+    )
+    result = results["Science_brain"]
+    assert_true(result["saw_scanner"] and result["saw_excerpt"], "A specialist did not receive scanner evidence.")
+    assert_true(result["scanner_context"]["received"], "Manager did not record scanner delivery.")
+    assert_true(result["scanner_context"]["required"], "Factual brains must be grounded when evidence exists.")
+    assert_true(set(result["scanner_context"]["sources"]) == {"pubmed", "crossref"}, "Source IDs were lost.")
+
+
+def test_reliable_source_parsers():
+    collector = KnowledgeCollector()
+    pubmed_xml = """
+    <PubmedArticleSet><PubmedArticle><MedlineCitation><PMID>123</PMID><Article>
+    <Journal><Title>Reliable Journal</Title><JournalIssue><PubDate><Year>2025</Year></PubDate></JournalIssue></Journal>
+    <ArticleTitle>Evidence-based test article</ArticleTitle><Abstract><AbstractText Label="BACKGROUND">
+    This is a sufficiently detailed publisher abstract describing methods, observations, evidence,
+    limitations, and conclusions for a parser regression test in the local Canri knowledge collector.
+    </AbstractText></Abstract></Article></MedlineCitation><PubmedData><ArticleIdList>
+    <ArticleId IdType="doi">10.1000/test</ArticleId></ArticleIdList></PubmedData></PubmedArticle></PubmedArticleSet>
+    """
+    collector.request_text = lambda *args, **kwargs: pubmed_xml
+    pubmed = collector.fetch_pubmed_articles(["123"])
+    assert_true(len(pubmed) == 1 and pubmed[0]["source_id"] == "pubmed", "PubMed XML was not parsed.")
+    assert_true("BACKGROUND" in pubmed[0]["text"], "Structured PubMed abstract labels were lost.")
+
+    collector.request_json = lambda *args, **kwargs: {
+        "message": {"items": [{
+            "DOI": "10.1000/crossref-test",
+            "title": ["Crossref evidence record"],
+            "abstract": "<jats:p>This publication abstract contains enough meaningful evidence, methodology, context, limitations, and conclusions to pass the collector content threshold safely.</jats:p>",
+            "publisher": "Test Publisher",
+            "container-title": ["Test Journal"],
+            "published": {"date-parts": [[2025]]},
+        }]}
+    }
+    crossref = collector.search_crossref_articles("evidence", 1)
+    assert_true(len(crossref) == 1 and crossref[0]["source_id"] == "crossref", "Crossref JSON was not parsed.")
+    assert_true("<jats" not in crossref[0]["text"], "Crossref JATS markup was not cleaned.")
+
+
 def main():
     tests = [
         test_expense_tracker_code_and_quality,
@@ -561,6 +638,8 @@ def main():
         test_manager_builds_targeted_retry_context,
         test_manager_shares_results_inside_same_phase,
         test_collaboration_brain_runs_bounded_peer_dialogue,
+        test_scanner_context_reaches_every_brain,
+        test_reliable_source_parsers,
     ]
 
     for test in tests:

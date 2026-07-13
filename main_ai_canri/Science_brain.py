@@ -32,6 +32,8 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
+from Scanner_knowledge import scanner_evidence
+
 
 DATA_DIR = Path(__file__).parent / "data"
 ARTICLES_PATH = DATA_DIR / "Articles.json"
@@ -349,10 +351,13 @@ class ScienceBrain:
         מחזיר report סטרוקטורי בחזרה ל-Manager_brain.
         """
         original_text = data.get("original_text", "")
+        scanner_articles = scanner_evidence(data, limit=5)
+        scanner_signature = tuple(item.get("article_id") for item in scanner_articles)
+        cache_key = (original_text, scanner_signature)
 
         # Cache - אם אותה שאלה כבר נענתה
-        if original_text in self.cache:
-            return self.cache[original_text]
+        if cache_key in self.cache:
+            return self.cache[cache_key]
 
         keywords = self._collect_keywords(data)
 
@@ -373,6 +378,13 @@ class ScienceBrain:
 
         # שלב 3: סיכום
         summary = self.summarize(matches)
+        if scanner_articles:
+            scanner_summary = scanner_articles[0].get("text") or scanner_articles[0].get("summary", "")
+            if scanner_summary and (not summary or confidence < LOCAL_CONFIDENCE_THRESHOLD):
+                summary = scanner_summary[:1800]
+                source = "scanner_knowledge"
+            scanner_trust = max(float(item.get("trust_score", 0) or 0) for item in scanner_articles)
+            confidence = max(confidence, min(95, round(scanner_trust)))
 
         # שלב 4: needs_fact_check - flag בלבד, Fact_Check_brain מופעל ע"י Manager
         needs_fact_check = confidence < MIN_USABLE_CONFIDENCE or len(matches) > 1
@@ -388,6 +400,8 @@ class ScienceBrain:
             "confidence": confidence,
             "summary": summary,
             "articles_found": len(matches),
+            "scanner_articles_found": len(scanner_articles),
+            "scanner_evidence": scanner_articles,
             "top_article_ids": [
                 article["article_id"]
                 for article in matches[:5]
@@ -395,7 +409,7 @@ class ScienceBrain:
             "needs_fact_check": needs_fact_check
         }
 
-        self.cache[original_text] = result
+        self.cache[cache_key] = result
 
         return result
 
