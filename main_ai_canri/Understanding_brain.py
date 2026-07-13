@@ -7,9 +7,11 @@ It uses UnderstandingDk for dictionary, grammar, and word connections,
 then adds Canri-specific intent, topic, task, and routing analysis.
 """
 
+import json
 import re
 from collections import Counter
 from datetime import datetime, timezone
+from pathlib import Path
 
 try:
     import UnderstandingDk as dk
@@ -18,6 +20,18 @@ except Exception:
 
 
 WORD_RE = re.compile(r"[A-Za-z\u0590-\u05FF][A-Za-z0-9_\-\u0590-\u05FF']*")
+DATA_DIR = Path(__file__).parent / "data"
+PUNCTUATION_FILE = DATA_DIR / "Punctuation_dictionary.json"
+
+CODE_KEYWORDS = {
+    "and", "as", "assert", "async", "await", "break", "case", "catch",
+    "class", "const", "continue", "def", "del", "do", "elif", "else",
+    "except", "export", "extends", "false", "finally", "for", "from",
+    "function", "global", "if", "import", "in", "instanceof", "interface",
+    "lambda", "let", "new", "none", "not", "null", "or", "pass", "public",
+    "raise", "return", "static", "super", "switch", "this", "throw", "true",
+    "try", "var", "while", "with", "yield"
+}
 
 STOP_WORDS = {
     "a", "an", "and", "are", "as", "at", "be", "by", "for", "from",
@@ -241,8 +255,20 @@ class UnderstandingBrain:
     def __init__(self):
 
         self.dictionary_ready = dk is not None
+        self.punctuation_dictionary = self.load_punctuation_dictionary()
 
         print("Understanding Brain Loaded")
+
+    def load_punctuation_dictionary(self):
+
+        if not PUNCTUATION_FILE.exists():
+            return {"metadata": {}, "symbols": {}}
+        try:
+            with PUNCTUATION_FILE.open("r", encoding="utf-8") as file:
+                data = json.load(file)
+            return data if isinstance(data, dict) else {"metadata": {}, "symbols": {}}
+        except (OSError, json.JSONDecodeError):
+            return {"metadata": {}, "symbols": {}}
 
     # ---------- input ----------
 
@@ -326,12 +352,165 @@ class UnderstandingBrain:
         if any(signal in lowered for signal in code_signals):
             return True
 
+        if re.search(r"\b[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*\s*\(", text):
+            return True
+
+        if re.search(r"`[^`\n]+`", text):
+            return True
+
         punctuation_score = sum(
             text.count(mark)
             for mark in ["(", ")", "{", "}", "[", "]", ";", "=", ":"]
         )
 
         return punctuation_score >= 6 and "\n" in text
+
+    def analyze_punctuation(self, text, code_spans=None):
+
+        symbols = self.punctuation_dictionary.get("symbols", {})
+        code_spans = code_spans or []
+        occurrences = []
+
+        for index, symbol in enumerate(str(text)):
+            definition = symbols.get(symbol)
+            if not isinstance(definition, dict):
+                continue
+            in_code = any(start <= index < end for start, end in code_spans)
+            occurrences.append({
+                "symbol": symbol,
+                "position": index,
+                "name": definition.get("name"),
+                "role": (
+                    definition.get("code_roles", [None])[0]
+                    if in_code
+                    else definition.get("language_role")
+                ),
+                "language_role": definition.get("language_role"),
+                "code_roles": definition.get("code_roles", []),
+                "inside_code": in_code
+            })
+
+        counts = Counter(item["symbol"] for item in occurrences)
+        return {
+            "occurrences": occurrences[:200],
+            "counts": dict(counts),
+            "recognized_count": len(occurrences),
+            "dictionary_file": PUNCTUATION_FILE.name
+        }
+
+    def extract_code_context(self, text):
+
+        raw = str(text or "")
+        fragments = []
+        spans = []
+
+        def add_fragment(kind, start, end, value, language=None, identifier=None):
+            key = (kind, start, end)
+            if any((item["kind"], item["start"], item["end"]) == key for item in fragments):
+                return
+            fragments.append({
+                "kind": kind,
+                "start": start,
+                "end": end,
+                "text": str(value)[:2000],
+                "language": language,
+                "identifier": identifier
+            })
+            spans.append((start, end))
+
+        for match in re.finditer(r"```([A-Za-z0-9_+.-]*)\s*\n?(.*?)```", raw, re.DOTALL):
+            add_fragment(
+                "fenced_code_block",
+                match.start(),
+                match.end(),
+                match.group(2),
+                match.group(1).lower() or None
+            )
+
+        for match in re.finditer(r"`([^`\n]+)`", raw):
+            add_fragment("inline_code", match.start(), match.end(), match.group(1))
+
+        call_pattern = re.compile(
+            r"(?<![A-Za-z0-9_])([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)\s*\(([^()\n]{0,240})\)"
+        )
+        for match in call_pattern.finditer(raw):
+            add_fragment(
+                "function_call",
+                match.start(),
+                match.end(),
+                match.group(0),
+                identifier=match.group(1)
+            )
+
+        line_markers = re.compile(
+            r"^\s*(?:def|class|import|from|return|if|elif|else|for|while|try|except|function|const|let|var)\b|[A-Za-z_][A-Za-z0-9_]*\s*=",
+            re.IGNORECASE
+        )
+        offset = 0
+        for line in raw.splitlines(keepends=True):
+            if line_markers.search(line):
+                add_fragment("code_line", offset, offset + len(line), line.strip())
+            offset += len(line)
+
+        identifier_items = []
+        for fragment in fragments:
+            fragment_text = fragment.get("text", "")
+            for match in re.finditer(r"\b[A-Za-z_][A-Za-z0-9_]*\b", fragment_text):
+                name = match.group(0)
+                lowered = name.lower()
+                if lowered in CODE_KEYWORDS:
+                    role = "keyword"
+                elif re.search(rf"\b{re.escape(name)}\s*\(", fragment_text):
+                    role = "function"
+                elif name[:1].isupper():
+                    role = "class_or_type"
+                else:
+                    role = "identifier"
+                identifier_items.append({
+                    "name": name,
+                    "normalized": lowered,
+                    "role": role,
+                    "fragment_kind": fragment.get("kind")
+                })
+
+        unique_identifiers = []
+        seen_identifiers = set()
+        for item in identifier_items:
+            key = (item["normalized"], item["role"])
+            if key in seen_identifiers:
+                continue
+            seen_identifiers.add(key)
+            unique_identifiers.append(item)
+
+        language_hints = []
+        lowered_raw = raw.lower()
+        language_markers = {
+            "python": ["python", "def ", "print(", "if __name__"],
+            "javascript": ["javascript", "console.log", "function ", "const ", "let "],
+            "java": ["public static", "system.out", "java"],
+            "html": ["<!doctype", "<html", "</"],
+            "sql": ["select ", "insert into", "update ", "delete from"]
+        }
+        for language, markers in language_markers.items():
+            if any(marker in lowered_raw for marker in markers):
+                language_hints.append(language)
+
+        punctuation = self.analyze_punctuation(raw, spans)
+        return {
+            "has_code": bool(fragments),
+            "fragments": fragments[:60],
+            "identifiers": unique_identifiers[:120],
+            "function_calls": [
+                fragment for fragment in fragments
+                if fragment.get("kind") == "function_call"
+            ][:40],
+            "language_hints": language_hints,
+            "punctuation": punctuation,
+            "confidence": min(98, 45 + len(fragments) * 12 + len(language_hints) * 8) if fragments else 0,
+            "interpretation_rule": (
+                "Code fragments and function-like identifiers are technical syntax, not nonsense words."
+            )
+        }
 
     # ---------- word analysis ----------
 
@@ -1452,7 +1631,14 @@ class UnderstandingBrain:
             }
         }
 
-    def build_advanced_understanding(self, text, word_reports, sentence_graph, requested_action):
+    def build_advanced_understanding(
+        self,
+        text,
+        word_reports,
+        sentence_graph,
+        requested_action,
+        code_context=None
+    ):
 
         stream = self.extract_token_stream(text)
         report_by_word = {
@@ -1480,6 +1666,25 @@ class UnderstandingBrain:
                 )
             )
 
+        code_identifiers = {
+            str(item.get("normalized", "")).lower()
+            for item in (code_context or {}).get("identifiers", [])
+            if isinstance(item, dict) and item.get("normalized")
+        }
+        code_roles = {
+            str(item.get("normalized", "")).lower(): item.get("role")
+            for item in (code_context or {}).get("identifiers", [])
+            if isinstance(item, dict) and item.get("normalized")
+        }
+        for tag in tags:
+            if tag.get("word") not in code_identifiers:
+                continue
+            tag["original_semantic_tag"] = tag.get("semantic_tag")
+            tag["semantic_tag"] = "code_identifier"
+            tag["grammar_role"] = code_roles.get(tag.get("word"), "identifier")
+            tag["is_code_token"] = True
+            tag["should_preserve_technical_spelling"] = True
+
         phrase_chunks = self.build_phrase_chunks(tags)
         semantic_frame = self.build_semantic_frame(
             tags,
@@ -1492,6 +1697,7 @@ class UnderstandingBrain:
             "tokens": tags,
             "phrase_chunks": phrase_chunks,
             "semantic_frame": semantic_frame,
+            "code_context": code_context or {},
             "coverage": {
                 "tokens_seen": len(stream),
                 "tokens_tagged": len(tags),
@@ -1508,7 +1714,8 @@ class UnderstandingBrain:
                 "Read the whole sentence before deciding what each word means.",
                 "Treat dictionary verbs as possible user actions.",
                 "Treat capitalized or technical words as names when context supports it.",
-                "Group nearby determiners, modifiers, and nouns into phrase chunks."
+                "Group nearby determiners, modifiers, and nouns into phrase chunks.",
+                "Treat function calls and code identifiers as technical syntax rather than unknown words."
             ]
         }
 
@@ -2018,6 +2225,7 @@ class UnderstandingBrain:
         words = self.extract_words(text)
         word_reports = self.analyze_words(words)
         language = self.detect_language(text, words)
+        code_context = self.extract_code_context(text)
 
         main_topic, topics, topic_hits = self.detect_topics(
             text,
@@ -2076,7 +2284,8 @@ class UnderstandingBrain:
             text,
             word_reports,
             sentence_graph,
-            requested_action
+            requested_action,
+            code_context
         )
 
         request_contract = self.build_request_contract(
@@ -2089,6 +2298,12 @@ class UnderstandingBrain:
             advanced_understanding.get("semantic_frame", {}),
             advanced_understanding
         )
+        request_contract["code_context"] = code_context
+        request_contract.setdefault("detail_inventory", {})["code_terms"] = [
+            item.get("name")
+            for item in code_context.get("identifiers", [])
+            if isinstance(item, dict) and item.get("name")
+        ][:80]
 
         tasks = self.possible_tasks(
             main_topic,
@@ -2126,6 +2341,8 @@ class UnderstandingBrain:
             "output_constraints": request_contract.get("output_constraints", {}),
             "global_picture": request_contract.get("global_picture", {}),
             "detail_inventory": request_contract.get("detail_inventory", {}),
+            "code_context": code_context,
+            "punctuation_analysis": code_context.get("punctuation", {}),
             "advanced_word_tags": advanced_understanding.get(
                 "tokens",
                 []
@@ -2164,7 +2381,8 @@ class UnderstandingBrain:
                 "Use nouns as targets and adjectives/adverbs as constraints or style.",
                 "Return a structured report that every specialist brain can consume.",
                 "Keep intent, topic, requested features, and routing hints explicit.",
-                "Preserve the global goal and every small explicit detail as separate contract data."
+                "Preserve the global goal and every small explicit detail as separate contract data.",
+                "Preserve embedded code, function calls, identifiers, and punctuation as technical context."
             ]
         }
 

@@ -10,7 +10,9 @@ Context-aware spelling correction using UnderstandingDk:
 - optional Creative_brain help for ambiguous cases
 """
 
+import json
 import re
+from pathlib import Path
 
 import UnderstandingDk as dk
 
@@ -69,6 +71,12 @@ TECHNICAL_WORDS = {
     "city", "cities", "data", "displays", "current", "include", "includes"
 }
 
+DATA_DIR = Path(__file__).parent / "data"
+CODE_TERMS_FILE = DATA_DIR / "Code_terms_dictionary.json"
+FUNCTION_CALL_RE = re.compile(
+    r"(?<![A-Za-z0-9_])([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)\s*(?=\()"
+)
+
 
 class SpellingBrain:
 
@@ -78,17 +86,39 @@ class SpellingBrain:
         self.all_words = set(dk.get_all_words())
         self.all_words.update(COMMON_WORDS)
         self.all_words.update(COMMON_CORRECTIONS.values())
+        self.code_functions = self.load_code_functions()
 
         print("Spelling Brain Loaded")
+
+    def load_code_functions(self):
+
+        functions = {}
+        if not CODE_TERMS_FILE.exists():
+            return functions
+        try:
+            with CODE_TERMS_FILE.open("r", encoding="utf-8") as file:
+                data = json.load(file)
+        except (OSError, json.JSONDecodeError):
+            return functions
+
+        for item in data.get("functions", []):
+            if not isinstance(item, dict) or not item.get("name"):
+                continue
+            functions[str(item["name"]).lower()] = item
+        return functions
 
     # ---------- text handling ----------
 
     def tokenize(self, sentence):
 
         return re.findall(
-            r"[A-Za-z]+|[0-9]+|[^\w\s]|\s+",
+            r"[A-Za-z_][A-Za-z0-9_]*|[0-9]+|[^\w\s]|\s+",
             str(sentence)
         )
+
+    def is_word_token(self, token):
+
+        return bool(re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", str(token)))
 
     def normalize(self, word):
 
@@ -199,6 +229,154 @@ class SpellingBrain:
             and candidate != lowered
             and self.edit_distance(lowered, candidate, max_distance=3) <= 3
         ][:120]
+
+    def code_function_candidates(self, function_name, sentence):
+
+        lowered = self.normalize(function_name)
+        tail = lowered.rsplit(".", 1)[-1]
+        sentence_terms = set(re.findall(r"[a-zA-Z][a-zA-Z0-9_-]{2,}", sentence.lower()))
+        language_hints = set()
+        if "python" in sentence_terms or any(marker in sentence for marker in ["def ", "print(", "input("]):
+            language_hints.add("python")
+        if "javascript" in sentence_terms or any(marker in sentence for marker in ["console.", "const ", "let "]):
+            language_hints.add("javascript")
+
+        scored = []
+        for key, item in self.code_functions.items():
+            candidate_tail = key.rsplit(".", 1)[-1]
+            distance = min(
+                self.edit_distance(lowered, key, max_distance=3),
+                self.edit_distance(tail, candidate_tail, max_distance=3)
+            )
+            if distance > 3:
+                continue
+
+            score = 92 - distance * 20
+            if tail[:1] == candidate_tail[:1]:
+                score += 9
+            if tail[-1:] == candidate_tail[-1:]:
+                score += 4
+            if len(tail) == len(candidate_tail):
+                score += 4
+            if item.get("language") in language_hints:
+                score += 14
+            context_overlap = sentence_terms.intersection(
+                str(value).lower()
+                for value in item.get("context", [])
+            )
+            score += min(len(context_overlap) * 7, 21)
+            scored.append({
+                "name": item.get("name"),
+                "language": item.get("language"),
+                "category": item.get("category"),
+                "distance": distance,
+                "score": score,
+                "context_overlap": sorted(context_overlap)
+            })
+
+        scored.sort(key=lambda item: (item["score"], -item["distance"]), reverse=True)
+        return scored[:8]
+
+    def choose_code_function(self, function_name, sentence):
+
+        lowered = self.normalize(function_name)
+        if lowered in self.code_functions:
+            canonical = str(self.code_functions[lowered].get("name", function_name))
+            return {
+                "word": canonical,
+                "changed": canonical != function_name,
+                "reason": (
+                    "normalized_known_code_function_case"
+                    if canonical != function_name
+                    else "known_code_function"
+                ),
+                "score": 100,
+                "candidates": []
+            }
+
+        candidates = self.code_function_candidates(function_name, sentence)
+        if not candidates:
+            return {
+                "word": function_name,
+                "changed": False,
+                "reason": "possible_custom_function",
+                "score": 70,
+                "candidates": []
+            }
+
+        best = candidates[0]
+        second = candidates[1] if len(candidates) > 1 else {"score": -999}
+        confident = (
+            best["distance"] <= 2
+            and best["score"] >= 68
+            and best["score"] - second["score"] >= 7
+        )
+        if not confident:
+            return {
+                "word": function_name,
+                "changed": False,
+                "reason": "ambiguous_or_custom_code_function",
+                "score": best["score"],
+                "candidates": candidates
+            }
+
+        return {
+            "word": str(best["name"]),
+            "changed": str(best["name"]) != function_name,
+            "reason": "contextual_code_function_correction",
+            "score": best["score"],
+            "candidates": candidates
+        }
+
+    def correct_code_function_calls(self, sentence):
+
+        text = str(sentence)
+        pieces = []
+        corrections = []
+        cursor = 0
+
+        for match in FUNCTION_CALL_RE.finditer(text):
+            original = match.group(1)
+            decision = self.choose_code_function(original, text)
+            pieces.append(text[cursor:match.start(1)])
+            pieces.append(decision["word"])
+            cursor = match.end(1)
+            corrections.append({
+                "original": original,
+                "corrected": decision["word"],
+                "changed": decision["changed"],
+                "reason": decision["reason"],
+                "score": round(decision.get("score", 0), 2),
+                "kind": "code_function",
+                "top_candidates": [
+                    {
+                        "word": item["name"],
+                        "score": round(item["score"], 2),
+                        "distance": item["distance"],
+                        "language": item.get("language")
+                    }
+                    for item in decision.get("candidates", [])[:5]
+                ]
+            })
+
+        pieces.append(text[cursor:])
+        return "".join(pieces), corrections
+
+    def protected_code_spans(self, sentence):
+
+        spans = [(match.start(1), match.end(1)) for match in FUNCTION_CALL_RE.finditer(sentence)]
+        spans.extend((match.start(), match.end()) for match in re.finditer(r"`[^`\n]+`", sentence))
+        spans.extend((match.start(), match.end()) for match in re.finditer(r"```.*?```", sentence, re.DOTALL))
+        return spans
+
+    def token_offsets(self, tokens):
+
+        offsets = []
+        cursor = 0
+        for token in tokens:
+            offsets.append((cursor, cursor + len(token)))
+            cursor += len(token)
+        return offsets
 
     # ---------- context scoring ----------
 
@@ -452,22 +630,37 @@ class SpellingBrain:
 
     def fix_sentence(self, sentence):
 
-        tokens = self.tokenize(sentence)
+        code_corrected, code_corrections = self.correct_code_function_calls(sentence)
+        tokens = self.tokenize(code_corrected)
+        token_offsets = self.token_offsets(tokens)
+        protected_spans = self.protected_code_spans(code_corrected)
         word_positions = [
             index
             for index, token in enumerate(tokens)
-            if token.isalpha()
+            if self.is_word_token(token)
         ]
         word_tokens = [
             tokens[index]
             for index in word_positions
         ]
 
-        corrections = []
+        corrections = list(code_corrections)
         fixed_tokens = list(tokens)
 
         for word_index, token_index in enumerate(word_positions):
             word = tokens[token_index]
+            token_start, token_end = token_offsets[token_index]
+            if any(token_start < end and token_end > start for start, end in protected_spans):
+                corrections.append({
+                    "original": word,
+                    "corrected": word,
+                    "changed": False,
+                    "reason": "protected_code_identifier",
+                    "score": 100,
+                    "kind": "code_identifier",
+                    "top_candidates": []
+                })
+                continue
             decision = self.choose_best_candidate(
                 word,
                 word_tokens,
@@ -494,12 +687,28 @@ class SpellingBrain:
 
     def fix_sentence_fast(self, sentence):
 
-        tokens = self.tokenize(sentence)
-        corrections = []
+        code_corrected, code_corrections = self.correct_code_function_calls(sentence)
+        tokens = self.tokenize(code_corrected)
+        token_offsets = self.token_offsets(tokens)
+        protected_spans = self.protected_code_spans(code_corrected)
+        corrections = list(code_corrections)
         fixed_tokens = list(tokens)
 
         for index, token in enumerate(tokens):
-            if not token.isalpha():
+            if not self.is_word_token(token):
+                continue
+
+            token_start, token_end = token_offsets[index]
+            if any(token_start < end and token_end > start for start, end in protected_spans):
+                corrections.append({
+                    "original": token,
+                    "corrected": token,
+                    "changed": False,
+                    "reason": "fast_protected_code_identifier",
+                    "score": 100,
+                    "kind": "code_identifier",
+                    "top_candidates": []
+                })
                 continue
 
             lowered = self.normalize(token)
@@ -522,7 +731,7 @@ class SpellingBrain:
     def process(self, sentence):
 
         tokens = self.tokenize(sentence)
-        word_count = sum(1 for token in tokens if token.isalpha())
+        word_count = sum(1 for token in tokens if self.is_word_token(token))
         char_count = len(str(sentence))
 
         if word_count > MAX_DEEP_WORDS or char_count > MAX_DEEP_CHARS:
@@ -574,7 +783,15 @@ class SpellingBrain:
                 "grammar": "UnderstandingDk Grammar_dictionary.json",
                 "scoring": "edit_distance + semantic_context + grammar_context",
                 "creative_fallback": "used only when no candidate or ambiguous context"
-            }
+            },
+            "code_function_dictionary": CODE_TERMS_FILE.name,
+            "code_function_calls_detected": sum(
+                1 for item in corrections if item.get("kind") == "code_function"
+            ),
+            "code_function_corrections": [
+                item for item in corrections
+                if item.get("kind") == "code_function" and item.get("changed")
+            ]
         }
 
 
