@@ -12,6 +12,7 @@ Canri AI
 """
 
 import json
+import math
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -24,6 +25,10 @@ PLACES_PATH = DATA_DIR / "Geography_places.json"
 CONCEPTS_PATH = DATA_DIR / "Geography_concepts.json"
 REGIONS_PATH = DATA_DIR / "Geography_regions.json"
 STATISTICS_PATH = DATA_DIR / "Geography_statistics.json"
+INDEX_PATH = DATA_DIR / "Geography_index.json"
+RELATIONS_PATH = DATA_DIR / "Geography_relations.json"
+QUERY_PATTERNS_PATH = DATA_DIR / "Geography_query_patterns.json"
+CREATIVE_PROFILES_PATH = DATA_DIR / "Geography_creative_profiles.json"
 
 LOCAL_CONFIDENCE_THRESHOLD = 55
 MAX_LOCAL_RESULTS = 6
@@ -59,6 +64,13 @@ class GeographyBrain:
             STATISTICS_PATH,
             {}
         )
+
+        self.index = self._load_json(INDEX_PATH, {})
+        self.relations = self._load_json(RELATIONS_PATH, {})
+        self.query_patterns = self._load_json(QUERY_PATTERNS_PATH, {})
+        self.creative_profiles = self._load_json(CREATIVE_PROFILES_PATH, {})
+        self.search_index = self._prepare_search_index()
+        self.alias_index = self._prepare_alias_index()
 
         print("Geography Brain Loaded")
 
@@ -109,6 +121,100 @@ class GeographyBrain:
             file.write(
                 "\n"
             )
+
+    def _prepare_search_index(self):
+
+        terms = self.index.get("terms", {}) if isinstance(self.index, dict) else {}
+        if terms:
+            return {
+                str(term).lower(): list(dict.fromkeys(refs))
+                for term, refs in terms.items()
+                if isinstance(refs, list)
+            }
+
+        generated = {}
+        collections = {
+            "place": self.places,
+            "concept": self.concepts,
+            "region": self.regions,
+        }
+        for record_type, records in collections.items():
+            for name, record in records.items():
+                values = [name]
+                for key in ["aliases", "keywords", "nearby"]:
+                    value = record.get(key, [])
+                    values.extend(value if isinstance(value, list) else [value])
+                values.extend(
+                    record.get(key, "")
+                    for key in ["type", "country", "continent", "region", "capital"]
+                )
+                reference = f"{record_type}:{name}"
+                for value in values:
+                    for token in self._tokenize(value):
+                        generated.setdefault(token, []).append(reference)
+        return {term: list(dict.fromkeys(refs)) for term, refs in generated.items()}
+
+    def _prepare_alias_index(self):
+
+        exact = self.index.get("exact", {}) if isinstance(self.index, dict) else {}
+        aliases = {
+            str(alias).lower(): list(dict.fromkeys(refs))
+            for alias, refs in exact.items()
+            if isinstance(refs, list)
+        }
+        if aliases:
+            return aliases
+
+        for prefix, records in [
+            ("place", self.places),
+            ("concept", self.concepts),
+            ("region", self.regions),
+        ]:
+            for name, record in records.items():
+                reference = f"{prefix}:{name}"
+                for alias in [name] + record.get("aliases", []):
+                    aliases.setdefault(str(alias).lower(), []).append(reference)
+        return aliases
+
+    def _tokenize(self, value):
+
+        return list(dict.fromkeys(re.findall(
+            r"[a-zA-Z\u0590-\u05FF][a-zA-Z0-9'\-\u0590-\u05FF]{1,}",
+            str(value).lower()
+        )))
+
+    def _phrase_in_text(self, phrase, text):
+
+        return re.search(
+            rf"(?<![\w]){re.escape(str(phrase).lower())}(?![\w])",
+            str(text).lower()
+        ) is not None
+
+    def _candidate_references(self, terms, text=""):
+
+        references = []
+        exact_references = []
+        lowered = str(text).lower()
+        for alias, refs in sorted(
+            self.alias_index.items(),
+            key=lambda item: len(item[0]),
+            reverse=True
+        ):
+            if len(alias) > 2 and self._phrase_in_text(alias, lowered):
+                exact_references.extend(refs)
+
+        if exact_references:
+            return list(dict.fromkeys(exact_references))[:80]
+
+        query_tokens = []
+        for term in terms:
+            query_tokens.extend(self._tokenize(term))
+            if term in self.search_index:
+                references.extend(self.search_index[term])
+        for token in query_tokens:
+            references.extend(self.search_index.get(token, []))
+
+        return list(dict.fromkeys(references))
 
     # ---------- Understanding report ----------
 
@@ -331,16 +437,12 @@ class GeographyBrain:
                     term
                 )
 
-        # Add phrase matches from local database for names like "new york city".
+        # Prefer exact indexed names and aliases for phrases such as "new york city".
         lowered = text.lower()
 
-        for name in list(
-            self.places.keys()
-        ) + list(
-            self.regions.keys()
-        ):
+        for name in sorted(self.alias_index, key=len, reverse=True):
 
-            if name in lowered and name not in clean_terms:
+            if len(name) > 2 and self._phrase_in_text(name, lowered) and name not in clean_terms:
                 clean_terms.insert(
                     0,
                     name
@@ -365,6 +467,28 @@ class GeographyBrain:
         ).lower()
 
         lowered = text.lower()
+
+        best_pattern = None
+        best_score = 0
+        pattern_values = (
+            self.query_patterns.values()
+            if isinstance(self.query_patterns, dict)
+            else self.query_patterns
+        )
+        for pattern in pattern_values:
+            if not isinstance(pattern, dict):
+                continue
+            score = sum(
+                1
+                for marker in pattern.get("markers", [])
+                if str(marker).lower() in lowered
+            )
+            if score > best_score:
+                best_pattern = pattern
+                best_score = score
+
+        if best_pattern and best_score:
+            return best_pattern.get("intent", "geography_explanation")
 
         if any(
             word in lowered
@@ -498,8 +622,19 @@ class GeographyBrain:
     ):
 
         results = []
+        candidate_references = self._candidate_references(terms, text)
+        candidate_names = [
+            reference.split(":", 1)[1]
+            for reference in candidate_references
+            if reference.startswith("place:")
+        ]
+        records = (
+            ((name, self.places[name]) for name in candidate_names if name in self.places)
+            if candidate_references
+            else self.places.items()
+        )
 
-        for name, data in self.places.items():
+        for name, data in records:
 
             searchable = " ".join([
                 name,
@@ -544,7 +679,10 @@ class GeographyBrain:
                         "keywords",
                         []
                     )
-                )
+                ),
+                " ".join(data.get("aliases", [])),
+                " ".join(data.get("languages", [])),
+                " ".join(data.get("landforms", []))
             ])
 
             score, matches = self._score_text(
@@ -559,7 +697,7 @@ class GeographyBrain:
                     name
                 )
 
-            if name in text.lower():
+            if self._phrase_in_text(name, text):
                 score += 20
                 matches.append(
                     name
@@ -580,12 +718,24 @@ class GeographyBrain:
 
     def search_concepts(
         self,
-        terms
+        terms,
+        text=""
     ):
 
         results = []
+        candidate_references = self._candidate_references(terms, text)
+        candidate_names = [
+            reference.split(":", 1)[1]
+            for reference in candidate_references
+            if reference.startswith("concept:")
+        ]
+        records = (
+            ((name, self.concepts[name]) for name in candidate_names if name in self.concepts)
+            if candidate_references
+            else self.concepts.items()
+        )
 
-        for name, data in self.concepts.items():
+        for name, data in records:
 
             searchable = " ".join([
                 name,
@@ -598,7 +748,9 @@ class GeographyBrain:
                         "keywords",
                         []
                     )
-                )
+                ),
+                " ".join(data.get("aliases", [])),
+                " ".join(data.get("examples", []))
             ])
 
             score, matches = self._score_text(
@@ -628,12 +780,24 @@ class GeographyBrain:
 
     def search_regions(
         self,
-        terms
+        terms,
+        text=""
     ):
 
         results = []
+        candidate_references = self._candidate_references(terms, text)
+        candidate_names = [
+            reference.split(":", 1)[1]
+            for reference in candidate_references
+            if reference.startswith("region:")
+        ]
+        records = (
+            ((name, self.regions[name]) for name in candidate_names if name in self.regions)
+            if candidate_references
+            else self.regions.items()
+        )
 
-        for name, data in self.regions.items():
+        for name, data in records:
 
             searchable = " ".join([
                 name,
@@ -650,7 +814,9 @@ class GeographyBrain:
                         "keywords",
                         []
                     )
-                )
+                ),
+                " ".join(data.get("countries", [])),
+                " ".join(data.get("major_places", []))
             ])
 
             score, matches = self._score_text(
@@ -691,11 +857,13 @@ class GeographyBrain:
             )
             +
             self.search_concepts(
-                terms
+                terms,
+                text
             )
             +
             self.search_regions(
-                terms
+                terms,
+                text
             )
         )
 
@@ -796,6 +964,121 @@ class GeographyBrain:
             )
         )[:10]
 
+    def related_places(self, place_name, limit=12):
+
+        if not place_name:
+            return []
+        relation_data = self.relations.get(place_name, {})
+        if isinstance(relation_data, list):
+            return relation_data[:limit]
+        if not isinstance(relation_data, dict):
+            return []
+
+        related = []
+        for relation_type, targets in relation_data.items():
+            if not isinstance(targets, list):
+                continue
+            for target in targets:
+                if isinstance(target, dict):
+                    value = dict(target)
+                    value.setdefault("relation", relation_type)
+                else:
+                    value = {"name": str(target), "relation": relation_type}
+                related.append(value)
+        return related[:limit]
+
+    def hierarchy_for_match(self, match):
+
+        data = match.get("data", {}) if match else {}
+        values = []
+        for level in ["continent", "region", "country", "administrative_area"]:
+            if data.get(level):
+                values.append({"level": level, "name": data[level]})
+        if match and match.get("name"):
+            values.append({"level": data.get("type", match.get("type")), "name": match["name"]})
+        return values
+
+    def haversine_distance_km(self, left, right):
+
+        try:
+            lat1 = math.radians(float(left["lat"]))
+            lon1 = math.radians(float(left["lon"]))
+            lat2 = math.radians(float(right["lat"]))
+            lon2 = math.radians(float(right["lon"]))
+        except (KeyError, TypeError, ValueError):
+            return None
+
+        delta_lat = lat2 - lat1
+        delta_lon = lon2 - lon1
+        value = (
+            math.sin(delta_lat / 2) ** 2
+            + math.cos(lat1) * math.cos(lat2) * math.sin(delta_lon / 2) ** 2
+        )
+        return round(6371.0088 * 2 * math.asin(min(1, math.sqrt(value))), 2)
+
+    def build_structured_answer(self, intent, local_matches):
+
+        if not local_matches:
+            return {}
+        top_match = local_matches[0]
+        top_data = top_match.get("data", {})
+        if top_match.get("type") == "concept":
+            return {
+                "concept": top_match.get("name"),
+                "category": top_data.get("category"),
+                "definition": top_data.get("definition"),
+                "examples": top_data.get("examples", []),
+                "related_concepts": top_data.get("related_concepts", [])[:8],
+                "direct_answer": top_data.get("definition")
+            }
+        if top_match.get("type") == "region":
+            return {
+                "region": top_match.get("name"),
+                "continent": top_data.get("continent"),
+                "description": top_data.get("description"),
+                "countries": top_data.get("countries", [])[:30],
+                "major_places": top_data.get("major_places", [])[:20],
+                "direct_answer": top_data.get("description")
+            }
+
+        place_matches = [item for item in local_matches if item.get("type") == "place"]
+        if not place_matches:
+            return {}
+        primary = place_matches[0]
+        data = primary.get("data", {})
+        answer = {
+            "place": primary.get("name"),
+            "type": data.get("type"),
+            "summary": data.get("summary"),
+            "hierarchy": self.hierarchy_for_match(primary),
+            "coordinates": data.get("coordinates"),
+            "capital": data.get("capital"),
+            "country": data.get("country"),
+        }
+        if intent == "capital_lookup" and data.get("capital"):
+            answer["direct_answer"] = f"The capital of {primary['name'].title()} is {data['capital']}."
+        elif intent == "location_lookup":
+            location = ", ".join(
+                str(data[key])
+                for key in ["region", "country", "continent"]
+                if data.get(key)
+            )
+            answer["direct_answer"] = f"{primary['name'].title()} is located in {location}." if location else data.get("summary")
+
+        if len(place_matches) >= 2:
+            distance = self.haversine_distance_km(
+                place_matches[0].get("data", {}).get("coordinates", {}),
+                place_matches[1].get("data", {}).get("coordinates", {})
+            )
+            if distance is not None:
+                answer["straight_line_distance"] = {
+                    "from": place_matches[0]["name"],
+                    "to": place_matches[1]["name"],
+                    "kilometers": distance,
+                    "note": "Approximate great-circle distance, not a travel route."
+                }
+        return answer
+
     def detect_needs(
         self,
         intent,
@@ -806,7 +1089,9 @@ class GeographyBrain:
 
         needs_map_or_gps = intent in [
             "location_lookup",
-            "map_or_distance"
+            "map_or_distance",
+            "distance_lookup",
+            "route_lookup"
         ] or any(
             term in terms
             for term in [
@@ -820,7 +1105,9 @@ class GeographyBrain:
 
         needs_current_data = intent in [
             "weather_lookup",
-            "population_lookup"
+            "population_lookup",
+            "border_lookup",
+            "route_lookup"
         ] or any(
             term in terms
             for term in [
@@ -929,6 +1216,12 @@ class GeographyBrain:
         stats["last_used_utc"] = datetime.now(
             timezone.utc
         ).isoformat()
+        stats["places"] = len(self.places)
+        stats["concepts"] = len(self.concepts)
+        stats["regions"] = len(self.regions)
+        stats["relations"] = len(self.relations)
+        stats["creative_profiles"] = len(self.creative_profiles)
+        stats["indexed_terms"] = len(self.search_index)
 
         self.statistics["Geography_brain"] = stats
 
@@ -1004,6 +1297,9 @@ class GeographyBrain:
         if local_matches:
             place_detected = local_matches[0]["name"]
 
+        structured_answer = self.build_structured_answer(intent, local_matches)
+        related = self.related_places(place_detected)
+
         self.update_statistics(
             confidence,
             place_detected
@@ -1030,6 +1326,11 @@ class GeographyBrain:
             ],
             "scanner_articles_found": len(scanner_articles),
             "scanner_evidence": scanner_articles,
+            "structured_answer": structured_answer,
+            "related_places": related,
+            "index_used": bool(self.search_index),
+            "indexed_terms": len(self.search_index),
+            "candidate_records": len(self._candidate_references(terms, text)),
             "local_matches": [
                 {
                     "type": match["type"],
@@ -1053,6 +1354,16 @@ class GeographyBrain:
                 if enabled
             ],
             "research_fallback": research_result,
+            "data_files_used": [
+                "Geography_places.json",
+                "Geography_concepts.json",
+                "Geography_regions.json",
+                "Geography_index.json",
+                "Geography_relations.json",
+                "Geography_query_patterns.json",
+                "Geography_creative_profiles.json",
+                "Geography_statistics.json"
+            ],
             "rules": [
                 "Use the Understanding_brain report as the main input.",
                 "Search local geography knowledge first.",

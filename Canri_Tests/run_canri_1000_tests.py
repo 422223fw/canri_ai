@@ -303,7 +303,16 @@ def build_tasks() -> list[dict[str, Any]]:
 def write_json(path: Path, value: Any) -> None:
     temporary = path.with_suffix(path.suffix + ".tmp")
     temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8")
-    temporary.replace(path)
+    replace_file_compat(temporary, path)
+
+
+def replace_file_compat(temporary: Path, destination: Path) -> None:
+    """Keep atomic replacement when possible, with a Windows editor-lock fallback."""
+    try:
+        temporary.replace(destination)
+    except PermissionError:
+        destination.write_bytes(temporary.read_bytes())
+        temporary.unlink(missing_ok=True)
 
 
 def load_existing_results() -> dict[int, dict[str, Any]]:
@@ -325,7 +334,7 @@ def rewrite_results(results: dict[int, dict[str, Any]]) -> None:
     with temporary.open("w", encoding="utf-8", newline="\n") as handle:
         for task_id in sorted(results):
             handle.write(json.dumps(results[task_id], ensure_ascii=False) + "\n")
-    temporary.replace(RESULTS_FILE)
+    replace_file_compat(temporary, RESULTS_FILE)
 
 
 def relevance_tokens(text: str) -> list[str]:

@@ -51,7 +51,10 @@ DOMAIN_HINTS = {
     "voice": ["voice", "audio", "sound", "recording", "speech"],
     "reasoning": ["reasoning", "logic", "rule", "pattern", "conclusion"],
     "security": ["security", "risk", "safety", "danger", "policy"],
+    "emotion": ["emotion", "feeling", "support", "sad", "fear", "anger", "conversation"],
+    "image_generation": ["image", "generation", "prompt", "style", "composition", "lighting"],
     "math": ["math", "number", "equation", "calculate", "unit"],
+    "history": ["history", "historical", "ancient", "medieval", "war", "empire", "timeline"],
 }
 
 
@@ -375,7 +378,10 @@ def recommended_brains_from_domains(domains):
         "voice": ["Voice_brain", "Vision_brain"],
         "reasoning": ["Reasoning_brain", "Quality_Control_brain"],
         "security": ["Security_brain", "Fact_Check_brain"],
+        "emotion": ["Emotion_brain", "Creative_brain", "Response_brain"],
+        "image_generation": ["Image_brain", "Creative_brain", "Quality_Control_brain"],
         "math": ["Math_brain", "Reasoning_brain", "Quality_Control_brain"],
+        "history": ["History_brain", "Research_brain", "Fact_Check_brain"],
     }
 
     brains = []
@@ -440,8 +446,13 @@ def context_view_for_brain(context, brain_name, max_sources=6):
     brain_domains = {
         "Code_brain": {"code", "technology", "security"},
         "Math_brain": {"math", "reasoning"},
+        "History_brain": {"history", "knowledge", "geography"},
         "Story_brain": {"creative", "language"},
-        "Creative_brain": {"creative", "planner", "language", "game", "code"},
+        "Creative_brain": {
+            "creative", "planner", "language", "game", "code", "emotion",
+            "image_generation", "vision", "voice"
+        },
+        "Emotion_brain": {"emotion", "language", "memory"},
         "Fact_Check_brain": {"knowledge", "science", "geography", "technology", "security"},
         "Research_brain": {"knowledge", "science", "geography", "technology"},
         "Language_brain": {"language"},
@@ -449,7 +460,7 @@ def context_view_for_brain(context, brain_name, max_sources=6):
         "Security_brain": {"security", "code", "technology"},
         "Vision_brain": {"vision"},
         "Voice_brain": {"voice", "vision"},
-        "Image_brain": {"vision", "creative"},
+        "Image_brain": {"vision", "creative", "image_generation"},
         "Game_brain": {"game", "creative", "code"},
         "Planner_brain": {"planner", "reasoning"},
         "Reasoning_brain": {"reasoning", "knowledge", "math"},

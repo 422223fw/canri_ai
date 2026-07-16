@@ -15,8 +15,12 @@ it reports that transcription is required.
 
 import json
 import hashlib
+import importlib.util
+import math
 import os
 import re
+import shutil
+import struct
 import wave
 from datetime import datetime, timezone
 from pathlib import Path
@@ -27,6 +31,7 @@ PROFILES_FILE = DATA_DIR / "Voice_audio_profiles.json"
 SIGNATURES_FILE = DATA_DIR / "Voice_magic_signatures.json"
 TASKS_FILE = DATA_DIR / "Voice_processing_tasks.json"
 STATS_FILE = DATA_DIR / "Voice_statistics.json"
+ANALYSIS_PROFILES_FILE = DATA_DIR / "Audio_analysis_profiles.json"
 
 MAX_HEADER_BYTES = 256
 
@@ -47,6 +52,7 @@ class VoiceBrain:
         self.signatures = self.load_json(SIGNATURES_FILE, {})
         self.tasks = self.load_json(TASKS_FILE, {})
         self.statistics = self.load_json(STATS_FILE, {})
+        self.analysis_profiles = self.load_json(ANALYSIS_PROFILES_FILE, [])
 
         print("Voice Brain Loaded")
 
@@ -277,6 +283,69 @@ class VoiceBrain:
         except (wave.Error, OSError, EOFError):
             return {}
 
+    def wav_signal_analysis(self, path, max_frames=200000):
+
+        try:
+            with wave.open(str(path), "rb") as wav_file:
+                sample_width = wav_file.getsampwidth()
+                channels = max(wav_file.getnchannels(), 1)
+                frame_count = min(wav_file.getnframes(), max_frames)
+                raw = wav_file.readframes(frame_count)
+        except (wave.Error, OSError, EOFError):
+            return {"available": False, "reason": "wav_read_failed"}
+
+        if not raw or sample_width not in {1, 2, 4}:
+            return {
+                "available": False,
+                "reason": "unsupported_or_empty_pcm",
+                "sample_width_bytes": sample_width
+            }
+
+        if sample_width == 1:
+            samples = [(value - 128) / 128.0 for value in raw]
+        else:
+            code = "h" if sample_width == 2 else "i"
+            maximum = float((1 << (sample_width * 8 - 1)) - 1)
+            samples = [
+                value[0] / maximum
+                for value in struct.iter_unpack(f"<{code}", raw)
+            ]
+
+        if not samples:
+            return {"available": False, "reason": "no_samples"}
+
+        squares = sum(value * value for value in samples)
+        rms = math.sqrt(squares / len(samples))
+        peak = max(abs(value) for value in samples)
+        clipping = sum(abs(value) >= 0.98 for value in samples) / len(samples)
+        silence = sum(abs(value) <= 0.015 for value in samples) / len(samples)
+
+        return {
+            "available": True,
+            "engine": "stdlib_pcm",
+            "frames_sampled": frame_count,
+            "samples_analyzed": len(samples),
+            "channels": channels,
+            "rms_level": round(rms, 5),
+            "peak_level": round(peak, 5),
+            "clipping_ratio": round(clipping, 5),
+            "silence_ratio": round(silence, 5),
+            "activity_ratio": round(1.0 - silence, 5),
+            "likely_contains_signal": rms >= 0.005 and peak >= 0.02
+        }
+
+    def external_engine_status(self):
+
+        speech_engine = "not_configured"
+        if importlib.util.find_spec("faster_whisper") is not None:
+            speech_engine = "faster_whisper_installed"
+        elif importlib.util.find_spec("whisper") is not None:
+            speech_engine = "whisper_installed"
+        return {
+            "speech_to_text": speech_engine,
+            "ffmpeg": shutil.which("ffmpeg") or "not_installed"
+        }
+
     def assess_audio_quality(self, metadata, size):
 
         if not metadata:
@@ -452,12 +521,18 @@ class VoiceBrain:
         risk_score = max(profile_scores or [20 if category == "unknown" else 10])
 
         metadata = {}
+        signal_analysis = {}
         if extension == "wav" and is_file:
             metadata = self.wav_metadata(path)
+            signal_analysis = self.wav_signal_analysis(path)
 
         audio_quality = self.assess_audio_quality(metadata, size)
 
-        needs_transcription = any(task in tasks for task in ["speech_to_text", "summarize_audio", "language_detection"])
+        provided_transcript = str(item.get("transcript") or "").strip()
+        needs_transcription = (
+            any(task in tasks for task in ["speech_to_text", "summarize_audio", "language_detection"])
+            and not provided_transcript
+        )
         needs_extraction = category == "video" or "extract_audio_from_video" in tasks
         needs_security = risk_score >= 40 or needs_transcription or context in ["attachment", "unknown_source"]
 
@@ -490,17 +565,20 @@ class VoiceBrain:
             "sha256": self.file_fingerprint(path) if is_file else None,
             "metadata": metadata,
             "audio_quality": audio_quality,
+            "signal_analysis": signal_analysis,
             "requested_tasks": tasks,
             "task_capabilities": self.task_capabilities(tasks),
             "processing_plan": self.build_processing_plan(category, tasks, audio_quality),
             "needs_transcription_engine": needs_transcription,
             "needs_video_audio_extraction": needs_extraction,
-            "transcript": None,
-            "transcription_available": False,
+            "transcript": provided_transcript or None,
+            "transcription_available": bool(provided_transcript),
+            "transcript_source": "provided_by_caller" if provided_transcript else None,
             "engine_status": {
                 "wav_metadata": "available" if extension == "wav" and is_file else "not_applicable",
-                "speech_to_text": "not_configured",
-                "video_audio_extractor": "not_configured" if needs_extraction else "not_required",
+                "wav_signal_analysis": "available" if signal_analysis.get("available") else "not_available",
+                "speech_to_text": self.external_engine_status()["speech_to_text"],
+                "video_audio_extractor": self.external_engine_status()["ffmpeg"] if needs_extraction else "not_required",
                 "real_file_read": is_file,
                 "failure_disclosed": bool(needs_transcription or needs_extraction)
             },
@@ -672,8 +750,9 @@ class VoiceBrain:
             "media": analyzed_media,
             "engine_status": {
                 "metadata_engine": "available",
-                "speech_to_text": "not_configured",
-                "video_audio_extraction": "not_configured"
+                "wav_signal_analysis": "available",
+                "speech_to_text": self.external_engine_status()["speech_to_text"],
+                "video_audio_extraction": self.external_engine_status()["ffmpeg"]
             },
             "confidence": min(confidence, 100),
             "needs_security": summary["needs_security"],
@@ -685,6 +764,7 @@ class VoiceBrain:
                 "Voice_magic_signatures.json",
                 "Voice_processing_tasks.json",
                 "Voice_statistics.json"
+                ,"Audio_analysis_profiles.json"
             ],
             "rules": [
                 "Do not fake transcript text.",

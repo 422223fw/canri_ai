@@ -20,6 +20,8 @@ DATA_DIR = Path(__file__).parent / "data"
 PATTERNS_PATH = DATA_DIR / "Emotion_patterns.json"
 STYLES_PATH = DATA_DIR / "Emotion_response_styles.json"
 STATISTICS_PATH = DATA_DIR / "Emotion_statistics.json"
+CONVERSATION_PATTERNS_PATH = DATA_DIR / "Conversation_patterns.json"
+SUPPORT_STRATEGIES_PATH = DATA_DIR / "Emotional_support_strategies.json"
 
 NEGATION_WORDS = {
     "not",
@@ -80,6 +82,16 @@ class EmotionBrain:
 
         self.statistics = self._load_json(
             STATISTICS_PATH,
+            {}
+        )
+
+        self.conversation_patterns = self._load_json(
+            CONVERSATION_PATTERNS_PATH,
+            {}
+        )
+
+        self.support_strategies = self._load_json(
+            SUPPORT_STRATEGIES_PATH,
             {}
         )
 
@@ -171,6 +183,12 @@ class EmotionBrain:
 
             return data
 
+        return {}
+
+    def get_memory_report(self, data):
+
+        if isinstance(data, dict) and isinstance(data.get("memory"), dict):
+            return data["memory"]
         return {}
 
     def extract_text(
@@ -548,6 +566,22 @@ class EmotionBrain:
                 scores[emotion_id] = score
                 evidence[emotion_id] = matches
 
+        unicode_emotion_terms = {
+            "sadness": [
+                "\u05e2\u05e6\u05d5\u05d1", "\u05e2\u05e6\u05d5\u05d1\u05d4", "\u05db\u05d5\u05d0\u05d1", "\u05d1\u05d5\u05d3\u05d3", "\u05d1\u05d5\u05d3\u05d3\u05d4",
+                "\u05dc\u05d1\u05d3", "\u05dc\u05d1\u05d3\u05d4", "\u05e7\u05e9\u05d4 \u05dc\u05d9"
+            ],
+            "fear": ["\u05de\u05e4\u05d7\u05d3", "\u05de\u05e4\u05d7\u05d3\u05ea", "\u05d7\u05d5\u05e9\u05e9", "\u05d7\u05d5\u05e9\u05e9\u05ea", "\u05d3\u05d5\u05d0\u05d2", "\u05d3\u05d5\u05d0\u05d2\u05ea"],
+            "anger": ["\u05db\u05d5\u05e2\u05e1", "\u05db\u05d5\u05e2\u05e1\u05ea", "\u05de\u05ea\u05d5\u05e1\u05db\u05dc", "\u05de\u05ea\u05d5\u05e1\u05db\u05dc\u05ea", "\u05e0\u05de\u05d0\u05e1 \u05dc\u05d9"],
+            "confusion": ["\u05de\u05d1\u05d5\u05dc\u05d1\u05dc", "\u05de\u05d1\u05d5\u05dc\u05d1\u05dc\u05ea", "\u05dc\u05d0 \u05de\u05d1\u05d9\u05df", "\u05dc\u05d0 \u05de\u05d1\u05d9\u05e0\u05d4"],
+            "joy": ["\u05e9\u05de\u05d7", "\u05e9\u05de\u05d7\u05d4", "\u05d4\u05e6\u05dc\u05d7\u05ea\u05d9", "\u05d7\u05d3\u05e9\u05d5\u05ea \u05d8\u05d5\u05d1\u05d5\u05ea"]
+        }
+        for emotion_id, keywords in unicode_emotion_terms.items():
+            matches = [keyword for keyword in keywords if keyword in lowered]
+            if matches:
+                scores[emotion_id] = scores.get(emotion_id, 0) + len(matches) * 6
+                evidence.setdefault(emotion_id, []).extend(matches)
+
         if not scores:
 
             return {
@@ -771,6 +805,197 @@ class EmotionBrain:
 
         self._save_statistics()
 
+    # ---------- conversation support ----------
+
+    def detect_conversation_intent(self, text, primary_emotion, sensitivity):
+
+        lowered = str(text or "").lower()
+        if sensitivity == "crisis":
+            return "crisis_support"
+
+        unicode_marker_groups = {
+            "emotional_support": [
+                "\u05e7\u05e9\u05d4 \u05dc\u05d9", "\u05d0\u05e0\u05d9 \u05e2\u05e6\u05d5\u05d1", "\u05d0\u05e0\u05d9 \u05e2\u05e6\u05d5\u05d1\u05d4",
+                "\u05d0\u05e0\u05d9 \u05dc\u05d1\u05d3", "\u05d0\u05e4\u05e9\u05e8 \u05dc\u05d3\u05d1\u05e8", "\u05d0\u05e0\u05d9 \u05e6\u05e8\u05d9\u05da \u05dc\u05d3\u05d1\u05e8",
+                "\u05d0\u05e0\u05d9 \u05e6\u05e8\u05d9\u05db\u05d4 \u05dc\u05d3\u05d1\u05e8"
+            ],
+            "reassurance": [
+                "\u05d0\u05e0\u05d9 \u05d3\u05d5\u05d0\u05d2", "\u05d0\u05e0\u05d9 \u05d3\u05d5\u05d0\u05d2\u05ea", "\u05d0\u05e0\u05d9 \u05de\u05e4\u05d7\u05d3", "\u05d0\u05e0\u05d9 \u05de\u05e4\u05d7\u05d3\u05ea"
+            ],
+            "venting": [
+                "\u05e0\u05de\u05d0\u05e1 \u05dc\u05d9", "\u05d0\u05e0\u05d9 \u05de\u05ea\u05d5\u05e1\u05db\u05dc", "\u05d0\u05e0\u05d9 \u05de\u05ea\u05d5\u05e1\u05db\u05dc\u05ea", "\u05d4\u05db\u05d5\u05dc \u05d4\u05e9\u05ea\u05d1\u05e9"
+            ],
+            "celebration": [
+                "\u05d4\u05e6\u05dc\u05d7\u05ea\u05d9", "\u05d7\u05d3\u05e9\u05d5\u05ea \u05d8\u05d5\u05d1\u05d5\u05ea", "\u05d0\u05e0\u05d9 \u05d2\u05d0\u05d4", "\u05d0\u05e0\u05d9 \u05d2\u05d0\u05d4 \u05d1\u05e2\u05e6\u05de\u05d9"
+            ],
+            "small_talk": [
+                "\u05de\u05d4 \u05e9\u05dc\u05d5\u05de\u05da", "\u05d1\u05d5\u05d0 \u05e0\u05d3\u05d1\u05e8", "\u05d1\u05d5\u05d0\u05d9 \u05e0\u05d3\u05d1\u05e8", "\u05e1\u05e4\u05e8 \u05dc\u05d9 \u05de\u05e9\u05d4\u05d5"
+            ],
+        }
+        for intent, markers in unicode_marker_groups.items():
+            if any(marker in lowered for marker in markers):
+                return intent
+
+        marker_groups = {
+            "emotional_support": [
+                "i feel", "i'm sad", "i am sad", "i'm lonely", "i am lonely",
+                "having a hard time", "need someone", "can we talk", "listen to me",
+                "קשה לי", "אני עצוב", "אני עצובה", "אני לבד", "אפשר לדבר",
+                "אני צריך לדבר", "אני צריכה לדבר"
+            ],
+            "reassurance": [
+                "am i good enough", "will it be okay", "i'm worried", "i am worried",
+                "i'm scared", "i am scared", "תרגיע", "אני דואג", "אני דואגת", "אני מפחד"
+            ],
+            "venting": [
+                "so frustrated", "i hate this", "everything went wrong", "need to vent",
+                "נמאס לי", "אני מתוסכל", "אני מתוסכלת", "הכול השתבש"
+            ],
+            "celebration": [
+                "i did it", "i succeeded", "great news", "i'm proud", "i am proud",
+                "הצלחתי", "חדשות טובות", "אני גאה"
+            ],
+            "small_talk": [
+                "how are you", "what are you doing", "let's talk", "tell me something",
+                "מה שלומך", "בוא נדבר", "ספר לי משהו"
+            ],
+        }
+        for intent, markers in marker_groups.items():
+            if any(marker in lowered for marker in markers):
+                return intent
+
+        if primary_emotion in {"sadness", "fear", "anger", "confusion"}:
+            return "emotional_support"
+        if primary_emotion == "joy":
+            return "celebration"
+        return "none"
+
+    def conversation_continuity(self, memory_report):
+
+        conversation = memory_report.get("conversation", {}) if isinstance(memory_report, dict) else {}
+        recent_turns = conversation.get("recent_turns", []) if isinstance(conversation, dict) else []
+        previous_user_text = ""
+        if recent_turns:
+            last = recent_turns[-1]
+            if isinstance(last, dict):
+                previous_user_text = str(last.get("user") or last.get("user_message") or "")[:240]
+        return {
+            "session_id": conversation.get("session_id") if isinstance(conversation, dict) else None,
+            "turn_count": conversation.get("turn_count", len(recent_turns)) if isinstance(conversation, dict) else 0,
+            "has_previous_turn": bool(recent_turns),
+            "previous_user_text": previous_user_text,
+        }
+
+    def select_support_strategy(self, emotion, intensity, intent):
+
+        if not isinstance(self.support_strategies, list):
+            return {}
+        intensity_band = "high" if intensity >= 75 else "medium" if intensity >= 35 else "low"
+        goal = {
+            "venting": "listen",
+            "reassurance": "stabilize",
+            "emotional_support": "clarify",
+            "celebration": "encourage",
+            "small_talk": "follow_up"
+        }.get(intent, "listen")
+        for strategy in self.support_strategies:
+            if not isinstance(strategy, dict):
+                continue
+            if (
+                strategy.get("emotion") == emotion
+                and strategy.get("intensity") == intensity_band
+                and strategy.get("goal") == goal
+            ):
+                return strategy
+        return {}
+
+    def build_support_response(self, text, emotion, intent, sensitivity, continuity):
+
+        hebrew = bool(re.search(r"[\u0590-\u05ff]", str(text or "")))
+        continuing = continuity.get("has_previous_turn", False)
+
+        if sensitivity == "crisis":
+            if hebrew:
+                return (
+                    "\u05d0\u05e0\u05d9 \u05e9\u05d5\u05de\u05e2 \u05e9\u05d9\u05e9 \u05db\u05d0\u05df \u05de\u05e6\u05d5\u05e7\u05d4 \u05e8\u05e6\u05d9\u05e0\u05d9\u05ea. \u05d7\u05e9\u05d5\u05d1 \u05dc\u05e2\u05e8\u05d1 \u05e2\u05db\u05e9\u05d9\u05d5 \u05d0\u05d3\u05dd \u05e9\u05d0\u05ea\u05d4 \u05e1\u05d5\u05de\u05da \u05e2\u05dc\u05d9\u05d5 "
+                    "\u05d0\u05d5 \u05e9\u05d9\u05e8\u05d5\u05ea \u05d7\u05d9\u05e8\u05d5\u05dd \u05de\u05e7\u05d5\u05de\u05d9; \u05d0\u05e0\u05d9 \u05d0\u05e9\u05d0\u05e8 \u05d0\u05d9\u05ea\u05da \u05d5\u05d0\u05e2\u05d6\u05d5\u05e8 \u05d1\u05e6\u05e2\u05d3 \u05d4\u05d1\u05d0."
+                )
+            return (
+                "I hear that this is serious distress. Please involve a trusted person or local emergency/crisis service now; "
+                "I can stay with you and help with the next immediate step."
+            )
+
+        hebrew_responses = {
+            "sadness": "\u05d6\u05d4 \u05e0\u05e9\u05de\u05e2 \u05db\u05d5\u05d0\u05d1, \u05d5\u05dc\u05d0 \u05e6\u05e8\u05d9\u05da \u05dc\u05e4\u05ea\u05d5\u05e8 \u05d4\u05db\u05d5\u05dc \u05d1\u05e8\u05d2\u05e2 \u05d0\u05d7\u05d3. \u05de\u05d4 \u05d4\u05d7\u05dc\u05e7 \u05e9\u05d4\u05db\u05d9 \u05de\u05db\u05d1\u05d9\u05d3 \u05e2\u05dc\u05d9\u05da \u05e2\u05db\u05e9\u05d9\u05d5?",
+            "fear": "\u05d4\u05d3\u05d0\u05d2\u05d4 \u05e0\u05e9\u05de\u05e2\u05ea \u05d0\u05de\u05d9\u05ea\u05d9\u05ea. \u05d1\u05d5\u05d0 \u05e0\u05e4\u05e8\u05d9\u05d3 \u05d1\u05d9\u05df \u05de\u05d4 \u05e9\u05e7\u05d5\u05e8\u05d4 \u05e2\u05db\u05e9\u05d9\u05d5 \u05dc\u05d1\u05d9\u05df \u05de\u05d4 \u05e9\u05d0\u05ea\u05d4 \u05d7\u05d5\u05e9\u05e9 \u05e9\u05d9\u05e7\u05e8\u05d4, \u05d5\u05d0\u05d6 \u05e0\u05d1\u05d7\u05e8 \u05e6\u05e2\u05d3 \u05e7\u05d8\u05df \u05d0\u05d7\u05d3.",
+            "anger": "\u05de\u05d5\u05d1\u05df \u05e9\u05d0\u05ea\u05d4 \u05de\u05ea\u05d5\u05e1\u05db\u05dc. \u05d0\u05e4\u05e9\u05e8 \u05e7\u05d5\u05d3\u05dd \u05dc\u05d6\u05d4\u05d5\u05ea \u05de\u05d4 \u05d1\u05d3\u05d9\u05d5\u05e7 \u05d4\u05e9\u05ea\u05d1\u05e9, \u05d5\u05d0\u05d6 \u05dc\u05d1\u05d7\u05d5\u05e8 \u05e4\u05e2\u05d5\u05dc\u05d4 \u05d0\u05d7\u05ea \u05e9\u05dc\u05d0 \u05ea\u05d7\u05de\u05d9\u05e8 \u05d0\u05ea \u05d4\u05de\u05e6\u05d1.",
+            "confusion": "\u05dc\u05d0 \u05d7\u05d9\u05d9\u05d1\u05d9\u05dd \u05dc\u05d4\u05d1\u05d9\u05df \u05d4\u05db\u05d5\u05dc \u05d1\u05d1\u05ea \u05d0\u05d7\u05ea. \u05db\u05ea\u05d5\u05d1 \u05dc\u05d9 \u05de\u05d4 \u05d9\u05d3\u05d5\u05e2 \u05dc\u05da \u05d5\u05de\u05d4 \u05dc\u05d0 \u05d1\u05e8\u05d5\u05e8, \u05d5\u05e0\u05e2\u05e9\u05d4 \u05d1\u05d6\u05d4 \u05e1\u05d3\u05e8 \u05d9\u05d7\u05d3.",
+            "joy": "\u05d6\u05d4 \u05d1\u05d0\u05de\u05ea \u05de\u05e9\u05de\u05d7. \u05de\u05d4 \u05d4\u05d9\u05d4 \u05d4\u05d3\u05d1\u05e8 \u05e9\u05e2\u05d6\u05e8 \u05dc\u05da \u05dc\u05d4\u05e6\u05dc\u05d9\u05d7?",
+            "neutral": "\u05d0\u05e0\u05d9 \u05db\u05d0\u05df. \u05d0\u05e4\u05e9\u05e8 \u05dc\u05d3\u05d1\u05e8 \u05e2\u05dc \u05de\u05d4 \u05e9\u05de\u05e2\u05e1\u05d9\u05e7 \u05d0\u05d5\u05ea\u05da, \u05dc\u05e4\u05ea\u05d5\u05e8 \u05d1\u05e2\u05d9\u05d4 \u05d0\u05d5 \u05e4\u05e9\u05d5\u05d8 \u05dc\u05d7\u05e9\u05d5\u05d1 \u05d9\u05d7\u05d3."
+        }
+        english_responses = {
+            "sadness": "That sounds painful, and you do not have to solve all of it at once. What part feels heaviest right now?",
+            "fear": "The worry sounds real. Let us separate what is happening now from what you fear might happen, then choose one small step.",
+            "anger": "It makes sense that you are frustrated. We can first name exactly what went wrong, then choose one action that will not make it worse.",
+            "confusion": "You do not have to understand everything at once. Tell me what you know and what is unclear, and we can sort it out together.",
+            "joy": "That is genuinely good news. What helped you make it happen?",
+            "neutral": "I am here. We can talk through what is on your mind, solve a problem, or simply think together."
+        }
+        response = (hebrew_responses if hebrew else english_responses).get(
+            emotion,
+            (hebrew_responses if hebrew else english_responses)["neutral"]
+        )
+        if continuing and intent not in {"small_talk", "celebration"}:
+            prefix = "\u05d0\u05e0\u05d9 \u05de\u05de\u05e9\u05d9\u05da \u05d0\u05d9\u05ea\u05da \u05de\u05d0\u05d5\u05ea\u05d4 \u05e9\u05d9\u05d7\u05d4. " if hebrew else "I am continuing with you from the same conversation. "
+            response = prefix + response
+        return response
+
+        if sensitivity == "crisis":
+            if hebrew:
+                return "אני שומע שיש כאן מצוקה רצינית. חשוב לערב עכשיו אדם אמיתי שאתה סומך עליו או שירות חירום מקומי; אני אשאר איתך ואעזור בצעד הבא."
+            return (
+                "I hear that this is serious distress. Please involve a trusted person or local emergency/crisis service now; "
+                "I can stay with you and help with the next immediate step."
+            )
+
+        responses = {
+            "sadness": (
+                "זה נשמע כואב, ולא צריך לפתור הכול ברגע אחד. מה החלק שהכי מכביד עליך עכשיו?"
+                if hebrew else
+                "That sounds painful, and you do not have to solve all of it at once. What part feels heaviest right now?"
+            ),
+            "fear": (
+                "הדאגה נשמעת אמיתית. בוא נפריד בין מה שקורה עכשיו לבין מה שאתה חושש שיקרה, ואז נבחר צעד קטן אחד."
+                if hebrew else
+                "The worry sounds real. Let us separate what is happening now from what you fear might happen, then choose one small step."
+            ),
+            "anger": (
+                "מובן שאתה מתוסכל. אפשר קודם לזהות מה בדיוק השתבש, ואז לבחור פעולה אחת שלא תחמיר את המצב."
+                if hebrew else
+                "It makes sense that you are frustrated. We can first name exactly what went wrong, then choose one action that will not make it worse."
+            ),
+            "confusion": (
+                "לא חייבים להבין הכול בבת אחת. כתוב לי מה ידוע לך ומה לא ברור, ונעשה בזה סדר יחד."
+                if hebrew else
+                "You do not have to understand everything at once. Tell me what you know and what is unclear, and we can sort it out together."
+            ),
+            "joy": (
+                "זה באמת משמח. מה היה הדבר שעזר לך להצליח?"
+                if hebrew else
+                "That is genuinely good news. What helped you make it happen?"
+            ),
+            "neutral": (
+                "אני כאן. אפשר לדבר על מה שמעסיק אותך, לפתור בעיה או פשוט לחשוב יחד."
+                if hebrew else
+                "I am here. We can talk through what is on your mind, solve a problem, or simply think together."
+            ),
+        }
+        response = responses.get(emotion, responses["neutral"])
+        if continuing and intent not in {"small_talk", "celebration"}:
+            prefix = "אני ממשיך איתך מאותה שיחה. " if hebrew else "I am continuing with you from the same conversation. "
+            response = prefix + response
+        return response
+
     # ---------- process ----------
 
     def process(
@@ -781,6 +1006,8 @@ class EmotionBrain:
         report = self.get_understanding_report(
             data
         )
+
+        memory_report = self.get_memory_report(data)
 
         text = self.extract_text(
             data,
@@ -827,6 +1054,27 @@ class EmotionBrain:
             or sensitivity == "crisis"
         )
 
+        conversation_intent = self.detect_conversation_intent(
+            text,
+            primary_emotion,
+            sensitivity
+        )
+        continuity = self.conversation_continuity(memory_report)
+        support_response = ""
+        support_strategy = self.select_support_strategy(
+            primary_emotion,
+            intensity,
+            conversation_intent
+        )
+        if conversation_intent != "none":
+            support_response = self.build_support_response(
+                text,
+                primary_emotion,
+                conversation_intent,
+                sensitivity,
+                continuity
+            )
+
         self.update_statistics(
             primary_emotion,
             intensity,
@@ -837,6 +1085,7 @@ class EmotionBrain:
             "brain": "Emotion_brain",
             "used_understanding_report": bool(report),
             "primary_emotion": primary_emotion,
+            "dominant_emotion": primary_emotion,
             "emotions": detected["emotions"],
             "mixed_emotions": detected.get(
                 "mixed_emotions",
@@ -851,6 +1100,13 @@ class EmotionBrain:
                 "response_style",
                 "normal_helpful"
             ),
+            "conversation_intent": conversation_intent,
+            "needs_emotional_support": conversation_intent not in {"none", "small_talk"},
+            "conversation_continuity": continuity,
+            "support_response": support_response,
+            "support_strategy": support_strategy,
+            "answer": support_response or None,
+            "final_output": support_response or None,
             "response_guidelines": style.get(
                 "guidelines",
                 []
@@ -866,6 +1122,12 @@ class EmotionBrain:
                 if enabled
             ],
             "terms_used": terms[:30],
+            "data_files_used": [
+                "Emotion_patterns.json",
+                "Emotion_response_styles.json",
+                "Conversation_patterns.json",
+                "Emotional_support_strategies.json"
+            ],
             "response_adjustments": {
                 "tone": tone,
                 "style": style.get(

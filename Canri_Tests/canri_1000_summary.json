@@ -1,11 +1,11 @@
 {
   "title": "Canri AI 1,000 Prompt End-to-End Test Report",
-  "generated_utc": "2026-07-13T15:26:06.157814+00:00",
+  "generated_utc": "2026-07-16T11:22:13.127900+00:00",
   "total_planned": 1000,
-  "total_completed": 236,
-  "total_passed": 236,
-  "total_failed": 0,
-  "pass_rate_percent": 100.0,
+  "total_completed": 510,
+  "total_passed": 431,
+  "total_failed": 79,
+  "pass_rate_percent": 84.51,
   "estimated_canri_version": "benchmark incomplete",
   "category_summary": {
     "algebra": {
@@ -44,9 +44,9 @@
       "pass_rate_percent": 0.0
     },
     "creative_design": {
-      "completed": 0,
-      "passed": 0,
-      "pass_rate_percent": 0.0
+      "completed": 10,
+      "passed": 1,
+      "pass_rate_percent": 10.0
     },
     "emotional_support": {
       "completed": 0,
@@ -54,9 +54,9 @@
       "pass_rate_percent": 0.0
     },
     "fact_check": {
-      "completed": 0,
-      "passed": 0,
-      "pass_rate_percent": 0.0
+      "completed": 50,
+      "passed": 10,
+      "pass_rate_percent": 20.0
     },
     "game_design": {
       "completed": 0,
@@ -64,14 +64,14 @@
       "pass_rate_percent": 0.0
     },
     "geography": {
-      "completed": 0,
-      "passed": 0,
-      "pass_rate_percent": 0.0
+      "completed": 50,
+      "passed": 50,
+      "pass_rate_percent": 100.0
     },
     "history": {
-      "completed": 0,
-      "passed": 0,
-      "pass_rate_percent": 0.0
+      "completed": 50,
+      "passed": 20,
+      "pass_rate_percent": 40.0
     },
     "language": {
       "completed": 0,
@@ -89,8 +89,8 @@
       "pass_rate_percent": 0.0
     },
     "science": {
-      "completed": 36,
-      "passed": 36,
+      "completed": 50,
+      "passed": 50,
       "pass_rate_percent": 100.0
     },
     "security_safe": {
@@ -109,22 +109,14 @@
       "pass_rate_percent": 0.0
     },
     "story": {
-      "completed": 0,
-      "passed": 0,
-      "pass_rate_percent": 0.0
+      "completed": 50,
+      "passed": 50,
+      "pass_rate_percent": 100.0
     },
     "technology": {
-      "completed": 0,
-      "passed": 0,
-      "pass_rate_percent": 0.0
+      "completed": 50,
+      "passed": 50,
+      "pass_rate_percent": 100.0
     }
-  },
-  "run_elapsed_seconds": 110.61,
-  "completed_by_category": {
-    "arithmetic": 50,
-    "algebra": 50,
-    "code_generation": 50,
-    "code_explanation": 50,
-    "science": 36
   }
 }

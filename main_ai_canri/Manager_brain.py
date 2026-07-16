@@ -655,6 +655,12 @@ class ManagerBrain:
             ("history", ["history", "historical", "empire", "war", "ancient"]),
             ("math", ["math", "number", "equation", "calculate", "solve", "step by step", "algebra", "x^2", "x**2"]),
             ("security", ["security", "password", "token", "encrypt", "danger", "bomb", "suicide"]),
+            ("emotion", [
+                "feel", "feeling", "sad", "lonely", "anxious", "worried",
+                "afraid", "angry", "upset", "frustrated", "overwhelmed",
+                "emotional support", "can we talk", "listen to me", "need someone",
+                "\u05e7\u05e9\u05d4 \u05dc\u05d9", "\u05d0\u05e0\u05d9 \u05de\u05e8\u05d2\u05d9\u05e9", "\u05d0\u05e0\u05d9 \u05de\u05e8\u05d2\u05d9\u05e9\u05d4", "\u05d0\u05e4\u05e9\u05e8 \u05dc\u05d3\u05d1\u05e8"
+            ]),
             ("image_generation", ["generate image", "create image", "make image", "draw", "illustration", "poster", "logo", "icon", "concept art", "image prompt"]),
             ("vision", ["vision", "image", "photo", "picture", "video", "attachment", "pdf", "png", "jpg", "mp4"]),
             ("voice", ["voice", "audio", "sound", "recording", "microphone", "speech", "transcribe", "wav", "mp3", "m4a"]),
@@ -782,6 +788,20 @@ class ManagerBrain:
         if intent == "story_creation" or topic == "story":
             return "story"
 
+        if topic == "emotion":
+            return "emotion"
+
+        if any(
+            marker in raw_text
+            for marker in [
+                "historically", "historical importance", "history of", "timeline of",
+                "printing press", "renaissance", "silk road", "moon landing",
+                "ancient egypt", "roman empire", "industrial revolution",
+                "french revolution", "invention of writing", "development of the internet"
+            ]
+        ):
+            return "history"
+
         if topic in {
             "science", "geography", "technology", "history", "language",
             "game", "voice", "vision", "security", "emotion", "planning"
@@ -822,6 +842,7 @@ class ManagerBrain:
             "language": "Language_brain",
             "knowledge": "Research_brain",
             "game": "Game_brain",
+            "emotion": "Emotion_brain",
         }
         primary_brain = specialist_map.get(primary, "Reasoning_brain")
         supporting = []
@@ -833,6 +854,8 @@ class ManagerBrain:
             supporting.extend(["Planner_brain", "Quality_Control_brain"])
         if primary == "math":
             supporting.extend(["Reasoning_brain", "Quality_Control_brain"])
+        if primary == "emotion":
+            supporting.extend(["Creative_brain", "Response_brain"])
 
         return {
             "primary_domain": primary,
@@ -1020,6 +1043,11 @@ class ManagerBrain:
                 "Voice_brain",
                 "Vision_brain",
                 "Security_brain"
+            ])
+
+        if "emotion" in domains:
+            experts.extend([
+                "Creative_brain"
             ])
 
         if "creative" in domains:

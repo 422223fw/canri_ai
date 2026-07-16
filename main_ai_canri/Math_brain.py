@@ -14,12 +14,18 @@ import json
 import math
 import operator
 import re
+from collections import Counter
+from fractions import Fraction
 from pathlib import Path
 
 
 DATA_DIR = Path(__file__).parent / "data"
 UNITS_FILE = DATA_DIR / "Units_dictionary.json"
 STATS_FILE = DATA_DIR / "Math_statistics.json"
+FORMULAS_FILE = DATA_DIR / "Math_formulas.json"
+PATTERNS_FILE = DATA_DIR / "Math_problem_patterns.json"
+EXAMPLES_FILE = DATA_DIR / "Math_examples.json"
+INDEX_FILE = DATA_DIR / "Math_index.json"
 
 
 class MathBrain:
@@ -95,6 +101,10 @@ class MathBrain:
     def __init__(self):
         self.units = self.load_json(UNITS_FILE, {})
         self.statistics = self.load_json(STATS_FILE, {})
+        self.formulas = self.load_json(FORMULAS_FILE, {})
+        self.problem_patterns = self.load_json(PATTERNS_FILE, {})
+        self.math_examples = self.load_json(EXAMPLES_FILE, {})
+        self.math_index = self.load_json(INDEX_FILE, {"terms": {}, "formula_patterns": {}})
         print("Math Brain Loaded")
 
     def load_json(self, path, default):
@@ -142,7 +152,7 @@ class MathBrain:
         expression = re.sub(r"\bdivided by\b", "/", expression)
         expression = re.sub(r"\bsquared\b", "**2", expression)
         expression = re.sub(r"\bcubed\b", "**3", expression)
-        expression = re.sub(r"[^0-9a-z_=+\-*/().,%\s]", " ", expression)
+        expression = re.sub(r"[^0-9a-z_=+\-*/().,%;\s]", " ", expression)
         return re.sub(r"\s+", " ", expression).strip()
 
     def is_safe_expression_text(self, expression):
@@ -279,14 +289,34 @@ class MathBrain:
 
     def solve_average(self, text):
         lowered = text.lower()
-        if not any(word in lowered for word in ["average", "mean", "median", "sum", "total", "minimum", "maximum", "max", "min"]):
+        if not any(word in lowered for word in [
+            "average", "mean", "median", "mode", "range", "variance",
+            "standard deviation", "sum", "total", "minimum", "maximum", "max", "min"
+        ]):
             return None
 
         nums = self.numbers(text)
         if not nums:
             return None
 
-        if "median" in lowered:
+        if "standard deviation" in lowered or "variance" in lowered:
+            mean = sum(nums) / len(nums)
+            variance = sum((number - mean) ** 2 for number in nums) / len(nums)
+            if "standard deviation" in lowered:
+                answer = math.sqrt(variance)
+                kind = "standard_deviation"
+            else:
+                answer = variance
+                kind = "population_variance"
+        elif "mode" in lowered:
+            counts = Counter(nums)
+            highest = max(counts.values())
+            answer = sorted(number for number, count in counts.items() if count == highest)
+            kind = "mode"
+        elif "range" in lowered:
+            answer = max(nums) - min(nums)
+            kind = "range"
+        elif "median" in lowered:
             ordered = sorted(nums)
             mid = len(ordered) // 2
             answer = ordered[mid] if len(ordered) % 2 else (ordered[mid - 1] + ordered[mid]) / 2
@@ -314,45 +344,151 @@ class MathBrain:
             "confidence": 95
         }
 
+    def parse_linear_x_side(self, side):
+        """Return (x coefficient, constant) for a linear expression."""
+
+        side = side.replace(" ", "").replace("*", "")
+        if not side:
+            return 0.0, 0.0
+        if side[0] not in "+-":
+            side = "+" + side
+
+        coefficient = 0.0
+        constant = 0.0
+        for term in re.findall(r"[+-][^+-]+", side):
+            sign = -1.0 if term[0] == "-" else 1.0
+            body = term[1:]
+            if "x" in body:
+                raw = body.replace("x", "")
+                coefficient += sign * (float(raw) if raw else 1.0)
+            else:
+                constant += sign * float(body)
+        return coefficient, constant
+
     def solve_linear_equation(self, text):
         cleaned = self.normalize_expression(text).replace(" ", "")
-        if "=" not in cleaned or "x" not in cleaned:
+        if "=" not in cleaned or "x" not in cleaned or "x**2" in cleaned:
             return None
 
-        match = re.search(r"([+-]?\d*(?:\.\d+)?)x([+-]\d+(?:\.\d+)?)?=([+-]?\d+(?:\.\d+)?)", cleaned)
-        if not match:
-            match = re.search(r"([+-]?\d+(?:\.\d+)?)=([+-]?\d*(?:\.\d+)?)x([+-]\d+(?:\.\d+)?)?", cleaned)
-            if not match:
-                return None
-            c = float(match.group(1))
-            a_text = match.group(2)
-            b = float(match.group(3) or 0)
-        else:
-            a_text = match.group(1)
-            b = float(match.group(2) or 0)
-            c = float(match.group(3))
-
-        if a_text in ["", "+"]:
-            a = 1.0
-        elif a_text == "-":
-            a = -1.0
-        else:
-            a = float(a_text)
-
-        if a == 0:
+        equations = re.findall(r"[+\-0-9.x*]+=[+\-0-9.x*]+", cleaned)
+        if not equations:
+            return None
+        equation = equations[0]
+        try:
+            left, right = equation.split("=", 1)
+            left_x, left_constant = self.parse_linear_x_side(left)
+            right_x, right_constant = self.parse_linear_x_side(right)
+        except (TypeError, ValueError):
             return None
 
-        answer = (c - b) / a
+        a = left_x - right_x
+        target = right_constant - left_constant
+        if abs(a) < 1e-12:
+            relationship = "all real numbers" if abs(target) < 1e-12 else "no solution"
+            return {
+                "type": "linear_equation",
+                "answer": relationship,
+                "steps": [f"Simplify both sides: {self.format_number(a)}x = {self.format_number(target)}", relationship.title()],
+                "confidence": 92,
+            }
+
+        answer = target / a
         return {
             "type": "linear_equation",
             "answer": answer,
             "steps": [
-                f"{self.format_number(a)}x + {self.format_number(b)} = {self.format_number(c)}",
-                f"{self.format_number(a)}x = {self.format_number(c - b)}",
+                f"Original equation: {equation.replace('**', '^')}",
+                f"Collect x terms and constants: {self.format_number(a)}x = {self.format_number(target)}",
                 f"x = {self.format_number(answer)}"
             ],
             "confidence": 96
         }
+
+    def solve_fraction(self, text):
+        normalized = self.normalize_expression(text)
+        match = re.search(r"(-?\d+)\s*/\s*(-?\d+)\s*([+\-*/])\s*(-?\d+)\s*/\s*(-?\d+)", normalized)
+        if not match:
+            return None
+        a, b, operation, c, d = match.groups()
+        if int(b) == 0 or int(d) == 0:
+            return None
+        left = Fraction(int(a), int(b))
+        right = Fraction(int(c), int(d))
+        operations = {"+": operator.add, "-": operator.sub, "*": operator.mul, "/": operator.truediv}
+        if operation == "/" and right == 0:
+            return None
+        exact = operations[operation](left, right)
+        answer = int(exact) if exact.denominator == 1 else f"{exact.numerator}/{exact.denominator}"
+        return {
+            "type": "fraction_arithmetic",
+            "answer": answer,
+            "steps": [
+                f"Expression: {left} {operation} {right}",
+                f"Use a common denominator or reciprocal as required: {exact}",
+                f"Simplified answer: {answer}",
+            ],
+            "confidence": 97,
+        }
+
+    def solve_interest(self, text):
+        lowered = text.lower()
+        if "interest" not in lowered:
+            return None
+        nums = self.numbers(text)
+        if len(nums) < 3:
+            return None
+        principal, rate_percent, years = nums[:3]
+        rate = rate_percent / 100
+        if "compound" in lowered:
+            compounds = nums[3] if len(nums) > 3 else 1
+            if compounds <= 0:
+                return None
+            answer = principal * (1 + rate / compounds) ** (compounds * years)
+            kind = "compound_interest"
+            formula = "A = P(1 + r/n)^(n*t)"
+        else:
+            answer = principal * (1 + rate * years)
+            kind = "simple_interest"
+            formula = "A = P(1 + r*t)"
+        return {
+            "type": kind,
+            "answer": answer,
+            "steps": [formula, f"P={principal}, r={rate}, t={years}", f"A = {self.format_number(answer)}"],
+            "confidence": 93,
+        }
+
+    def solve_probability(self, text):
+        lowered = text.lower()
+        if not any(term in lowered for term in ["probability", "chance", "favorable outcomes"]):
+            return None
+        nums = self.numbers(text)
+        if len(nums) < 2 or nums[1] <= 0:
+            return None
+        favorable, total = nums[:2]
+        if favorable < 0 or favorable > total:
+            return None
+        probability = favorable / total
+        return {
+            "type": "probability",
+            "answer": probability,
+            "steps": [
+                "probability = favorable outcomes / total outcomes",
+                f"{self.format_number(favorable)} / {self.format_number(total)} = {self.format_number(probability)}",
+                f"percentage = {self.format_number(probability * 100)}%",
+            ],
+            "confidence": 94,
+        }
+
+    def relevant_formula_context(self, text, limit=5):
+        terms = set(re.findall(r"[a-z][a-z0-9_-]{2,}", text.lower()))
+        ranked = []
+        for formula in self.formulas.values():
+            trigger_terms = set(formula.get("trigger_terms", []))
+            score = len(terms.intersection(trigger_terms))
+            if score:
+                ranked.append((score, formula))
+        ranked.sort(key=lambda item: item[0], reverse=True)
+        return [item[1] for item in ranked[:limit]]
 
     def parse_quadratic_side(self, side):
         side = side.replace("-", "+-")
@@ -792,18 +928,14 @@ class MathBrain:
                     "residual": abs(float(answer) - float(expected))
                 }
 
-            if result_type == "linear_equation":
+            if result_type == "linear_equation" and isinstance(answer, (int, float)):
                 cleaned = self.normalize_expression(text).replace(" ", "")
-                match = re.search(
-                    r"([+-]?\d*(?:\.\d+)?)x([+-]\d+(?:\.\d+)?)?=([+-]?\d+(?:\.\d+)?)",
-                    cleaned
-                )
-                if match:
-                    a_text = match.group(1)
-                    a = 1.0 if a_text in {"", "+"} else -1.0 if a_text == "-" else float(a_text)
-                    b = float(match.group(2) or 0)
-                    c = float(match.group(3))
-                    residual = abs(a * float(answer) + b - c)
+                equations = re.findall(r"[+\-0-9.x*]+=[+\-0-9.x*]+", cleaned)
+                if equations:
+                    left, right = equations[0].split("=", 1)
+                    lx, lc = self.parse_linear_x_side(left)
+                    rx, rc = self.parse_linear_x_side(right)
+                    residual = abs((lx * float(answer) + lc) - (rx * float(answer) + rc))
                     return {
                         "passed": residual <= tolerance,
                         "method": "substitution_into_linear_equation",
@@ -830,14 +962,21 @@ class MathBrain:
                     "residuals": residuals
                 }
 
-            if result_type == "system_equations" and isinstance(answer, dict):
-                equations = re.findall(r"[^,;\n]+=[^,;\n]+", self.normalize_expression(text))
+            if result_type == "linear_system" and isinstance(answer, dict):
+                normalized = self.normalize_expression(text)
+                normalized = re.sub(r"\band\b", ";", normalized)
+                normalized = re.sub(r"\b(?!x\b|y\b)[a-zA-Z]+\b", " ", normalized)
+                equations = [
+                    piece.strip()
+                    for piece in re.split(r";|\n", normalized)
+                    if "=" in piece and ("x" in piece or "y" in piece)
+                ]
                 residuals = []
                 for equation in equations[:2]:
                     parsed = self.parse_linear_xy_equation(equation.replace(" ", ""))
                     if parsed:
                         a, b, c = parsed
-                        residuals.append(abs(a * float(answer["x"]) + b * float(answer["y"]) - c))
+                        residuals.append(abs(a * float(answer["x"]) + b * float(answer["y"]) + c))
                 if residuals:
                     return {
                         "passed": max(residuals) <= tolerance,
@@ -905,9 +1044,13 @@ class MathBrain:
 
     def process(self, data):
         text = self.extract_text(data)
+        formula_context = self.relevant_formula_context(text)
 
         solvers = [
             self.solve_percentage,
+            self.solve_fraction,
+            self.solve_interest,
+            self.solve_probability,
             self.solve_average,
             self.solve_quadratic_equation,
             self.solve_system_equations,
@@ -924,7 +1067,7 @@ class MathBrain:
             solved = solver(text)
             if solved:
                 verification = self.verify_solution(text, solved)
-                return self.result(
+                response = self.result(
                     True,
                     solved["answer"],
                     solved["steps"],
@@ -932,6 +1075,12 @@ class MathBrain:
                     solved["confidence"],
                     verification=verification
                 )
+                response["formula_context"] = formula_context
+                response["data_files_used"] = [
+                    "Math_formulas.json", "Math_problem_patterns.json",
+                    "Math_examples.json", "Math_index.json", "Units_dictionary.json"
+                ]
+                return response
 
         return self.result(
             False,

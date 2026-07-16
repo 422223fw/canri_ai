@@ -26,6 +26,7 @@ PROMPT_FILE = DATA_DIR / "Image_prompt_templates.json"
 SAFETY_FILE = DATA_DIR / "Image_safety_rules.json"
 STATS_FILE = DATA_DIR / "Image_statistics.json"
 HISTORY_FILE = DATA_DIR / "Image_history.json"
+PROFILES_FILE = DATA_DIR / "Image_generation_profiles.json"
 
 
 GENERIC_IMAGE_WORDS = {
@@ -48,6 +49,7 @@ class ImageBrain:
         self.safety_rules = self.load_json(SAFETY_FILE, {})
         self.statistics = self.load_json(STATS_FILE, {})
         self.history = self.load_json(HISTORY_FILE, [])
+        self.generation_profiles = self.load_json(PROFILES_FILE, [])
 
         print("Image Brain Loaded")
 
@@ -313,6 +315,71 @@ class ImageBrain:
 
         return "balanced_scene", self.composition_rules.get("balanced_scene", {})
 
+    def parse_request_spec(self, text):
+
+        lowered = str(text or "").lower()
+        dimensions = re.search(r"\b(\d{2,5})\s*[x×]\s*(\d{2,5})\b", lowered)
+        width = int(dimensions.group(1)) if dimensions else None
+        height = int(dimensions.group(2)) if dimensions else None
+
+        aspect_ratio = "4:3"
+        if "16:9" in lowered or any(word in lowered for word in ["widescreen", "wide landscape"]):
+            aspect_ratio = "16:9"
+        elif "9:16" in lowered or any(word in lowered for word in ["phone wallpaper", "vertical poster"]):
+            aspect_ratio = "9:16"
+        elif "1:1" in lowered or "square" in lowered:
+            aspect_ratio = "1:1"
+        elif "3:2" in lowered:
+            aspect_ratio = "3:2"
+        elif "2:3" in lowered or "portrait" in lowered:
+            aspect_ratio = "2:3"
+
+        if width and height:
+            aspect_ratio = f"{width}:{height}"
+        elif aspect_ratio == "16:9":
+            width, height = 1280, 720
+        elif aspect_ratio == "9:16":
+            width, height = 720, 1280
+        elif aspect_ratio == "1:1":
+            width, height = 1024, 1024
+        elif aspect_ratio == "2:3":
+            width, height = 800, 1200
+
+        groups = {
+            "lighting": ["soft light", "studio light", "golden hour", "moonlight", "neon", "dramatic lighting"],
+            "camera": ["close-up", "wide shot", "top-down", "low angle", "eye level", "macro"],
+            "mood": ["calm", "friendly", "mysterious", "dramatic", "joyful", "dark", "hopeful"],
+            "medium": ["photo", "photorealistic", "illustration", "watercolor", "oil painting", "pixel art", "3d render", "vector"],
+            "purpose": ["logo", "poster", "icon", "game sprite", "wallpaper", "book cover", "concept art"]
+        }
+        detected = {
+            name: [term for term in values if term in lowered]
+            for name, values in groups.items()
+        }
+        colors = re.findall(
+            r"\b(?:red|blue|green|yellow|orange|purple|pink|black|white|gray|grey|gold|silver|cyan|magenta)\b",
+            lowered
+        )
+        text_match = re.search(
+            r'(?:text|title|words?)\s*[:=]\s*[\"\']([^\"\']+)',
+            str(text or ""),
+            re.IGNORECASE
+        )
+
+        return {
+            "aspect_ratio": aspect_ratio,
+            "width": width,
+            "height": height,
+            "lighting": detected["lighting"],
+            "camera": detected["camera"],
+            "mood": detected["mood"],
+            "medium": detected["medium"],
+            "purpose": detected["purpose"],
+            "colors": list(dict.fromkeys(colors))[:6],
+            "required_text": text_match.group(1).strip() if text_match else None,
+            "detail_coverage": sum(bool(value) for value in detected.values()) + bool(colors) + bool(dimensions)
+        }
+
     def build_prompt(self, text, subject_id, subject_template, subject_terms, style_id, style, composition_id, composition):
 
         prompt_template = self.prompt_templates.get(
@@ -498,6 +565,7 @@ class ImageBrain:
     </linearGradient>
     <style>
       .title {{
+        display: none;
         font-family: Arial, sans-serif;
         font-size: 34px;
         font-weight: 700;
@@ -543,6 +611,7 @@ class ImageBrain:
             raw_text = data
         terms = self.collect_terms(text, report, memory_report, raw_text)
         safety = self.safety_check(text)
+        request_spec = self.parse_request_spec(raw_text or text)
 
         if not safety["safe"]:
             return {
@@ -561,6 +630,10 @@ class ImageBrain:
         style_id, style = self.choose_style(text, terms)
         subject_id, subject_template, subject_terms = self.choose_subject(text, terms)
         composition_id, composition = self.choose_composition(text, subject_id)
+        composition = dict(composition)
+        if request_spec.get("width") and request_spec.get("height"):
+            composition["width"] = request_spec["width"]
+            composition["height"] = request_spec["height"]
         prompt_request = raw_text or text
         prompt, negative_prompt = self.build_prompt(
             prompt_request,
@@ -572,6 +645,13 @@ class ImageBrain:
             composition_id,
             composition
         )
+        visual_details = []
+        for key in ["medium", "lighting", "camera", "mood", "colors", "purpose"]:
+            visual_details.extend(request_spec.get(key, []))
+        visual_details.append(f"aspect ratio {request_spec['aspect_ratio']}")
+        if request_spec.get("required_text"):
+            visual_details.append(f"exact readable text: {request_spec['required_text']}")
+        prompt = f"{prompt}, {', '.join(visual_details)}"
         quality_report = self.prompt_quality_report(
             prompt,
             subject_terms,
@@ -600,6 +680,7 @@ class ImageBrain:
             },
             "generated_image_prompt": prompt,
             "negative_prompt": negative_prompt,
+            "request_spec": request_spec,
             "style": {
                 "id": style_id,
                 "name": style.get("name", style_id),
@@ -633,6 +714,13 @@ class ImageBrain:
                 "Create a professional prompt and a local SVG preview.",
                 "Never call external image APIs from Image_brain.",
                 "Run visual safety checks before generating assets."
+            ],
+            "data_files_used": [
+                "Image_styles.json",
+                "Image_subject_templates.json",
+                "Image_composition_rules.json",
+                "Image_prompt_templates.json",
+                "Image_generation_profiles.json"
             ]
         }
 

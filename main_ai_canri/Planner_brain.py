@@ -20,6 +20,7 @@ DATA_DIR = Path(__file__).parent / "data"
 TEMPLATES_FILE = DATA_DIR / "Planner_task_templates.json"
 DEPENDENCY_FILE = DATA_DIR / "Planner_dependency_graph.json"
 RISK_FILE = DATA_DIR / "Planner_risk_rules.json"
+QUALITY_PATTERNS_FILE = DATA_DIR / "Planner_quality_patterns.json"
 STATS_FILE = DATA_DIR / "Planner_statistics.json"
 
 MAX_MATCHES = 8
@@ -38,7 +39,21 @@ class PlannerBrain:
         self.templates = self.load_json(TEMPLATES_FILE, {})
         self.dependency_graph = self.load_json(DEPENDENCY_FILE, {})
         self.risk_rules = self.load_json(RISK_FILE, {})
+        self.quality_patterns = self.load_json(QUALITY_PATTERNS_FILE, {})
         self.statistics = self.load_json(STATS_FILE, {})
+
+        self.template_index = self.build_index(
+            self.templates,
+            ("domain", "intent", "scale", "output")
+        )
+        self.risk_index = self.build_index(
+            self.risk_rules,
+            ("domain", "intent", "scale")
+        )
+        self.quality_index = self.build_index(
+            self.quality_patterns,
+            ("domain", "intent")
+        )
 
         print("Planner Brain Loaded")
 
@@ -62,6 +77,34 @@ class PlannerBrain:
         with STATS_FILE.open("w", encoding="utf-8") as file:
             json.dump(self.statistics, file, ensure_ascii=False, indent=2)
             file.write("\n")
+
+    def build_index(self, records, fields):
+
+        index = {}
+        values = records.values() if isinstance(records, dict) else records
+
+        for record in values:
+            if not isinstance(record, dict):
+                continue
+            key = tuple(str(record.get(field, "*")).lower() for field in fields)
+            index.setdefault(key, []).append(record)
+
+        return index
+
+    def indexed_candidates(self, index, keys, fallback):
+
+        candidates = []
+        seen = set()
+
+        for key in keys:
+            for record in index.get(tuple(str(value).lower() for value in key), []):
+                record_id = record.get("id") or id(record)
+                if record_id in seen:
+                    continue
+                seen.add(record_id)
+                candidates.append(record)
+
+        return candidates or list(fallback)
 
     # ---------- input extraction ----------
 
@@ -326,8 +369,18 @@ class PlannerBrain:
     def find_templates(self, domain, intent, scale, output, terms):
 
         matches = []
+        candidates = self.indexed_candidates(
+            self.template_index,
+            [
+                (domain, intent, scale, output),
+                (domain, intent, scale, "implementation_plan"),
+                (domain, intent, "medium", output),
+                (domain, "planning", scale, output),
+            ],
+            self.templates.values()
+        )
 
-        for template in self.templates.values():
+        for template in candidates:
             score, matched = self.score_template(
                 template,
                 domain,
@@ -366,8 +419,17 @@ class PlannerBrain:
 
         best_rule = None
         best_score = -1
+        candidates = self.indexed_candidates(
+            self.risk_index,
+            [
+                (domain, intent, scale),
+                (domain, intent, "medium"),
+                (domain, "planning", scale),
+            ],
+            self.risk_rules.values()
+        )
 
-        for rule in self.risk_rules.values():
+        for rule in candidates:
             score = 0
 
             if rule.get("domain") == domain:
@@ -383,7 +445,145 @@ class PlannerBrain:
 
         return best_rule or {}
 
-    def build_steps(self, template, dependency_data, memory_report):
+    def get_request_contract(self, report, data):
+
+        for source in (report, data if isinstance(data, dict) else {}):
+            contract = source.get("request_contract")
+            if isinstance(contract, dict):
+                return contract
+
+        requirements = []
+        for item in report.get("requirements", []):
+            if isinstance(item, dict):
+                requirements.append(item)
+            elif item:
+                requirements.append({
+                    "id": f"requirement_{len(requirements) + 1}",
+                    "text": str(item),
+                    "kind": "explicit_constraint"
+                })
+
+        return {
+            "requirements": requirements,
+            "output_constraints": report.get("output_constraints", {}),
+            "detail_inventory": report.get("detail_inventory", {}),
+            "global_picture": report.get("global_picture", {})
+        }
+
+    def normalize_requirements(self, contract, text):
+
+        requirements = []
+        seen = set()
+
+        for index, item in enumerate(contract.get("requirements", []), start=1):
+            if isinstance(item, dict):
+                requirement = dict(item)
+                requirement_text = str(requirement.get("text", "")).strip()
+            else:
+                requirement = {}
+                requirement_text = str(item).strip()
+
+            key = re.sub(r"\s+", " ", requirement_text.lower()).strip()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            requirement["id"] = requirement.get("id") or f"requirement_{index}"
+            requirement["text"] = requirement_text
+            requirement.setdefault("kind", "explicit_constraint")
+            requirements.append(requirement)
+
+        if not requirements and text:
+            requirements.append({
+                "id": "primary_goal",
+                "text": re.sub(r"\s+", " ", text).strip()[:500],
+                "kind": "goal"
+            })
+
+        return requirements[:80]
+
+    def requirement_brains(self, requirement, domain):
+
+        lowered = requirement.get("text", "").lower()
+        brains = []
+        rules = {
+            "Code_brain": ["code", "program", "function", "python", "json", "api"],
+            "Security_brain": ["safe", "security", "password", "validate", "permission"],
+            "Fact_Check_brain": ["fact", "source", "reliable", "verify", "current"],
+            "Math_brain": ["calculate", "equation", "total", "percentage", "average"],
+            "Story_brain": ["story", "character", "chapter", "plot"],
+            "Memory_brain": ["continue", "same", "previous", "existing"],
+        }
+        domain_brain = {
+            "code": "Code_brain",
+            "math": "Math_brain",
+            "story": "Story_brain",
+            "security": "Security_brain",
+        }.get(domain)
+        if domain_brain:
+            brains.append(domain_brain)
+        for brain_name, markers in rules.items():
+            if any(marker in lowered for marker in markers):
+                brains.append(brain_name)
+        return list(dict.fromkeys(brains or ["Reasoning_brain"]))
+
+    def topological_order(self, steps):
+
+        by_id = {step["id"]: step for step in steps if step.get("id")}
+        indegree = {step_id: 0 for step_id in by_id}
+        outgoing = {step_id: [] for step_id in by_id}
+        missing_dependencies = []
+
+        for step_id, step in by_id.items():
+            valid_requires = []
+            for required_id in step.get("requires", []):
+                if required_id not in by_id:
+                    missing_dependencies.append({
+                        "step": step_id,
+                        "missing": required_id
+                    })
+                    continue
+                valid_requires.append(required_id)
+                indegree[step_id] += 1
+                outgoing[required_id].append(step_id)
+            step["requires"] = valid_requires
+
+        queue = sorted(
+            (step_id for step_id, degree in indegree.items() if degree == 0),
+            key=lambda step_id: (by_id[step_id].get("order", 9999), step_id)
+        )
+        ordered = []
+
+        while queue:
+            step_id = queue.pop(0)
+            ordered.append(by_id[step_id])
+            for next_id in outgoing[step_id]:
+                indegree[next_id] -= 1
+                if indegree[next_id] == 0:
+                    queue.append(next_id)
+                    queue.sort(key=lambda value: (by_id[value].get("order", 9999), value))
+
+        cycle_nodes = [step_id for step_id, degree in indegree.items() if degree > 0]
+        if cycle_nodes:
+            for step_id in sorted(cycle_nodes):
+                step = by_id[step_id]
+                step["requires"] = [
+                    required_id
+                    for required_id in step.get("requires", [])
+                    if required_id not in cycle_nodes
+                ]
+                ordered.append(step)
+
+        for order, step in enumerate(ordered, start=1):
+            step["order"] = order
+
+        return ordered, {
+            "valid": not cycle_nodes and not missing_dependencies,
+            "cycle_detected": bool(cycle_nodes),
+            "cycle_nodes": cycle_nodes,
+            "missing_dependencies": missing_dependencies
+        }
+
+    def build_steps(self, template, dependency_data, memory_report, requirements, domain):
 
         steps = []
         dependencies = dependency_data.get("dependencies", {})
@@ -432,7 +632,98 @@ class PlannerBrain:
                 "status": "planned"
             })
 
-        return steps
+        if requirements:
+            anchor_id = steps[0]["id"] if steps else None
+            requirement_step_ids = []
+            insert_at = 1 if steps else 0
+
+            for index, requirement in enumerate(requirements[:24], start=1):
+                step_id = f"requirement_coverage_{index}"
+                requirement_step_ids.append(step_id)
+                steps.insert(insert_at + index - 1, {
+                    "id": step_id,
+                    "order": insert_at + index,
+                    "name": f"implement and verify: {requirement['text']}",
+                    "requires": [anchor_id] if anchor_id else [],
+                    "before": [],
+                    "needed_brains": self.requirement_brains(requirement, domain),
+                    "blocking": requirement.get("kind") == "output_constraint",
+                    "status": "planned",
+                    "requirement_ids": [requirement["id"]],
+                    "acceptance_check": f"Evidence exists for requirement: {requirement['text']}"
+                })
+
+            verification_id = "verify_all_requirements"
+            steps.append({
+                "id": verification_id,
+                "order": len(steps) + 1,
+                "name": "verify every requested requirement and output constraint",
+                "requires": requirement_step_ids,
+                "before": [],
+                "needed_brains": ["Quality_Control_brain"],
+                "blocking": True,
+                "status": "planned",
+                "requirement_ids": [item["id"] for item in requirements],
+                "acceptance_check": "All requirements have concrete evidence and no requested detail is missing"
+            })
+
+        return self.topological_order(steps)
+
+    def choose_quality_pattern(self, domain, intent, terms):
+
+        candidates = self.indexed_candidates(
+            self.quality_index,
+            [(domain, intent), (domain, "planning"), ("general", intent)],
+            self.quality_patterns.values()
+        )
+        if not candidates:
+            return {}
+
+        terms_set = set(terms)
+        return max(
+            candidates,
+            key=lambda item: (
+                len(terms_set & set(item.get("trigger_terms", []))),
+                item.get("quality_score", 0)
+            )
+        )
+
+    def build_requirement_coverage(self, requirements, steps):
+
+        coverage = []
+        for requirement in requirements:
+            step_ids = [
+                step["id"]
+                for step in steps
+                if requirement["id"] in step.get("requirement_ids", [])
+            ]
+            coverage.append({
+                "requirement_id": requirement["id"],
+                "requirement": requirement["text"],
+                "kind": requirement.get("kind", "constraint"),
+                "covered": bool(step_ids),
+                "planned_steps": step_ids,
+                "verification": f"Check final evidence for {requirement['id']}"
+            })
+        return coverage
+
+    def build_parallel_groups(self, steps):
+
+        depths = {}
+        for step in steps:
+            depths[step["id"]] = 0 if not step.get("requires") else 1 + max(
+                (depths.get(required_id, 0) for required_id in step["requires"]),
+                default=0
+            )
+
+        groups = {}
+        for step in steps:
+            groups.setdefault(depths[step["id"]], []).append(step["id"])
+
+        return [
+            {"stage": stage + 1, "step_ids": step_ids, "parallel": len(step_ids) > 1}
+            for stage, step_ids in sorted(groups.items())
+        ]
 
     def identify_missing_information(self, domain, intent, terms):
 
@@ -452,7 +743,7 @@ class PlannerBrain:
 
         return missing
 
-    def build_plan(self, domain, intent, scale, output, terms, memory_report):
+    def build_plan(self, domain, intent, scale, output, terms, memory_report, contract):
 
         matches = self.find_templates(
             domain,
@@ -504,11 +795,21 @@ class PlannerBrain:
             scale
         )
 
-        steps = self.build_steps(
+        requirements = self.normalize_requirements(
+            contract,
+            contract.get("global_picture", {}).get("goal", "")
+        )
+        steps, graph_validation = self.build_steps(
             selected,
             dependency_data,
-            memory_report
+            memory_report,
+            requirements,
+            domain
         )
+        quality_pattern = self.choose_quality_pattern(domain, intent, terms)
+        requirement_coverage = self.build_requirement_coverage(requirements, steps)
+        output_constraints = contract.get("output_constraints", {})
+        detail_inventory = contract.get("detail_inventory", {})
 
         needed_brains = []
 
@@ -529,7 +830,8 @@ class PlannerBrain:
             confidence = max(20, confidence - len(missing) * 10)
 
         return {
-            "goal": selected.get("name"),
+            "goal": contract.get("global_picture", {}).get("goal") or selected.get("name"),
+            "planning_strategy": selected.get("name"),
             "template_id": selected.get("id"),
             "domain": domain,
             "intent": intent,
@@ -550,6 +852,33 @@ class PlannerBrain:
             "dependency_graph_used": bool(dependency_data),
             "memory_context_used": bool(memory_report.get("memory_found", 0)),
             "quality_checks": selected.get("quality_checks", [])
+                + quality_pattern.get("quality_checks", []),
+            "requirements": requirements,
+            "requirement_coverage": requirement_coverage,
+            "requirements_covered": sum(1 for item in requirement_coverage if item["covered"]),
+            "requirements_total": len(requirement_coverage),
+            "all_requirements_planned": all(item["covered"] for item in requirement_coverage),
+            "output_constraints": output_constraints,
+            "important_details": detail_inventory,
+            "acceptance_criteria": [
+                item.get("acceptance_check")
+                for item in steps
+                if item.get("acceptance_check")
+            ] + quality_pattern.get("acceptance_criteria", []),
+            "deliverables": quality_pattern.get("deliverables", [output]),
+            "checkpoints": quality_pattern.get("checkpoints", [
+                "requirements approved",
+                "implementation assembled",
+                "all acceptance checks passed"
+            ]),
+            "rollback_strategy": quality_pattern.get(
+                "rollback_strategy",
+                "Keep the last verified result and revert any step that fails its acceptance check."
+            ),
+            "parallel_groups": self.build_parallel_groups(steps),
+            "critical_path": dependency_data.get("critical_path", [step["id"] for step in steps if step.get("blocking")]),
+            "graph_validation": graph_validation,
+            "quality_pattern_id": quality_pattern.get("id")
         }
 
     # ---------- statistics ----------
@@ -562,9 +891,12 @@ class PlannerBrain:
         stats["last_intent"] = plan.get("intent")
         stats["last_confidence"] = plan.get("confidence")
         stats["last_used_utc"] = datetime.now(timezone.utc).isoformat()
-        stats.setdefault("templates", len(self.templates))
-        stats.setdefault("dependency_graphs", len(self.dependency_graph))
-        stats.setdefault("risk_rules", len(self.risk_rules))
+        stats["templates"] = len(self.templates)
+        stats["dependency_graphs"] = len(self.dependency_graph)
+        stats["risk_rules"] = len(self.risk_rules)
+        stats["quality_patterns"] = len(self.quality_patterns)
+        stats["last_requirements_total"] = plan.get("requirements_total", 0)
+        stats["last_requirements_covered"] = plan.get("requirements_covered", 0)
 
         self.statistics["Planner_brain"] = stats
         self.save_statistics()
@@ -606,13 +938,18 @@ class PlannerBrain:
             text
         )
 
+        contract = self.get_request_contract(report, data)
+        if not contract.get("global_picture"):
+            contract["global_picture"] = {"goal": text}
+
         plan = self.build_plan(
             domain,
             intent,
             scale,
             output,
             terms,
-            memory_report
+            memory_report,
+            contract
         )
 
         self.update_statistics(plan)
@@ -640,6 +977,7 @@ class PlannerBrain:
                 "Planner_task_templates.json",
                 "Planner_dependency_graph.json",
                 "Planner_risk_rules.json",
+                "Planner_quality_patterns.json",
                 "Planner_statistics.json"
             ],
             "rules": [
