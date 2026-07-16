@@ -504,6 +504,7 @@ class ResponseBrain:
             "Language_brain": 12,
             "Math_brain": 12,
             "Story_brain": 12,
+            "Emotion_brain": 14,
             "Creative_brain": 10,
             "Research_brain": 9,
             "Reasoning_brain": 8,
@@ -568,6 +569,16 @@ class ResponseBrain:
 
         preferred = []
 
+        emotion_result = results.get("Emotion_brain", {})
+        conversation_intent = ""
+        if isinstance(emotion_result, dict):
+            conversation_intent = str(
+                emotion_result.get("conversation_intent", "")
+            ).lower()
+
+        if topic == "emotion" and conversation_intent not in {"", "none"}:
+            preferred.append("Emotion_brain")
+
         is_code_request = intent in {"code_generation", "code_analysis"} or (
             topic == "code" and intent not in {"question", "research"}
         )
@@ -621,6 +632,41 @@ class ResponseBrain:
                 return brain_name, result
 
         return None, {}
+
+    def is_pure_emotional_conversation(self, report, results, user_text):
+
+        emotion = results.get("Emotion_brain", {})
+        if not isinstance(emotion, dict):
+            return False
+
+        conversation_intent = str(
+            emotion.get("conversation_intent", "none")
+        ).lower()
+        if conversation_intent in {"", "none"}:
+            return False
+        if not str(emotion.get("support_response") or "").strip():
+            return False
+
+        topic = str(report.get("main_topic", "")).lower()
+        intent = str(report.get("intent", "")).lower()
+        if topic in {
+            "code", "math", "story", "image_generation", "vision", "voice",
+            "science", "technology", "geography", "history", "game"
+        }:
+            return False
+        if intent in {
+            "code_generation", "code_analysis", "math", "story_creation",
+            "image_generation", "research"
+        }:
+            return False
+
+        lowered = str(user_text or "").lower()
+        technical_markers = [
+            "write code", "build a program", "solve this", "calculate",
+            "write a story", "create an image", "analyze this file",
+            "explain this code", "fact check"
+        ]
+        return not any(marker in lowered for marker in technical_markers)
 
     # ---------- formatting ----------
 
@@ -1244,6 +1290,13 @@ class ResponseBrain:
         style = emotion.get("response_style", {})
         detected = str(emotion.get("dominant_emotion", "")).lower()
 
+        # Emotion_brain returns a style name, while older versions returned a
+        # dictionary. Emotional conversations are handled as a direct domain
+        # result; technical answers should stay concise instead of receiving a
+        # hard-coded language prefix.
+        if detected in {"stress", "sadness", "fear", "anger"}:
+            return text
+
         if detected in {"stress", "sadness", "fear", "anger"}:
             return f"אני אענה בזהירות וברור.\n\n{text}"
 
@@ -1330,6 +1383,15 @@ class ResponseBrain:
             display_text = self.capability_answer()
             primary_brain = "Response_brain"
             confidence = 95
+        elif self.is_pure_emotional_conversation(report, results, user_text):
+            emotion_result = results.get("Emotion_brain", {})
+            display_text = str(
+                emotion_result.get("support_response")
+                or emotion_result.get("final_output")
+                or emotion_result.get("answer")
+            ).strip()
+            primary_brain = "Emotion_brain"
+            confidence = emotion_result.get("confidence", 80)
         elif (
             not self.is_action_request(report)
             and self.is_definition_or_explanation_request(user_text, report)

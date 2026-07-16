@@ -5,7 +5,10 @@ Run from the project root:
     python tools/check_canri_regression.py
 """
 
+import struct
 import sys
+import wave
+import zipfile
 from pathlib import Path
 
 
@@ -28,6 +31,13 @@ from Understanding_brain import UnderstandingBrain  # noqa: E402
 from Data_context import context_view_for_brain  # noqa: E402
 from Knowledge_collector import KnowledgeCollector  # noqa: E402
 from Learning_brain import LearningBrain  # noqa: E402
+from Planner_brain import PlannerBrain  # noqa: E402
+from Geography_brain import GeographyBrain  # noqa: E402
+from History_brain import HistoryBrain  # noqa: E402
+from Emotion_brain import EmotionBrain  # noqa: E402
+from Image_brain import ImageBrain  # noqa: E402
+from Vision_brain import VisionBrain  # noqa: E402
+from Voice_brain import VoiceBrain  # noqa: E402
 
 
 def assert_true(condition, message):
@@ -548,6 +558,114 @@ def test_code_self_review_checks_request_alignment():
     assert_true(review["request_alignment"]["failed"], "Self-review should list failed request checks.")
 
 
+def test_planner_covers_every_request_requirement():
+    prompt = (
+        "Build a professional Python habit tracker. Add, list, search and delete habits. "
+        "Save and load habits_custom.json. Only output runnable code."
+    )
+    contract = {
+        "requirements": [
+            {"id": "add", "text": "Add habits"},
+            {"id": "search", "text": "Search habits"},
+            {"id": "delete", "text": "Delete habits"},
+            {"id": "file", "text": "Use habits_custom.json"},
+        ],
+        "output_constraints": {"requested_format": "code", "must_be_runnable": True},
+        "global_picture": {"goal": prompt},
+        "detail_inventory": {"file_names": ["habits_custom.json"]},
+    }
+    plan = PlannerBrain().process({
+        "original_text": prompt,
+        "main_topic": "code",
+        "intent": "code_generation",
+        "request_contract": contract,
+    })["plan"]
+    assert_true(plan["requirements_total"] == 4, "Planner lost an atomic requirement.")
+    assert_true(plan["requirements_covered"] == 4, "Planner failed to cover every requirement.")
+    assert_true(plan["all_requirements_planned"], "Planner must block incomplete requirement coverage.")
+    assert_true(plan["graph_validation"]["valid"], "Planner produced an invalid dependency graph.")
+    assert_true(plan["quality_pattern_id"], "Planner did not use professional quality knowledge.")
+
+
+def test_code_recipe_builds_new_program_kind_and_exact_file():
+    prompt = (
+        "Build a runnable Python habit tracker for the terminal. Add, list, search and "
+        "delete habits. Save and load habit_records.json. Only output final code."
+    )
+    result = CodeBrain().process({
+        "original_text": prompt,
+        "main_topic": "code",
+        "intent": "code_generation",
+    })
+    code = result["generated_code"]
+    assert_true(result["program_kind"] == "habit_tracker", "Code recipe routing chose the wrong project.")
+    assert_true("habit_records.json" in code, "Code recipe lost the exact requested filename.")
+    assert_true(result["project_recipe"]["id"], "Code generation did not use its project recipe database.")
+    assert_true(result["self_review"]["ready"], "Complete recipe output failed self-review.")
+    assert_true(result["code_metrics"]["syntax_valid"], "Generated recipe code has invalid Python syntax.")
+
+
+def test_code_review_checks_edit_export_and_fields():
+    review = CodeBrain().self_reviewer.review_and_improve(
+        "def main():\n    print('incomplete')\n\nif __name__ == \"__main__\":\n    main()\n",
+        "python",
+        "Build a runnable notes app. Edit and export notes with title, body and tags.",
+        "notes_app",
+    )
+    failed = {item["requirement"] for item in review["request_alignment"]["failed"]}
+    assert_true("operation_edit" in failed, "Self-review did not check the edit operation.")
+    assert_true("operation_export" in failed, "Self-review did not check the export operation.")
+    assert_true("field_tags" in failed, "Self-review did not check a requested data field.")
+
+
+def test_geography_uses_exact_index_and_structured_answer():
+    result = GeographyBrain().process({
+        "original_text": "What is the capital of Albania?",
+        "main_topic": "geography",
+        "intent": "question",
+    })
+    answer = result.get("structured_answer", {})
+    assert_true(result.get("index_used"), "Geography did not use its fast index.")
+    assert_true(result.get("candidate_records", 999) <= 5, "Exact geography lookup searched too many records.")
+    assert_true(answer.get("capital") == "Tirana", "Capital lookup returned the wrong answer.")
+    assert_true(result.get("place_detected") == "albania", "Geography selected the wrong place.")
+
+
+def test_geography_distance_and_concept_definition():
+    brain = GeographyBrain()
+    distance = brain.process({
+        "original_text": "What is the distance between Tokyo and Paris?",
+        "main_topic": "geography",
+        "intent": "question",
+    }).get("structured_answer", {}).get("straight_line_distance", {})
+    assert_true(9600 < distance.get("kilometers", 0) < 9900, "Great-circle distance is implausible.")
+    concept = brain.process({
+        "original_text": "Explain what a drainage basin is.",
+        "main_topic": "geography",
+        "intent": "question",
+    })
+    definition = concept.get("structured_answer", {}).get("definition", "").lower()
+    assert_true("land area" in definition and "drain" in definition, "Geographic concept definition is too weak.")
+
+
+def test_creative_uses_geography_inverted_index():
+    brain = CreativeBrain()
+    context = brain.collect_indexed_geography_context(
+        ["sahara", "desert", "journey"],
+        "Create a story set in the Sahara Desert",
+        limit=4,
+    )
+    assert_true(context, "Creative brain found no indexed geography context.")
+    assert_true(
+        any("place:sahara desert" in key for key in context),
+        "Creative brain did not retrieve the exact requested place."
+    )
+    assert_true(
+        all(item.get("retrieval_mode") == "geography_inverted_index" for item in context.values()),
+        "Creative geography retrieval did not use the fast index."
+    )
+
+
 def test_manager_builds_targeted_retry_context():
     manager = ManagerBrain()
     quality = {
@@ -716,6 +834,197 @@ def test_reliable_source_parsers():
     assert_true("<jats" not in crossref[0]["text"], "Crossref JATS markup was not cleaned.")
 
 
+def test_history_uses_indexed_events_and_timelines():
+    history = HistoryBrain()
+    causal = history.process("Why did World War 1 begin, and what followed it?")
+    timeline = history.process("Give a timeline of the French and Haitian revolutions.")
+    figure = history.process("Who was Alan Turing?")
+
+    assert_true(causal.get("verified"), "History should find a curated local event.")
+    assert_true("alliance" in causal.get("final_output", "").lower(), "History lost the indexed causes.")
+    titles = [item.get("title") for item in timeline.get("timeline", [])]
+    assert_true("French Revolution" in titles and "Haitian Revolution" in titles, "History timeline is incomplete.")
+    assert_true("Alan Turing" in figure.get("final_output", ""), "History figure lookup failed.")
+
+
+def test_historical_importance_routes_to_history_not_language():
+    prompt = "Explain why the printing press was historically important in three sentences."
+    report = UnderstandingBrain().process(prompt)
+    manager = ManagerBrain()
+    decision = manager.routing_decision(report, {})
+
+    assert_true(report.get("main_topic") == "history", "Understanding misclassified a history request.")
+    assert_true(decision.get("primary_brain") == "History_brain", "History request leaked to Language_brain.")
+
+
+def test_math_extended_solvers_and_verification():
+    math_brain = MathBrain()
+    linear = math_brain.process("Solve 2x + 3 = 5x - 9 step by step")
+    system = math_brain.process("Solve 2x + y = 5; x - y = 1")
+    fraction = math_brain.process("Calculate 1/2 + 3/4")
+    probability = math_brain.process("Probability with 3 favorable outcomes out of 10 total outcomes")
+
+    assert_true(linear.get("answer") == 4 and linear["verification"]["passed"], "Two-sided linear solving failed.")
+    assert_true(system.get("answer") == {"x": 2.0, "y": 1.0}, "Linear-system answer is wrong.")
+    assert_true(system["verification"]["passed"], "Linear-system substitution failed.")
+    assert_true(fraction.get("answer") == "5/4", "Exact fraction arithmetic failed.")
+    assert_true(abs(probability.get("answer", 0) - 0.3) < 1e-12, "Probability solver was not selected.")
+    assert_true(bool(linear.get("formula_context")), "Math did not retrieve indexed formula context.")
+
+
+def test_creative_registers_non_rule_project_data():
+    creative = CreativeBrain()
+    required = {
+        "Code_project_recipes.json",
+        "Planner_quality_patterns.json",
+        "History_events.json",
+        "History_index.json",
+        "Math_formulas.json",
+        "Math_problem_patterns.json",
+    }
+    assert_true(required.issubset(creative.canri_index), "Creative data index is missing new non-rule files.")
+    assert_true("Learning_rules.json" not in creative.canri_index, "Creative must not use behavior rules as idea data.")
+    assert_true("Planner_risk_rules.json" not in creative.canri_index, "Creative must not ingest risk rules as idea data.")
+
+
+def test_emotional_conversation_routes_to_support():
+    prompt = "I feel lonely and I need someone to talk to."
+    understanding = UnderstandingBrain().process(prompt)
+    assert_true(understanding.get("main_topic") == "emotion", "Understanding missed an emotional conversation.")
+
+    manager = ManagerBrain()
+    decision = manager.routing_decision(understanding, {})
+    assert_true(decision.get("primary_brain") == "Emotion_brain", "Manager did not route emotional support correctly.")
+
+    emotion = EmotionBrain()
+    emotion.update_statistics = lambda *args, **kwargs: None
+    emotion_result = emotion.process({"original_text": prompt, "understanding": understanding})
+    assert_true(emotion_result.get("conversation_intent") == "emotional_support", "Emotion intent is wrong.")
+    assert_true(bool(emotion_result.get("support_response")), "Emotion did not produce support text.")
+    assert_true(bool(emotion_result.get("support_strategy")), "Emotion did not retrieve a support strategy.")
+
+    response = ResponseBrain()
+    response.update_statistics = lambda *args, **kwargs: None
+    final = response.process({
+        "original_text": prompt,
+        "understanding": understanding,
+        "results": {"Emotion_brain": emotion_result}
+    })
+    assert_true(final.get("primary_brain") == "Emotion_brain", "Response did not select emotional support.")
+    assert_true("Goal:" not in final.get("display_text", ""), "Response leaked an internal creative report.")
+
+
+def test_emotion_does_not_override_code():
+    prompt = "I am frustrated, but write a runnable Python calculator."
+    report = {"main_topic": "code", "intent": "code_generation", "original_text": prompt}
+    response = ResponseBrain()
+    response.update_statistics = lambda *args, **kwargs: None
+    result = response.process({
+        "original_text": prompt,
+        "understanding": report,
+        "results": {
+            "Emotion_brain": {
+                "conversation_intent": "venting",
+                "support_response": "That sounds frustrating.",
+                "primary_emotion": "anger"
+            },
+            "Code_brain": {
+                "generated_code": "def main():\n    print(2 + 2)\n\nif __name__ == '__main__':\n    main()",
+                "confidence": 90
+            }
+        }
+    })
+    assert_true(result.get("primary_brain") == "Code_brain", "Emotion incorrectly replaced a code result.")
+    assert_true("def main" in result.get("display_text", ""), "Code output disappeared from the response.")
+
+
+def test_creative_uses_emotion_output_without_story():
+    creative = CreativeBrain()
+    creative.update_statistics = lambda *args, **kwargs: None
+    creative.remember_creative_result = lambda *args, **kwargs: None
+    result = creative.process({
+        "original_text": "Can we talk? I feel worried.",
+        "understanding": {
+            "original_text": "Can we talk? I feel worried.",
+            "main_topic": "emotion",
+            "intent": "conversation"
+        },
+        "results": {
+            "Emotion_brain": {
+                "support_response": "The worry sounds real. What is the most immediate concern?"
+            }
+        }
+    })
+    assert_true(result["execution_policy"]["mode"] == "conversation_support", "Creative used the wrong emotional mode.")
+    assert_true(result.get("domain") == "emotion", "Creative changed emotional support into another domain.")
+    assert_true("Use mechanism" not in result.get("final_output", ""), "Creative returned instructions instead of support.")
+
+
+def test_image_request_spec_and_clean_svg():
+    image = ImageBrain()
+    image.save_history = lambda: None
+    image.update_statistics = lambda *args, **kwargs: None
+    result = image.process("Create a friendly robot poster, 16:9, neon, wide shot, blue and gold.")
+    spec = result.get("request_spec", {})
+    assert_true(spec.get("aspect_ratio") == "16:9", "Image aspect ratio was not understood.")
+    assert_true(spec.get("width") == 1280 and spec.get("height") == 720, "Image dimensions are wrong.")
+    assert_true("neon" in spec.get("lighting", []), "Image lighting detail was lost.")
+    svg = Path(result["image_file"]).read_text(encoding="utf-8")
+    assert_true("display: none" in svg, "SVG preview still shows the oversized generated title.")
+    assert_true(result["engine_status"]["external_raster_model"] == "not_configured", "Image engine status is misleading.")
+
+
+def test_vision_ast_and_safe_archive_inspection():
+    directory = PROJECT_ROOT / "Canri_Tests" / "runtime_fixtures"
+    directory.mkdir(parents=True, exist_ok=True)
+    code_path = directory / "vision_sample.py"
+    code_path.write_text("import json\n\ndef hello(name):\n    return f'Hello {name}'\n", encoding="utf-8")
+    archive_path = directory / "vision_sample.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr("docs/readme.txt", "safe preview")
+
+    vision = VisionBrain()
+    vision.update_statistics = lambda *args, **kwargs: None
+    result = vision.process({"files": [str(code_path), str(archive_path)]})
+    files = {Path(item["path"]).suffix: item for item in result["files"]}
+    assert_true(files[".py"]["content_analysis"]["python_ast"]["syntax_valid"], "Python AST validation failed.")
+    assert_true("hello" in files[".py"]["content_analysis"]["python_ast"]["functions"], "Vision missed a Python function.")
+    assert_true(files[".zip"]["archive_analysis"]["entry_count"] == 1, "Archive structure was not inspected.")
+    assert_true(files[".zip"]["archive_analysis"]["extracted"] is False, "Vision must not extract archives.")
+
+
+def test_voice_real_wav_signal_analysis():
+    directory = PROJECT_ROOT / "Canri_Tests" / "runtime_fixtures"
+    directory.mkdir(parents=True, exist_ok=True)
+    wav_path = directory / "voice_tone.wav"
+    samples = [int(12000 * ((index % 20) / 10 - 1)) for index in range(8000)]
+    with wave.open(str(wav_path), "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(8000)
+        wav_file.writeframes(b"".join(struct.pack("<h", value) for value in samples))
+
+    voice = VoiceBrain()
+    voice.update_statistics = lambda *args, **kwargs: None
+    result = voice.process({"files": [str(wav_path)]})
+    signal = result["media"][0]["signal_analysis"]
+    assert_true(signal.get("available"), "Voice did not analyze real WAV samples.")
+    assert_true(signal.get("rms_level", 0) > 0, "Voice RMS should be greater than zero.")
+    assert_true(result["media"][0]["transcript"] is None, "Voice invented a transcript.")
+
+
+def test_creative_registers_emotion_and_media_data():
+    creative = CreativeBrain()
+    required = {
+        "Conversation_patterns.json",
+        "Emotional_support_strategies.json",
+        "Image_generation_profiles.json",
+        "Media_analysis_profiles.json",
+        "Audio_analysis_profiles.json",
+    }
+    assert_true(required.issubset(creative.canri_index), "Creative index is missing emotional or media data.")
+
+
 def main():
     tests = [
         test_expense_tracker_code_and_quality,
@@ -741,11 +1050,28 @@ def main():
         test_data_context_is_filtered_per_brain,
         test_response_hides_quality_metadata_for_strict_output,
         test_code_self_review_checks_request_alignment,
+        test_planner_covers_every_request_requirement,
+        test_code_recipe_builds_new_program_kind_and_exact_file,
+        test_code_review_checks_edit_export_and_fields,
+        test_geography_uses_exact_index_and_structured_answer,
+        test_geography_distance_and_concept_definition,
+        test_creative_uses_geography_inverted_index,
         test_manager_builds_targeted_retry_context,
         test_manager_shares_results_inside_same_phase,
         test_collaboration_brain_runs_bounded_peer_dialogue,
         test_scanner_context_reaches_every_brain,
         test_reliable_source_parsers,
+        test_history_uses_indexed_events_and_timelines,
+        test_historical_importance_routes_to_history_not_language,
+        test_math_extended_solvers_and_verification,
+        test_creative_registers_non_rule_project_data,
+        test_emotional_conversation_routes_to_support,
+        test_emotion_does_not_override_code,
+        test_creative_uses_emotion_output_without_story,
+        test_image_request_spec_and_clean_svg,
+        test_vision_ast_and_safe_archive_inspection,
+        test_voice_real_wav_signal_analysis,
+        test_creative_registers_emotion_and_media_data,
     ]
 
     for test in tests:

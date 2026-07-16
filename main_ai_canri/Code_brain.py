@@ -17,6 +17,7 @@ STATS_FILE = DATA_DIR / "Code_statistics.json"
 DEPENDENCY_GRAPH_FILE = DATA_DIR / "Code_dependency_graph.json"
 COMPOSITION_TABLE_FILE = DATA_DIR / "Code_composition_tables.json"
 ASSEMBLY_PATTERNS_FILE = DATA_DIR / "Code_assembly_patterns.json"
+PROJECT_RECIPES_FILE = DATA_DIR / "Code_project_recipes.json"
 
 GENERIC_CODE_TERMS = {
     "code",
@@ -36,6 +37,112 @@ GENERIC_CODE_TERMS = {
 
 
 class CodeSelfReviewer:
+
+    OPERATION_PATTERNS = {
+        "add": (r"\badd\b", ("def add_", ".append(")),
+        "list": (r"\blist\b", ("def list_", "enumerate(")),
+        "search": (r"\bsearch\b", ("def search",)),
+        "view": (r"\bview\b", ("def view_",)),
+        "edit": (r"\bedit\b", ("def edit_",)),
+        "delete": (r"\bdelete\b", ("def delete_", ".pop(")),
+        "export": (r"\bexport\b", ("def export", ".write_text(")),
+        "save": (r"\bsave\b", ("def save_",)),
+        "load": (r"\bload\b", ("def load_",)),
+        "total": (r"\b(?:total|sum)\b", ("def show_total", "sum(")),
+        "mark_done": (r"\bmark\b.*\bdone\b", ("def mark_", '"done"')),
+    }
+
+    FIELD_MARKERS = {
+        "amount", "category", "description", "title", "body", "name",
+        "email", "phone", "date", "time", "tags", "quantity", "price",
+        "question", "answer", "status", "priority", "author", "year"
+    }
+
+    def extract_request_requirements(self, request_text, program_kind=None):
+
+        request = str(request_text or "")
+        lowered = request.lower()
+        requirements = []
+
+        def add(identifier, kind, evidence, alternatives=None):
+            if any(item["id"] == identifier for item in requirements):
+                return
+            requirements.append({
+                "id": identifier,
+                "kind": kind,
+                "evidence": list(evidence),
+                "alternatives": list(alternatives or [])
+            })
+
+        if any(marker in lowered for marker in ["runnable", "must run", "terminal", "command line"]):
+            add("runnable_entry_point", "structure", ["def main(", 'if __name__ == "__main__"'])
+
+        for operation, (request_pattern, evidence) in self.OPERATION_PATTERNS.items():
+            if re.search(request_pattern, lowered, re.DOTALL):
+                alternatives = []
+                if operation == "total":
+                    alternatives = [
+                        ("def total_", "sum("),
+                        ("def calculate_total", "sum(")
+                    ]
+                add(f"operation_{operation}", "operation", evidence, alternatives)
+
+        file_names = list(dict.fromkeys(re.findall(
+            r"\b[\w.-]+\.(?:jsonl?|txt|csv|py|md)\b",
+            request,
+            flags=re.IGNORECASE
+        )))
+        for file_name in file_names:
+            add(
+                f"file_{file_name.lower()}",
+                "exact_file",
+                [file_name.lower()]
+            )
+
+        requested_fields = [
+            field
+            for field in sorted(self.FIELD_MARKERS)
+            if re.search(rf"\b{re.escape(field)}\b", lowered)
+        ]
+        for field in requested_fields:
+            add(f"field_{field}", "data_field", [f'"{field}"'], [(f"'{field}'",)])
+
+        if "json" in lowered and any(marker in lowered for marker in ["save", "load", "persist"]):
+            add("json_persistence", "persistence", ["json.loads", "json.dumps"])
+        if any(marker in lowered for marker in ["do not use external", "no external", "standard library only"]):
+            add("standard_library_only", "negative_constraint", [])
+        if "only output" in lowered and "code" in lowered:
+            add("code_only_output", "output_constraint", [])
+        if program_kind:
+            add(f"program_kind_{program_kind}", "program_kind", [])
+        program_fields = {
+            "expense_tracker": ["amount", "category", "description"],
+            "notes_app": ["title", "body"],
+            "contact_book": ["name", "phone", "email"],
+            "shop_inventory": ["name", "quantity", "price"],
+        }
+        for field in program_fields.get(program_kind, []):
+            add(f"field_{field}", "data_field", [f'"{field}"'], [(f"'{field}'",)])
+
+        return requirements
+
+    def requirement_passed(self, requirement, lowered_code):
+
+        if requirement["kind"] == "negative_constraint":
+            external_imports = [
+                "import requests", "from requests", "import pandas", "from pandas",
+                "import numpy", "from numpy", "import flask", "from flask"
+            ]
+            return not any(marker in lowered_code for marker in external_imports)
+        if requirement["kind"] in {"output_constraint", "program_kind"}:
+            return True
+        required = requirement.get("evidence", [])
+        if required and all(marker.lower() in lowered_code for marker in required):
+            return True
+        return any(
+            all(marker.lower() in lowered_code for marker in alternative)
+            for alternative in requirement.get("alternatives", [])
+        )
 
     def review(self, code, language="python"):
 
@@ -187,65 +294,16 @@ class CodeSelfReviewer:
     def review_request_alignment(self, code, request_text="", program_kind=None):
 
         lowered_code = str(code or "").lower()
-        lowered_request = str(request_text or "").lower()
+        extracted = self.extract_request_requirements(request_text, program_kind)
         checks = []
-
-        def add_check(name, requested, passed, evidence):
-            if requested:
-                checks.append({
-                    "requirement": name,
-                    "passed": bool(passed),
-                    "evidence": evidence
-                })
-
-        add_check(
-            "runnable_entry_point",
-            any(marker in lowered_request for marker in ["runnable", "must run", "terminal", "command line"]),
-            'if __name__ == "__main__"' in lowered_code and "def main(" in lowered_code,
-            "main() and Python main guard"
-        )
-        add_check(
-            "json_persistence",
-            "json" in lowered_request and any(marker in lowered_request for marker in ["save", "load"]),
-            "json.loads" in lowered_code and "json.dumps" in lowered_code,
-            "JSON load and save calls"
-        )
-        add_check(
-            "add_operation",
-            re.search(r"\badd\b", lowered_request) is not None,
-            "def add_" in lowered_code and ".append(" in lowered_code,
-            "add function and append"
-        )
-        add_check(
-            "list_operation",
-            re.search(r"\blist\b", lowered_request) is not None,
-            "def list_" in lowered_code and "enumerate(" in lowered_code,
-            "list function and numbered output"
-        )
-        add_check(
-            "search_operation",
-            re.search(r"\bsearch\b", lowered_request) is not None,
-            "def search" in lowered_code,
-            "search function"
-        )
-        add_check(
-            "delete_operation",
-            re.search(r"\bdelete\b", lowered_request) is not None,
-            "def delete_" in lowered_code and ".pop(" in lowered_code,
-            "delete function and item removal"
-        )
-        add_check(
-            "expense_fields",
-            program_kind == "expense_tracker" or "expense tracker" in lowered_request,
-            all(field in lowered_code for field in ['"amount"', '"category"', '"description"']),
-            "amount, category, and description fields"
-        )
-        add_check(
-            "calculation_steps",
-            "step by step" in lowered_request,
-            "steps" in lowered_code or "step" in lowered_code,
-            "step output"
-        )
+        for requirement in extracted:
+            checks.append({
+                "requirement": requirement["id"],
+                "kind": requirement["kind"],
+                "passed": self.requirement_passed(requirement, lowered_code),
+                "evidence": requirement.get("evidence", []),
+                "alternatives": requirement.get("alternatives", [])
+            })
 
         failed = [check for check in checks if not check["passed"]]
         return {
@@ -609,6 +667,8 @@ class CodeBrain:
         self.dependency_graph = {}
         self.composition_tables = {}
         self.assembly_patterns = {}
+        self.project_recipes = {}
+        self.recipe_by_kind = {}
         self.code_by_id = {}
         self.self_reviewer = CodeSelfReviewer()
         self.code_explainer = CodeExplainer()
@@ -669,11 +729,50 @@ class CodeBrain:
 
                 self.assembly_patterns = json.load(f)
 
+        if PROJECT_RECIPES_FILE.exists():
+
+            with open(
+                PROJECT_RECIPES_FILE,
+                "r",
+                encoding="utf-8"
+            ) as f:
+
+                self.project_recipes = json.load(f)
+
         self.code_by_id = {
             item.get("id"): item
             for item in self.code_database
             if item.get("id")
         }
+        recipe_values = (
+            self.project_recipes.values()
+            if isinstance(self.project_recipes, dict)
+            else self.project_recipes
+        )
+        for recipe in recipe_values:
+            if not isinstance(recipe, dict) or not recipe.get("kind"):
+                continue
+            self.recipe_by_kind.setdefault(recipe["kind"], []).append(recipe)
+        for recipes in self.recipe_by_kind.values():
+            recipes.sort(
+                key=lambda item: (item.get("quality_score", 0), item.get("version", 0)),
+                reverse=True
+            )
+
+    def choose_project_recipe(self, program_kind, text=""):
+
+        recipes = self.recipe_by_kind.get(program_kind, [])
+        if not recipes:
+            return {}
+        lowered = str(text).lower()
+        return max(
+            recipes,
+            key=lambda recipe: (
+                sum(1 for marker in recipe.get("trigger_terms", []) if marker in lowered),
+                recipe.get("quality_score", 0),
+                recipe.get("version", 0)
+            )
+        )
 
     def save_statistics(self):
 
@@ -736,6 +835,23 @@ class CodeBrain:
             "improved",
             False
         )
+        try:
+            tree = ast.parse(result["generated_code"])
+            result["code_metrics"] = {
+                "lines": len(result["generated_code"].splitlines()),
+                "functions": sum(isinstance(node, ast.FunctionDef) for node in ast.walk(tree)),
+                "classes": sum(isinstance(node, ast.ClassDef) for node in ast.walk(tree)),
+                "imports": sum(isinstance(node, (ast.Import, ast.ImportFrom)) for node in ast.walk(tree)),
+                "syntax_valid": True
+            }
+        except SyntaxError:
+            result["code_metrics"] = {
+                "lines": len(result["generated_code"].splitlines()),
+                "functions": 0,
+                "classes": 0,
+                "imports": 0,
+                "syntax_valid": False
+            }
 
         if not review.get("ready", False):
             result.setdefault(
@@ -2215,6 +2331,21 @@ if __name__ == "__main__":
             lowered
         )
 
+        recipe_matches = []
+        for kind, recipes in self.recipe_by_kind.items():
+            aliases = {
+                str(alias).lower()
+                for recipe in recipes
+                for alias in recipe.get("aliases", [])
+                if alias
+            }
+            matched = [alias for alias in aliases if alias in domain_text]
+            if matched:
+                recipe_matches.append((max(len(alias) for alias in matched), kind))
+        if recipe_matches:
+            recipe_matches.sort(reverse=True)
+            return recipe_matches[0][1]
+
         checks = [
             ("weather_app", ["weather", "temperature", "humidity", "forecast"]),
             ("expense_tracker", ["expense tracker", "expenses", "amount spent", "total amount", "search expenses", "category"]),
@@ -2224,6 +2355,14 @@ if __name__ == "__main__":
             ("library_manager", ["library", "books", "book tracker", "borrowed books", "reading list"]),
             ("flashcards_app", ["flashcards", "flash cards", "study cards", "review cards"]),
             ("shop_inventory", ["shop inventory", "store inventory", "inventory tracker", "stock", "products in stock"]),
+            ("habit_tracker", ["habit tracker", "daily habits", "habit log"]),
+            ("grade_book", ["grade book", "gradebook", "student grades"]),
+            ("recipe_manager", ["recipe manager", "cookbook", "recipes"]),
+            ("bookmark_manager", ["bookmark manager", "bookmarks", "saved links"]),
+            ("workout_log", ["workout log", "exercise tracker", "fitness log"]),
+            ("time_tracker", ["time tracker", "time log", "hours worked"]),
+            ("event_registration", ["event registration", "attendee list", "registrations"]),
+            ("file_catalog", ["file catalog", "file organizer", "document catalog"]),
             ("notes_app", ["notes", "note taking", "save notes", "notebook"]),
             ("password_manager", ["password manager", "accounts", "account names", "view one account"]),
             ("quiz_game", ["quiz", "question game", "multiple choice"]),
@@ -2726,6 +2865,19 @@ if __name__ == "__main__":
             text,
             task_type
         )
+
+        recipe = self.choose_project_recipe(program_kind, text)
+        if recipe.get("generator") == "json_record_cli":
+            code = self.build_json_record_cli_code(
+                recipe.get("title", program_kind.replace("_", " ").title()),
+                recipe.get("file_name", f"{program_kind}.json"),
+                recipe.get("fields", ["name", "description"]),
+                recipe.get("search_fields", recipe.get("fields", ["name"])),
+                numeric_fields=recipe.get("numeric_fields", []),
+                total_expression=recipe.get("total_expression"),
+                total_label=recipe.get("total_label")
+            )
+            return self.apply_requested_file_name(code, text)
 
         if program_kind == "weather_app" or "api" in lowered:
             return '''import json
@@ -3907,6 +4059,25 @@ if __name__ == "__main__":
     main()
 '''
 
+    def apply_requested_file_name(self, code, text):
+
+        file_names = re.findall(
+            r"\b[\w.-]+\.(?:jsonl?|txt|csv)\b",
+            str(text),
+            flags=re.IGNORECASE
+        )
+        if not file_names:
+            return code
+
+        requested = file_names[0]
+        return re.sub(
+            r'Path\("[^"\n]+\.(?:jsonl?|txt|csv)"\)',
+            f'Path("{requested}")',
+            code,
+            count=1,
+            flags=re.IGNORECASE
+        )
+
     def build_direct_python_program_result(self, text, terms, task_type, existing_code=""):
 
         program_kind = self.detect_direct_program_kind(
@@ -3918,6 +4089,8 @@ if __name__ == "__main__":
             text,
             task_type
         )
+        code = self.apply_requested_file_name(code, text)
+        recipe = self.choose_project_recipe(program_kind, text)
 
         return {
             "brain": "Code_brain",
@@ -3936,6 +4109,7 @@ if __name__ == "__main__":
             "assembly_plan": {
                 "task_type": task_type,
                 "program_kind": program_kind,
+                "ordered_ids": [f"direct_python_{program_kind}"],
                 "steps": [
                     "Detect requested Python program kind from the Understanding_brain report and user text.",
                     "Choose a complete runnable standard-library template.",
@@ -3948,6 +4122,20 @@ if __name__ == "__main__":
                         "connection_type": "complete_program_template",
                         "score": 90
                     }
+                ],
+                "project_recipe_id": recipe.get("id"),
+                "architecture": recipe.get("architecture", "single_file_cli"),
+                "quality_gates": recipe.get("quality_gates", [
+                    "syntax validation",
+                    "request requirement coverage",
+                    "persistence round trip",
+                    "invalid input handling"
+                ]),
+                "data_files_used": [
+                    "Code_project_recipes.json",
+                    "Code_assembly_patterns.json",
+                    "Code_composition_tables.json",
+                    "Code_dependency_graph.json"
                 ]
             },
             "dependencies_added": [],
@@ -3967,6 +4155,12 @@ if __name__ == "__main__":
             "match_details": [],
             "generated_code": code,
             "request_text": text,
+            "project_recipe": {
+                "id": recipe.get("id"),
+                "kind": recipe.get("kind", program_kind),
+                "architecture": recipe.get("architecture", "single_file_cli"),
+                "acceptance_criteria": recipe.get("acceptance_criteria", [])
+            },
             "missing": [],
             "needs_creative_brain": False,
             "creative_fallback": None,

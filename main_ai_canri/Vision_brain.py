@@ -13,14 +13,22 @@ Vision_brain is responsible for file and media understanding:
 It identifies and describes files. It does not execute files.
 """
 
+import ast
 import json
 import hashlib
 import mimetypes
 import os
 import re
 import struct
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
+
+try:
+    from PIL import Image, ImageStat
+except (ImportError, ModuleNotFoundError):
+    Image = None
+    ImageStat = None
 
 
 DATA_DIR = Path(__file__).parent / "data"
@@ -28,6 +36,7 @@ FILE_PROFILES_FILE = DATA_DIR / "Vision_file_profiles.json"
 MAGIC_FILE = DATA_DIR / "Vision_magic_signatures.json"
 RISK_FILE = DATA_DIR / "Vision_risk_rules.json"
 STATS_FILE = DATA_DIR / "Vision_statistics.json"
+ANALYSIS_PROFILES_FILE = DATA_DIR / "Media_analysis_profiles.json"
 
 MAX_HEADER_BYTES = 128
 MAX_TEXT_PREVIEW_BYTES = 32_000
@@ -53,6 +62,7 @@ class VisionBrain:
         self.magic_signatures = self.load_json(MAGIC_FILE, {})
         self.risk_rules = self.load_json(RISK_FILE, {})
         self.statistics = self.load_json(STATS_FILE, {})
+        self.analysis_profiles = self.load_json(ANALYSIS_PROFILES_FILE, [])
 
         print("Vision Brain Loaded")
 
@@ -385,8 +395,95 @@ class VisionBrain:
                 "classes": len(re.findall(r"\bclass\s+\w+", text)),
                 "imports": len(re.findall(r"^\s*(import|from|const|let|var|using)\b", text, re.M))
             }
+            if extension == "py":
+                try:
+                    tree = ast.parse(text)
+                    analysis["python_ast"] = {
+                        "syntax_valid": True,
+                        "functions": [node.name for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))][:50],
+                        "classes": [node.name for node in ast.walk(tree) if isinstance(node, ast.ClassDef)][:30],
+                        "imports": [
+                            alias.name
+                            for node in ast.walk(tree)
+                            if isinstance(node, (ast.Import, ast.ImportFrom))
+                            for alias in node.names
+                        ][:50]
+                    }
+                except SyntaxError as error:
+                    analysis["python_ast"] = {
+                        "syntax_valid": False,
+                        "line": error.lineno,
+                        "message": error.msg
+                    }
 
         return analysis
+
+    def analyze_image_pixels(self, path):
+
+        if Image is None or ImageStat is None:
+            return {
+                "available": False,
+                "engine": "pillow_not_installed",
+                "limitation": "Install Pillow for pixel-level color, brightness, and contrast analysis."
+            }
+        try:
+            with Image.open(path) as source:
+                image = source.convert("RGB")
+                image.thumbnail((256, 256))
+                stats = ImageStat.Stat(image)
+                grayscale = image.convert("L")
+                gray_stats = ImageStat.Stat(grayscale)
+                quantized = image.quantize(colors=5)
+                palette = quantized.getpalette() or []
+                dominant = []
+                for count, index in sorted(quantized.getcolors() or [], reverse=True)[:5]:
+                    offset = index * 3
+                    if offset + 2 < len(palette):
+                        dominant.append({
+                            "rgb": palette[offset:offset + 3],
+                            "pixels": count
+                        })
+                return {
+                    "available": True,
+                    "engine": "pillow",
+                    "format": source.format,
+                    "mode": source.mode,
+                    "frames": getattr(source, "n_frames", 1),
+                    "has_transparency": "A" in source.mode or "transparency" in source.info,
+                    "mean_rgb": [round(value, 2) for value in stats.mean[:3]],
+                    "brightness": round(gray_stats.mean[0], 2),
+                    "contrast": round(gray_stats.stddev[0], 2),
+                    "dominant_colors": dominant
+                }
+        except (OSError, ValueError) as error:
+            return {"available": False, "engine": "pillow", "error": str(error)}
+
+    def analyze_zip_archive(self, path, extension):
+
+        if extension not in {"zip", "jar", "war", "apk"}:
+            return {}
+        try:
+            with zipfile.ZipFile(path, "r") as archive:
+                entries = archive.infolist()
+                total_size = sum(entry.file_size for entry in entries)
+                compressed_size = sum(entry.compress_size for entry in entries)
+                suspicious = [
+                    entry.filename for entry in entries
+                    if ".." in Path(entry.filename).parts
+                    or entry.filename.startswith(("/", "\\"))
+                ]
+                return {
+                    "read": True,
+                    "entry_count": len(entries),
+                    "total_uncompressed_bytes": total_size,
+                    "total_compressed_bytes": compressed_size,
+                    "compression_ratio": round(total_size / max(compressed_size, 1), 2),
+                    "suspicious_paths": suspicious[:20],
+                    "sample_entries": [entry.filename for entry in entries[:30]],
+                    "extracted": False
+                }
+        except (OSError, zipfile.BadZipFile, RuntimeError) as error:
+            return {"read": False, "error": str(error), "extracted": False}
 
     def build_file_capability_summary(self, category, content_analysis):
 
@@ -525,6 +622,16 @@ class VisionBrain:
             is_file,
             size
         )
+        pixel_analysis = (
+            self.analyze_image_pixels(path)
+            if category == "image" and is_file and extension != "svg"
+            else {}
+        )
+        archive_analysis = (
+            self.analyze_zip_archive(path, extension)
+            if category == "archive" and is_file
+            else {}
+        )
 
         warnings = []
 
@@ -542,6 +649,8 @@ class VisionBrain:
 
         if content_analysis.get("contains_possible_secret"):
             warnings.append("Text preview contains possible secret/token/password wording.")
+        if archive_analysis.get("suspicious_paths"):
+            warnings.append("Archive contains suspicious traversal or absolute paths.")
 
         return {
             "path": str(path_value) if path_value else None,
@@ -559,6 +668,8 @@ class VisionBrain:
             "sha256": self.file_fingerprint(path) if is_file else None,
             "dimensions": dimensions,
             "content_analysis": content_analysis,
+            "pixel_analysis": pixel_analysis,
+            "archive_analysis": archive_analysis,
             "capability_summary": self.build_file_capability_summary(category, content_analysis),
             "risk_score": risk_score,
             "risk_level": self.risk_level(risk_score),
@@ -570,7 +681,8 @@ class VisionBrain:
             "warnings": list(dict.fromkeys(warnings)),
             "analysis_status": {
                 "real_file_read": is_file,
-                "metadata_extracted": bool(header or content_analysis or dimensions),
+                "metadata_extracted": bool(header or content_analysis or dimensions or pixel_analysis or archive_analysis),
+                "pixel_analysis_available": bool(pixel_analysis.get("available")),
                 "deep_vision_engine_available": False,
                 "limitation": (
                     "Metadata and safe text/header analysis completed; object recognition needs an external vision model."
@@ -725,6 +837,9 @@ class VisionBrain:
             "engine_status": {
                 "metadata_engine": "available",
                 "text_file_engine": "available",
+                "python_ast_engine": "available",
+                "zip_inspection_engine": "available",
+                "pixel_statistics_engine": "available" if Image is not None else "pillow_not_installed",
                 "deep_image_model": "not_configured",
                 "video_frame_model": "not_configured"
             },
@@ -736,6 +851,7 @@ class VisionBrain:
                 "Vision_magic_signatures.json",
                 "Vision_risk_rules.json",
                 "Vision_statistics.json"
+                ,"Media_analysis_profiles.json"
             ],
             "rules": [
                 "Identify files before processing them.",

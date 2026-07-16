@@ -110,8 +110,10 @@ DOMAIN_RULES = {
         "גיאוגרפיה", "מדינה", "עיר", "מפה"
     ],
     "history": [
-        "history", "war", "empire", "ancient", "king", "century",
-        "revolution", "היסטוריה", "מלחמה", "אימפריה", "עתיק"
+        "history", "historical", "historically", "war", "empire", "ancient", "king", "century",
+        "revolution", "renaissance", "printing press", "silk road", "moon landing",
+        "invention of writing", "development of the internet", "timeline",
+        "היסטוריה", "מלחמה", "אימפריה", "עתיק"
     ],
     "language": [
         "language", "translate", "translation", "grammar", "synonym",
@@ -125,6 +127,14 @@ DOMAIN_RULES = {
     "security": [
         "security", "password", "hack", "malware", "token", "encrypt",
         "suicide", "bomb", "אבטחה", "סיסמה", "פצצה", "התאבד"
+    ],
+    "emotion": [
+        "feel", "feeling", "sad", "lonely", "anxious", "worried",
+        "scared", "afraid", "angry", "upset", "frustrated", "overwhelmed",
+        "emotional support", "can we talk", "listen to me", "need someone",
+        "\u05de\u05e8\u05d2\u05d9\u05e9", "\u05de\u05e8\u05d2\u05d9\u05e9\u05d4", "\u05e2\u05e6\u05d5\u05d1", "\u05e2\u05e6\u05d5\u05d1\u05d4",
+        "\u05d1\u05d5\u05d3\u05d3", "\u05d1\u05d5\u05d3\u05d3\u05d4", "\u05d3\u05d5\u05d0\u05d2", "\u05d3\u05d5\u05d0\u05d2\u05ea", "\u05de\u05e4\u05d7\u05d3",
+        "\u05db\u05d5\u05e2\u05e1", "\u05db\u05d5\u05e2\u05e1\u05ea", "\u05de\u05ea\u05d5\u05e1\u05db\u05dc", "\u05de\u05ea\u05d5\u05e1\u05db\u05dc\u05ea", "\u05e7\u05e9\u05d4 \u05dc\u05d9"
     ],
     "image_generation": [
         "generate image", "create image", "make image", "draw image",
@@ -1072,6 +1082,16 @@ class UnderstandingBrain:
             scores["code"] = scores.get("code", 0) + 14
             hits.setdefault("code", []).append("code_payload")
 
+        emotion_phrases = [
+            "i feel", "can we talk", "listen to me", "having a hard time",
+            "need someone", "\u05e7\u05e9\u05d4 \u05dc\u05d9", "\u05d0\u05e0\u05d9 \u05de\u05e8\u05d2\u05d9\u05e9", "\u05d0\u05e0\u05d9 \u05de\u05e8\u05d2\u05d9\u05e9\u05d4",
+            "\u05d0\u05e4\u05e9\u05e8 \u05dc\u05d3\u05d1\u05e8", "\u05d0\u05e0\u05d9 \u05e6\u05e8\u05d9\u05da \u05dc\u05d3\u05d1\u05e8", "\u05d0\u05e0\u05d9 \u05e6\u05e8\u05d9\u05db\u05d4 \u05dc\u05d3\u05d1\u05e8"
+        ]
+        matched_emotion = [marker for marker in emotion_phrases if marker in lowered]
+        if matched_emotion:
+            scores["emotion"] = scores.get("emotion", 0) + 18 + len(matched_emotion) * 3
+            hits.setdefault("emotion", []).extend(matched_emotion)
+
         if (
             "capital" in word_set
             or "located" in word_set
@@ -1080,6 +1100,17 @@ class UnderstandingBrain:
         ):
             scores["geography"] = scores.get("geography", 0) + 10
             hits.setdefault("geography", []).append("geography_context")
+
+        history_markers = [
+            "historically", "historical importance", "history of", "timeline of",
+            "printing press", "renaissance", "silk road", "moon landing",
+            "ancient egypt", "roman empire", "industrial revolution",
+            "french revolution", "invention of writing", "development of the internet"
+        ]
+        matched_history = [marker for marker in history_markers if marker in lowered]
+        if matched_history:
+            scores["history"] = scores.get("history", 0) + 20 + len(matched_history) * 3
+            hits.setdefault("history", []).extend(matched_history)
 
         for report in word_reports:
             for connection in report.get("connections", [])[:8]:

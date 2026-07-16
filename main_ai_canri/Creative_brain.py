@@ -33,15 +33,13 @@ MEMORY_FILE = DATA_DIR / "Creative_memory.json"
 ALWAYS_CANRI_DATA_FILES = [
     "Learning_history.json",
     "Learning_statistics.json",
-    "Learning_rules.json",
     "Improvement_queue.json",
     "Brain_performance.json",
     "Memory_database.json",
     "Planner_task_templates.json",
     "Planner_dependency_graph.json",
-    "Planner_risk_rules.json",
+    "Planner_quality_patterns.json",
     "Reasoning_patterns.json",
-    "Reasoning_rules.json",
     "Knowledge_index.json",
     "Knowledge_statistics.json",
 ]
@@ -54,6 +52,7 @@ DOMAIN_CANRI_DATA_FILES = {
         "Code_dependency_graph.json",
         "Code_composition_tables.json",
         "Code_assembly_patterns.json",
+        "Code_project_recipes.json",
         "Code_statistics.json",
         "Technology_terms.json",
         "Technical_terms.json"
@@ -108,29 +107,60 @@ DOMAIN_CANRI_DATA_FILES = {
         "Geography_places.json",
         "Geography_concepts.json",
         "Geography_regions.json",
+        "Geography_index.json",
+        "Geography_relations.json",
+        "Geography_query_patterns.json",
+        "Geography_creative_profiles.json",
         "Geography_statistics.json",
         "research_sources.json"
     ],
     "history": [
         "history_knowledge.json",
         "history_sources.json",
+        "History_events.json",
+        "History_figures.json",
+        "History_timelines.json",
+        "History_index.json",
         "Articles.json",
         "research_sources.json"
+    ],
+    "math": [
+        "Math_formulas.json",
+        "Math_problem_patterns.json",
+        "Math_examples.json",
+        "Math_index.json",
+        "Units_dictionary.json",
+        "Math_statistics.json"
     ],
     "security": [
         "research_sources.json",
         "Technical_terms.json",
         "Code_dependency_graph.json"
     ],
+    "emotion": [
+        "Emotion_patterns.json",
+        "Emotion_response_styles.json",
+        "Conversation_patterns.json",
+        "Emotional_support_strategies.json"
+    ],
+    "image_generation": [
+        "Image_styles.json",
+        "Image_subject_templates.json",
+        "Image_prompt_templates.json",
+        "Image_composition_rules.json",
+        "Image_generation_profiles.json",
+        "Image_history.json"
+    ],
     "vision": [
         "Vision_file_profiles.json",
         "Vision_magic_signatures.json",
-        "Vision_risk_rules.json"
+        "Media_analysis_profiles.json"
     ],
     "voice": [
         "Voice_audio_profiles.json",
         "Voice_magic_signatures.json",
-        "Voice_processing_tasks.json"
+        "Voice_processing_tasks.json",
+        "Audio_analysis_profiles.json"
     ],
     "general": [
         "Company_products.json",
@@ -145,13 +175,24 @@ DOMAIN_CANRI_DATA_FILES = {
 CANRI_DATA_FILES = [
     "Planner_task_templates.json",
     "Planner_dependency_graph.json",
+    "Planner_quality_patterns.json",
     "Reasoning_patterns.json",
     "Code_dependency_graph.json",
+    "Code_project_recipes.json",
     "Translation_dictionary.json",
     "Synonyms.json",
     "Articles.json",
     "Knowledge_index.json"
 ]
+
+# Rules control behavior and must not be treated as creative source material.
+# Quality patterns are evidence/checklists, not executable policy, so they stay available.
+CREATIVE_DATA_EXCLUDED_SUFFIXES = ("_rules.json", "_risk_rules.json")
+CREATIVE_DATA_EXCLUDED_FILES = {
+    "Creative_scoring_rules.json",
+    "Learning_rules.json",
+    "Reasoning_rules.json",
+}
 
 GENERIC_TERMS = {
     "the", "and", "for", "with", "that", "this", "what", "how",
@@ -763,6 +804,14 @@ class CreativeBrain:
             "failed_directions": {},
             "successful_patterns": {}
         })
+        self.geography_index = self.load_json(
+            DATA_DIR / "Geography_index.json",
+            {}
+        )
+        self.geography_creative_profiles = self.load_json(
+            DATA_DIR / "Geography_creative_profiles.json",
+            {}
+        )
         self.graphs_by_seed = self.index_graphs_by_seed()
         self.canri_index = self.build_canri_index()
         self.code_assembler = CreativeCodeAssembler(self)
@@ -813,7 +862,7 @@ class CreativeBrain:
 
         index = {}
 
-        for file_name in self.unique_files(ALWAYS_CANRI_DATA_FILES + CANRI_DATA_FILES):
+        for file_name in self.all_creative_data_files():
             path = DATA_DIR / file_name
 
             if not path.exists():
@@ -841,6 +890,25 @@ class CreativeBrain:
                 }
 
         return index
+
+    def is_creative_data_file(self, file_name):
+
+        name = str(file_name or "").strip()
+        lowered = name.lower()
+        if not name or name in CREATIVE_DATA_EXCLUDED_FILES:
+            return False
+        return not lowered.endswith(CREATIVE_DATA_EXCLUDED_SUFFIXES)
+
+    def all_creative_data_files(self):
+
+        file_names = list(ALWAYS_CANRI_DATA_FILES) + list(CANRI_DATA_FILES)
+        for domain_files in DOMAIN_CANRI_DATA_FILES.values():
+            file_names.extend(domain_files)
+        return [
+            file_name
+            for file_name in self.unique_files(file_names)
+            if self.is_creative_data_file(file_name)
+        ]
 
     def unique_files(self, file_names):
 
@@ -937,7 +1005,11 @@ class CreativeBrain:
             if known_domain in source_brain:
                 file_names.extend(known_files)
 
-        return self.unique_files(file_names)
+        return [
+            file_name
+            for file_name in self.unique_files(file_names)
+            if self.is_creative_data_file(file_name)
+        ]
 
     def collect_canri_context(self, domain, terms, data=None):
 
@@ -981,11 +1053,7 @@ class CreativeBrain:
             if not isinstance(match, dict):
                 continue
             file_name = str(match.get("file", "")).strip()
-            normalized_name = file_name.lower().replace("_", " ")
-            if not file_name or any(
-                marker in normalized_name
-                for marker in [" rules", " rule", "risk rule", "safety rule", "release criteria"]
-            ):
+            if not self.is_creative_data_file(file_name):
                 continue
 
             snippets = []
@@ -1088,6 +1156,62 @@ class CreativeBrain:
                 "retrieval_mode": "exact_dictionary_lookup"
             }
 
+        return context
+
+    def collect_indexed_geography_context(self, terms, text="", limit=10):
+
+        if not isinstance(self.geography_index, dict):
+            return {}
+        term_index = self.geography_index.get("terms", {})
+        exact_index = self.geography_index.get("exact", {})
+        records = self.geography_index.get("records", {})
+        lowered_text = str(text).lower()
+        references = []
+
+        for phrase, refs in sorted(exact_index.items(), key=lambda item: len(item[0]), reverse=True):
+            if len(phrase) > 2 and re.search(
+                rf"(?<![\w]){re.escape(str(phrase).lower())}(?![\w])",
+                lowered_text
+            ):
+                references.extend(refs)
+        for term in terms[:60]:
+            normalized = re.sub(r"\s+", " ", str(term).lower()).strip()
+            references.extend(term_index.get(normalized, []))
+            for token in re.findall(r"[a-zA-Z\u0590-\u05FF][a-zA-Z0-9'\-\u0590-\u05FF]{1,}", normalized):
+                references.extend(term_index.get(token, []))
+
+        selected = []
+        for reference in dict.fromkeys(references):
+            record = records.get(reference)
+            if not isinstance(record, dict):
+                continue
+            score = sum(
+                1
+                for term in terms[:40]
+                if str(term).lower() in self.preview_json_value(record).lower()
+            )
+            if reference.split(":", 1)[-1] in lowered_text:
+                score += 10
+            selected.append((score, reference, record))
+        selected.sort(key=lambda item: item[0], reverse=True)
+
+        context = {}
+        for score, reference, record in selected[:limit]:
+            profile = self.geography_creative_profiles.get(reference.split(":", 1)[-1], {})
+            context[f"Geography_index::{reference}"] = {
+                "count": 1,
+                "sample_terms": [record.get("name", reference), record.get("type", "")],
+                "matched_terms": [
+                    term for term in terms[:40]
+                    if str(term).lower() in self.preview_json_value(record).lower()
+                ],
+                "snippets": [{"geography": record, "creative_profile": profile}],
+                "score": score,
+                "source_group": "geography_fast_index",
+                "used": True,
+                "full_file_loaded": False,
+                "retrieval_mode": "geography_inverted_index"
+            }
         return context
 
     def terms_from_canri_context(self, canri_context):
@@ -2489,6 +2613,28 @@ class CreativeBrain:
             "The final response should be the finished result, not the internal simulation."
         )
 
+    def build_conversation_output(self, text, emotion_result=None):
+
+        emotion_result = emotion_result if isinstance(emotion_result, dict) else {}
+        support_response = str(
+            emotion_result.get("support_response")
+            or emotion_result.get("final_output")
+            or ""
+        ).strip()
+        if support_response and not self.looks_like_internal_report(support_response):
+            return support_response
+
+        hebrew = bool(re.search(r"[\u0590-\u05ff]", str(text or "")))
+        if hebrew:
+            return (
+                "\u05d0\u05e0\u05d9 \u05db\u05d0\u05df \u05d0\u05d9\u05ea\u05da. \u05d0\u05e4\u05e9\u05e8 \u05dc\u05e1\u05e4\u05e8 \u05dc\u05d9 \u05de\u05d4 \u05e7\u05d5\u05e8\u05d4, "
+                "\u05d5\u05e0\u05e1\u05d3\u05e8 \u05d0\u05ea \u05d6\u05d4 \u05d9\u05d7\u05d3 \u05e6\u05e2\u05d3 \u05d0\u05d7\u05e8 \u05e6\u05e2\u05d3."
+            )
+        return (
+            "I am here with you. Tell me what is happening, and we can work "
+            "through it one step at a time."
+        )
+
     def build_creative_final_output(
         self,
         text,
@@ -2534,6 +2680,14 @@ class CreativeBrain:
             for marker in ["write a story", "create a story", "continue the story", "chapter", "narrative"]
         )
         explicit_code = intent in {"code_generation", "code_analysis"} or topic == "code"
+        emotional_conversation = topic == "emotion" or any(
+            marker in lowered
+            for marker in [
+                "i feel", "can we talk", "listen to me", "need someone",
+                "having a hard time", "\u05e7\u05e9\u05d4 \u05dc\u05d9", "\u05d0\u05e4\u05e9\u05e8 \u05dc\u05d3\u05d1\u05e8",
+                "\u05d0\u05e0\u05d9 \u05de\u05e8\u05d2\u05d9\u05e9", "\u05d0\u05e0\u05d9 \u05de\u05e8\u05d2\u05d9\u05e9\u05d4"
+            ]
+        )
         factual = intent in {"question", "research"} and not any(
             marker in lowered
             for marker in ["brainstorm", "invent", "creative idea", "imagine"]
@@ -2556,6 +2710,15 @@ class CreativeBrain:
                 "max_rounds": 4,
                 "allow_story": True,
                 "reason": "User explicitly requested narrative content."
+            }
+        if emotional_conversation:
+            return {
+                "mode": "conversation_support",
+                "domain": "emotion",
+                "generation_size": 24,
+                "max_rounds": 2,
+                "allow_story": False,
+                "reason": "Emotion_brain leads; creativity only improves supportive phrasing."
             }
         if factual:
             return {
@@ -2908,6 +3071,10 @@ class CreativeBrain:
             report,
             terms
         )
+        if domain in {"geography", "story", "general"}:
+            canri_context.update(
+                self.collect_indexed_geography_context(terms, text, limit=10)
+            )
         if not canri_context:
             canri_context = self.collect_canri_context(
                 domain,
@@ -2944,6 +3111,10 @@ class CreativeBrain:
             "Creative_brain",
             "creative_generation"
         )
+        if execution_policy.get("mode") == "conversation_support":
+            results = data.get("results", {}) if isinstance(data, dict) else {}
+            emotion_result = results.get("Emotion_brain", {}) if isinstance(results, dict) else {}
+            final_output = self.build_conversation_output(text, emotion_result)
 
         if isinstance(best, dict):
             best = dict(best)
