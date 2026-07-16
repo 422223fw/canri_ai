@@ -568,7 +568,13 @@ class ResponseBrain:
 
         preferred = []
 
-        if topic == "math" or intent == "math" or (
+        is_code_request = intent in {"code_generation", "code_analysis"} or (
+            topic == "code" and intent not in {"question", "research"}
+        )
+        if is_code_request:
+            preferred.append("Code_brain")
+
+        if not is_code_request and (topic == "math" or intent == "math" or (
             re.search(r"\d|\bx\b", lowered)
             and (
                 "=" in lowered
@@ -576,17 +582,8 @@ class ResponseBrain:
                 or "**" in lowered
                 or any(term in lowered for term in ["solve", "calculate", "step by step"])
             )
-        ):
+        )):
             preferred.append("Math_brain")
-
-        if intent in {"question", "research"}:
-            preferred.extend(["Research_brain", "Reasoning_brain"])
-
-        if intent in {"code_generation", "code_analysis"} or (
-            topic == "code"
-            and intent not in {"question", "research"}
-        ):
-            preferred.append("Code_brain")
 
         if topic == "story" or intent == "story_creation":
             preferred.extend(["Story_brain", "Creative_brain"])
@@ -610,6 +607,9 @@ class ResponseBrain:
 
         if topic in domain_map:
             preferred.append(domain_map[topic])
+
+        if intent in {"question", "research"}:
+            preferred.extend(["Research_brain", "Reasoning_brain"])
 
         for brain_name in list(dict.fromkeys(preferred)):
             result = results.get(brain_name)
@@ -1331,10 +1331,8 @@ class ResponseBrain:
             primary_brain = "Response_brain"
             confidence = 95
         elif (
-            (
-                not self.is_action_request(report)
-                or self.is_definition_or_explanation_request(user_text, report)
-            )
+            not self.is_action_request(report)
+            and self.is_definition_or_explanation_request(user_text, report)
             and not any(
                 marker in user_text.lower()
                 for marker in ["reliable", "fact check", "check if", "local knowledge", "use local knowledge"]

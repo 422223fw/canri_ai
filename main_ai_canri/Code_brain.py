@@ -2209,6 +2209,11 @@ if __name__ == "__main__":
     def detect_direct_program_kind(self, text, task_type):
 
         lowered = str(text).lower()
+        domain_text = re.sub(
+            r"\b(?:python\s+)?standard[\s-]+library\b",
+            "",
+            lowered
+        )
 
         checks = [
             ("weather_app", ["weather", "temperature", "humidity", "forecast"]),
@@ -2229,7 +2234,7 @@ if __name__ == "__main__":
         ]
 
         for kind, signals in checks:
-            if any(signal in lowered for signal in signals):
+            if any(signal in domain_text for signal in signals):
                 return kind
 
         if task_type == "file_io":

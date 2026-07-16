@@ -66,6 +66,15 @@ GENERIC_SCIENCE_TERMS = {
     "general", "knowledge", "process", "processes"
 }
 
+STOP_WORDS.update({
+    "explain", "accurately", "clear", "clearly", "sentence", "sentences",
+    "student", "students", "give", "show"
+})
+GENERIC_SCIENCE_TERMS.update({
+    "answer", "question", "simple", "brief", "short", "detailed",
+    "accurate", "accuracy"
+})
+
 
 class ScienceBrain:
 
@@ -145,6 +154,32 @@ class ScienceBrain:
             and len(keyword) > 2
         }
 
+    def _collect_direct_keywords(self, report):
+        """Terms written by the user get more weight than graph expansions."""
+        original_text = str(report.get("original_text", ""))
+        return {
+            token
+            for token in re.findall(r"[a-zA-Z][a-zA-Z\-]{2,}", original_text.lower())
+            if token not in STOP_WORDS
+            and token not in GENERIC_SCIENCE_TERMS
+        }
+
+    def _collect_direct_phrases(self, report):
+        tokens = [
+            token
+            for token in re.findall(
+                r"[a-zA-Z][a-zA-Z\-]{2,}",
+                str(report.get("original_text", "")).lower()
+            )
+            if token not in STOP_WORDS
+            and token not in GENERIC_SCIENCE_TERMS
+        ]
+        phrases = set()
+        for size in (3, 2):
+            for index in range(len(tokens) - size + 1):
+                phrases.add(" ".join(tokens[index:index + size]))
+        return phrases
+
     # ---------- חיפוש מקומי ----------
 
     def _field_text(self, value):
@@ -154,7 +189,13 @@ class ScienceBrain:
             return " ".join(str(item) for item in value.values())
         return str(value or "")
 
-    def _text_match_score(self, article, keywords):
+    def _text_match_score(
+        self,
+        article,
+        keywords,
+        direct_keywords=None,
+        direct_phrases=None
+    ):
         fields = {
             "title": (article.get("title", ""), 4),
             "abstract": (article.get("abstract", ""), 3),
@@ -181,6 +222,26 @@ class ScienceBrain:
             if matches:
                 matched_by_field[field_name] = sorted(matches)
                 score += len(matches) * weight
+
+        direct_keywords = direct_keywords or set()
+        title = str(article.get("title", "")).lower()
+        article_keywords = self._field_text(article.get("keywords", [])).lower()
+        content = str(article.get("content", "")).lower()
+        for keyword in direct_keywords:
+            if keyword in title:
+                score += 12
+            elif keyword in article_keywords:
+                score += 8
+            elif keyword in content:
+                score += 2
+
+        for phrase in direct_phrases or set():
+            if phrase in title:
+                score += 40
+            elif phrase in article_keywords:
+                score += 35
+            elif phrase in content:
+                score += 30
 
         return score, matched_by_field
 
@@ -215,7 +276,12 @@ class ScienceBrain:
             {"uses": 0, "success_rate": 50, "trust": 50}
         )
 
-    def search_local_articles(self, keywords):
+    def search_local_articles(
+        self,
+        keywords,
+        direct_keywords=None,
+        direct_phrases=None
+    ):
         """
         מחפש לפי התאמת טקסט גנרית (title/content), ואז מדרג מחדש
         לפי statistics (trust) - מאמר עם אמינות גבוהה יותר עולה בדירוג.
@@ -228,7 +294,9 @@ class ScienceBrain:
 
             text_score, matched_by_field = self._text_match_score(
                 article,
-                keywords
+                keywords,
+                direct_keywords,
+                direct_phrases
             )
 
             if text_score == 0:
@@ -304,6 +372,41 @@ class ScienceBrain:
 
         return summary_parts
 
+    def requested_sentence_count(self, text):
+        match = re.search(
+            r"\b(\d+)\s+(?:clear\s+|short\s+|brief\s+)?sentences?\b",
+            str(text).lower()
+        )
+        if not match:
+            return None
+        return max(1, min(int(match.group(1)), 12))
+
+    def build_answer(self, matches, scanner_articles, original_text):
+        source_text = ""
+        if matches:
+            source_text = str(
+                matches[0].get("content")
+                or matches[0].get("abstract")
+                or ""
+            )
+        if not source_text and scanner_articles:
+            source_text = str(
+                scanner_articles[0].get("text")
+                or scanner_articles[0].get("summary")
+                or ""
+            )
+        if not source_text:
+            return ""
+
+        sentences = [
+            item.strip()
+            for item in re.split(r"(?<=[.!?])\s+", source_text)
+            if item.strip()
+        ]
+        requested = self.requested_sentence_count(original_text)
+        limit = requested or min(5, len(sentences))
+        return " ".join(sentences[:limit]).strip()
+
     # ---------- ביטחון ----------
 
     def calculate_confidence(self, matches):
@@ -360,9 +463,15 @@ class ScienceBrain:
             return self.cache[cache_key]
 
         keywords = self._collect_keywords(data)
+        direct_keywords = self._collect_direct_keywords(data)
+        direct_phrases = self._collect_direct_phrases(data)
 
         # שלב 1: חיפוש מקומי (כולל דירוג לפי statistics)
-        matches = self.search_local_articles(keywords)
+        matches = self.search_local_articles(
+            keywords,
+            direct_keywords,
+            direct_phrases
+        )
         confidence = self.calculate_confidence(matches)
         source = "local"
 
@@ -399,6 +508,7 @@ class ScienceBrain:
             "source": source,
             "confidence": confidence,
             "summary": summary,
+            "answer": self.build_answer(matches, scanner_articles, original_text),
             "articles_found": len(matches),
             "scanner_articles_found": len(scanner_articles),
             "scanner_evidence": scanner_articles,

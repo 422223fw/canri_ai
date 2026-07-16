@@ -94,7 +94,10 @@ DOMAIN_RULES = {
         "combat", "save", "load", "משחק", "שחקן", "אויב", "שלב"
     ],
     "science": [
-        "science", "physics", "chemistry", "biology", "gravity", "atom",
+        "science", "physics", "chemistry", "biology", "gravity", "atom", "atoms",
+        "photosynthesis", "dna", "genetics", "evolution", "ecosystem",
+        "water cycle", "volcano", "immune system", "electric current",
+        "sound wave", "climate",
         "energy", "force", "cell", "מדע", "פיזיקה", "כימיה", "ביולוגיה"
     ],
     "technology": [
@@ -2289,7 +2292,7 @@ class UnderstandingBrain:
         )
 
         request_contract = self.build_request_contract(
-            text,
+            original_text or text,
             main_topic,
             intent,
             requested_action,

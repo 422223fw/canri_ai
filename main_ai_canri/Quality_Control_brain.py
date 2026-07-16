@@ -159,6 +159,8 @@ class QualityControlBrain:
             "topic": topic,
             "intent": intent,
             "is_code_request": topic == "code" or intent in {"code_generation", "code_analysis"},
+            "is_code_analysis": intent == "code_analysis",
+            "is_code_generation": (topic == "code" and intent != "code_analysis") or intent == "code_generation",
             "is_math_request": topic == "math" or intent == "math" or self.looks_like_math(lowered),
             "is_story_request": topic == "story" or intent == "story_creation",
             "is_reliability_request": any(
@@ -186,19 +188,23 @@ class QualityControlBrain:
             "requested_sentence_count": self.extract_requested_sentence_count(lowered),
             "expected_program_kind": self.detect_expected_program_kind(lowered),
             "requested_code_features": self.extract_requested_code_features(lowered),
-            "needs_local_data": any(
-                marker in lowered
-                for marker in [
-                    "local knowledge",
-                    "use local",
-                    "from data",
-                    "from the dictionaries",
-                    "reliable",
-                    "verify",
-                    "fact check",
-                    "what is",
-                    "explain"
-                ]
+            "needs_local_data": (
+                topic != "code"
+                and intent not in {"code_generation", "code_analysis"}
+                and any(
+                    marker in lowered
+                    for marker in [
+                        "local knowledge",
+                        "use local",
+                        "from data",
+                        "from the dictionaries",
+                        "reliable",
+                        "verify",
+                        "fact check",
+                        "what is",
+                        "explain"
+                    ]
+                )
             ),
             "is_image_request": topic == "image_generation" or intent == "image_generation" or any(
                 marker in lowered
@@ -253,10 +259,12 @@ class QualityControlBrain:
             code = str(code_result.get("generated_code") or code_result.get("code") or "")
 
         if kind == "feature" and feature:
-            passed = self.code_feature_present(feature, code) if requirements.get("is_code_request") else True
+            passed = self.code_feature_present(feature, code) if requirements.get("is_code_generation") else True
             return passed, f"feature:{feature}"
 
         if requirement_id == "runnable_output":
+            if not requirements.get("is_code_generation"):
+                return True, "not a code-generation request"
             syntax_ok = self.python_syntax_error(code) is None if code else False
             structure_ok = self.code_has_real_structure(code)
             self_review = code_result.get("self_review", {}) if isinstance(code_result, dict) else {}
@@ -275,7 +283,7 @@ class QualityControlBrain:
                 leaked = True
             return not leaked, "final-output leakage check"
 
-        if kind == "explicit_constraint" and requirements.get("is_code_request"):
+        if kind == "explicit_constraint" and requirements.get("is_code_generation"):
             ignored = {
                 "program", "must", "include", "support", "user", "users", "with",
                 "from", "into", "only", "output", "final", "full", "working",
@@ -343,7 +351,7 @@ class QualityControlBrain:
         if isinstance(code_result, dict):
             code = str(code_result.get("generated_code") or code_result.get("code") or "")
 
-        if requirements.get("is_code_request"):
+        if requirements.get("is_code_generation"):
             lowered_code = code.lower()
             for file_name in inventory.get("file_names", [])[:12]:
                 if str(file_name).lower() in lowered_code:
@@ -403,7 +411,7 @@ class QualityControlBrain:
             ("expense_tracker", ["expense tracker", "expenses", "amount spent", "total amount", "search expenses", "category"]),
             ("calendar_app", ["calendar", "appointment", "appointments", "event planner", "schedule event"]),
             ("contact_book", ["contact book", "contacts", "phone book", "address book"]),
-            ("library_manager", ["library manager", "book tracker", "books", "borrowed books", "reading list"]),
+            ("library_manager", ["library manager", "book tracker", "book library", "borrowed books", "reading list"]),
             ("flashcards_app", ["flashcards", "flash cards", "study cards"]),
             ("shop_inventory", ["shop inventory", "store inventory", "inventory tracker", "stock", "products in stock"]),
             ("todo_app", ["to-do", "todo", "task list", "tasks", "mark a task"]),
@@ -425,7 +433,7 @@ class QualityControlBrain:
         checks = [
             ("calendar_events", ["calendar", "appointment", "appointments", "event", "events by date", "schedule event"]),
             ("contact_records", ["contacts", "contact book", "phone", "email"]),
-            ("library_books", ["library", "books", "author", "borrowed books", "reading list"]),
+            ("library_books", ["library manager", "book library", "book tracker", "borrowed books", "reading list", "book author"]),
             ("flashcards", ["flashcards", "flash cards", "question", "answer", "study cards"]),
             ("shop_inventory", ["shop inventory", "store inventory", "inventory", "stock", "products in stock"]),
             ("edit_existing_item", ["edit an existing", "edit a note", "edit note", "update an existing", "modify an existing"]),
@@ -524,6 +532,31 @@ class QualityControlBrain:
             return
 
         result = results.get("Code_brain", {})
+        if requirements.get("is_code_analysis"):
+            explanation = str(
+                result.get("answer")
+                or result.get("summary")
+                or result.get("code_explanation")
+                or ""
+            ).strip()
+            if result.get("mode") != "code_analysis" or not explanation:
+                self.add_issue(
+                    issues,
+                    "Code_brain",
+                    "critical",
+                    "The code-analysis request did not return a concrete explanation.",
+                    "Analyze the supplied code and return a clear explanation of its behavior."
+                )
+            if not result.get("code_analyzed"):
+                self.add_issue(
+                    issues,
+                    "Code_brain",
+                    "high",
+                    "The explanation does not identify the code that was analyzed.",
+                    "Preserve the supplied code and analyze that exact snippet."
+                )
+            return
+
         code = str(
             result.get("generated_code")
             or result.get("code")
@@ -738,7 +771,7 @@ class QualityControlBrain:
 
     def audit_requested_code_features(self, results, requirements, issues):
 
-        if not requirements["is_code_request"]:
+        if not requirements.get("is_code_generation"):
             return
 
         features = requirements.get("requested_code_features", [])
@@ -1051,7 +1084,17 @@ class QualityControlBrain:
 
         if requirements["is_code_request"]:
             code = self.text_from_result(results.get("Code_brain", {}))
-            if not self.code_has_real_structure(code):
+            if requirements.get("is_code_analysis"):
+                result = results.get("Code_brain", {})
+                if not isinstance(result, dict) or result.get("mode") != "code_analysis" or not result.get("answer"):
+                    self.add_issue(
+                        issues,
+                        "Code_brain",
+                        "high",
+                        "Code analysis did not produce a screen-ready explanation.",
+                        "Return the analysis result instead of a generated program."
+                    )
+            elif not self.code_has_real_structure(code):
                 self.add_issue(
                     issues,
                     "Code_brain",
@@ -1230,7 +1273,7 @@ class QualityControlBrain:
                 "target_brain": brain_name
             })
 
-        if requirements.get("is_code_request"):
+        if requirements.get("is_code_generation"):
             code_result = results.get("Code_brain", {})
             code = ""
             if isinstance(code_result, dict):
@@ -1255,6 +1298,19 @@ class QualityControlBrain:
                     "passed": self.code_feature_present(feature, code),
                     "target_brain": "Code_brain"
                 })
+
+        if requirements.get("is_code_analysis"):
+            code_result = results.get("Code_brain", {})
+            checks.append({
+                "requirement": "code_explained",
+                "passed": (
+                    isinstance(code_result, dict)
+                    and code_result.get("mode") == "code_analysis"
+                    and bool(code_result.get("answer"))
+                    and bool(code_result.get("code_analyzed"))
+                ),
+                "target_brain": "Code_brain"
+            })
 
         if requirements.get("is_math_request"):
             math_result = results.get("Math_brain", {})

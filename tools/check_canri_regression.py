@@ -22,10 +22,12 @@ from Manager_brain import ManagerBrain  # noqa: E402
 from Memory_brain import MemoryBrain  # noqa: E402
 from Quality_Control_brain import QualityControlBrain  # noqa: E402
 from Response_brain import ResponseBrain  # noqa: E402
+from Science_brain import ScienceBrain  # noqa: E402
 from Spelling_brain import SpellingBrain  # noqa: E402
 from Understanding_brain import UnderstandingBrain  # noqa: E402
 from Data_context import context_view_for_brain  # noqa: E402
 from Knowledge_collector import KnowledgeCollector  # noqa: E402
+from Learning_brain import LearningBrain  # noqa: E402
 
 
 def assert_true(condition, message):
@@ -83,6 +85,103 @@ def test_quadratic_math():
     assert_true("2" in str(result["answer"]) and "3" in str(result["answer"]), "Quadratic solutions should include 2 and 3.")
     assert_true(result["steps"], "Quadratic solution should include steps.")
     assert_true(result["verification"]["passed"], "Quadratic roots should be verified by substitution.")
+
+
+def test_math_ignores_request_words_around_expression():
+    math_brain = MathBrain()
+    arithmetic = math_brain.process({
+        "original_text": "Calculate 8 + 2. Show the steps and give the final answer."
+    })
+    linear = math_brain.process({
+        "original_text": "Solve 3x + 9 = 18 step by step, then verify x."
+    })
+
+    assert_true(arithmetic.get("success") and str(arithmetic.get("answer")) in {"10", "10.0"}, "Embedded arithmetic failed.")
+    assert_true(linear.get("success") and "3" in str(linear.get("answer")), "Embedded linear equation failed.")
+    assert_true(linear.get("verification", {}).get("passed"), "Linear solution was not verified.")
+
+
+def test_science_prefers_the_exact_user_topic():
+    science = ScienceBrain()
+    science.update_statistics = lambda *args, **kwargs: None
+    result = science.process({
+        "original_text": "Explain photosynthesis accurately in 3 clear sentences for a student.",
+        "main_topic": "science",
+        "topics": {},
+        "words": [],
+    })
+
+    assert_true(result.get("top_article_ids", [None])[0] == "biology_photosynthesis", "Science selected an unrelated article.")
+    answer = str(result.get("answer", "")).lower()
+    assert_true("photosynthesis" in answer and "nuclear fusion" not in answer, "Science answer is unrelated to the request.")
+
+    current = science.process({
+        "original_text": "Explain electric current accurately in 3 clear sentences for a student.",
+        "main_topic": "science",
+        "topics": {},
+        "words": [],
+    })
+    current_answer = str(current.get("answer", "")).lower()
+    assert_true("electric" in current_answer and "current" in current_answer, "Science lost the requested multi-word topic.")
+
+
+def test_quality_treats_code_analysis_as_explanation():
+    prompt = "Explain what this Python code does: print(sum([2, 4]))"
+    qc = QualityControlBrain()
+    quality = qc.process({
+        "original_text": prompt,
+        "understanding": {
+            "main_topic": "code",
+            "intent": "code_analysis",
+            "original_text": prompt,
+        },
+        "results": {
+            "Code_brain": {
+                "brain": "Code_brain",
+                "mode": "code_analysis",
+                "code_analyzed": "print(sum([2, 4]))",
+                "answer": "The code adds 2 and 4, then prints 6.",
+            }
+        },
+    })
+
+    assert_true(quality.get("passed"), f"A valid code explanation failed quality control: {quality.get('issues')}")
+    checks = {item.get("requirement"): item.get("passed") for item in quality.get("requirement_checks", [])}
+    assert_true(checks.get("code_explained") is True, "Quality control did not record code-analysis coverage.")
+
+
+def test_understanding_preserves_original_file_names():
+    prompt = "Build an expense tracker and save it to expenses.json."
+    report = UnderstandingBrain().process({
+        "original_text": prompt,
+        "corrected_text": "Build an expense tracker and save it to expense.json.",
+    })
+    files = report.get("request_contract", {}).get("detail_inventory", {}).get("file_names", [])
+    assert_true("expenses.json" in files, "Understanding lost the exact filename from the original request.")
+    assert_true("expense.json" not in files, "A spelling rewrite changed an exact filename requirement.")
+
+
+def test_standard_library_does_not_mean_book_library():
+    code = CodeBrain()
+    quiz_prompt = "Build a Python terminal quiz game. Use only the standard library."
+    inventory_prompt = "Build a Python terminal inventory tracker. Use only the standard library."
+    assert_true(code.detect_direct_program_kind(quiz_prompt, "general") == "quiz_game", "Standard library hijacked quiz routing.")
+    assert_true(code.detect_direct_program_kind(inventory_prompt, "general") == "shop_inventory", "Standard library hijacked inventory routing.")
+
+
+def test_atoms_route_to_science():
+    report = UnderstandingBrain().process("Explain atoms accurately in three sentences.")
+    assert_true(report.get("main_topic") == "science", "The plural word atoms should route to science.")
+
+
+def test_learning_does_not_use_creativity_for_missing_metadata():
+    learning = LearningBrain()
+    result = learning.request_creative_help(
+        [{"brain": "Science_brain", "problem": "missing confidence", "result": {}}],
+        {"main_topic": "science", "intent": "question"},
+        {},
+    )
+    assert_true(result == [], "Missing confidence metadata should not start a creative simulation.")
 
 
 def test_response_blocks_bad_quality():
@@ -621,6 +720,13 @@ def main():
     tests = [
         test_expense_tracker_code_and_quality,
         test_quadratic_math,
+        test_math_ignores_request_words_around_expression,
+        test_science_prefers_the_exact_user_topic,
+        test_quality_treats_code_analysis_as_explanation,
+        test_understanding_preserves_original_file_names,
+        test_standard_library_does_not_mean_book_library,
+        test_atoms_route_to_science,
+        test_learning_does_not_use_creativity_for_missing_metadata,
         test_response_blocks_bad_quality,
         test_quality_catches_wrong_program_kind,
         test_fact_check_evidence_coverage,
