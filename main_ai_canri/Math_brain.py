@@ -129,7 +129,7 @@ class MathBrain:
                 for key in ["original_text", "corrected_text"]:
                     if understanding.get(key):
                         parts.append(str(understanding[key]))
-            return " ".join(parts)
+            return " ".join(dict.fromkeys(parts))
         return str(data)
 
     def normalize_expression(self, text):
@@ -160,16 +160,11 @@ class MathBrain:
         if self.is_safe_expression_text(normalized):
             return normalized
 
+        atom = r"(?:sqrt\s*\([^()]+\)|\([^()]+\)|\d+(?:\.\d+)?|pi|e)"
         candidates = re.findall(
-            r"(?:sqrt\s*\([^)]+\)|[0-9pi e+\-*/().\s]{3,}(?:\*\*[0-9]+)?)",
-            normalized
+            rf"(?<![a-z0-9_.]){atom}(?:\s*(?:\*\*|[+\-*/])\s*{atom})+",
+            normalized,
         )
-        candidates = [
-            candidate.strip()
-            for candidate in candidates
-            if re.search(r"\d", candidate)
-            and any(op in candidate for op in ["+", "-", "*", "/", "sqrt", "**", "(", ")"])
-        ]
         return max(candidates, key=len) if candidates else None
 
     def safe_eval(self, expression):
@@ -324,9 +319,9 @@ class MathBrain:
         if "=" not in cleaned or "x" not in cleaned:
             return None
 
-        match = re.fullmatch(r"([+-]?\d*(?:\.\d+)?)x([+-]\d+(?:\.\d+)?)?=([+-]?\d+(?:\.\d+)?)", cleaned)
+        match = re.search(r"([+-]?\d*(?:\.\d+)?)x([+-]\d+(?:\.\d+)?)?=([+-]?\d+(?:\.\d+)?)", cleaned)
         if not match:
-            match = re.fullmatch(r"([+-]?\d+(?:\.\d+)?)=([+-]?\d*(?:\.\d+)?)x([+-]\d+(?:\.\d+)?)?", cleaned)
+            match = re.search(r"([+-]?\d+(?:\.\d+)?)=([+-]?\d*(?:\.\d+)?)x([+-]\d+(?:\.\d+)?)?", cleaned)
             if not match:
                 return None
             c = float(match.group(1))

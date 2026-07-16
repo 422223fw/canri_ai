@@ -648,7 +648,7 @@ class ManagerBrain:
 
         domain_rules = [
             ("code", ["code", "program", "python", "javascript", "java", "function", "api", "json"]),
-            ("science", ["science", "physics", "chemistry", "biology", "article", "experiment"]),
+            ("science", ["science", "physics", "chemistry", "biology", "article", "experiment", "photosynthesis", "dna", "genetics", "evolution", "ecosystem", "water cycle", "volcano", "immune system", "electric current", "sound wave", "climate", "atom", "atoms"]),
             ("language", ["language", "translation", "translate", "grammar", "synonym", "antonym"]),
             ("geography", ["geography", "country", "city", "capital", "map", "gps", "river", "mountain"]),
             ("technology", ["technology", "hardware", "computer", "cpu", "gpu", "robot", "server"]),
@@ -659,7 +659,7 @@ class ManagerBrain:
             ("vision", ["vision", "image", "photo", "picture", "video", "attachment", "pdf", "png", "jpg", "mp4"]),
             ("voice", ["voice", "audio", "sound", "recording", "microphone", "speech", "transcribe", "wav", "mp3", "m4a"]),
             ("creative", ["creative", "creativity", "idea", "invent", "original", "brainstorm", "stuck", "fallback"]),
-            ("story", ["story", "stories", "sentence", "sentences", "chapter", "character", "plot", "narrative", "leo", "tiny door"]),
+            ("story", ["story", "stories", "chapter", "character", "plot", "narrative", "leo", "tiny door"]),
             ("game", ["game", "player", "enemy", "level", "inventory"])
         ]
 
@@ -694,7 +694,6 @@ class ManagerBrain:
                 for marker in [
                     "story",
                     "stories",
-                    "sentences",
                     "chapter",
                     "continue the same story",
                     "continued story"
@@ -760,6 +759,12 @@ class ManagerBrain:
         if isinstance(requested_action, dict):
             action_intent = str(requested_action.get("intent_override", "")).lower()
 
+        if intent in {"code_generation", "code_analysis"} or action_intent in {"code_generation", "code_analysis"}:
+            return "code"
+
+        if topic == "code" and any(term in raw_text for term in ["code", "program", "python", "runnable", "terminal"]):
+            return "code"
+
         if intent == "math" or action_intent == "math" or (
             re.search(r"\d|\bx\b", raw_text)
             and (
@@ -771,17 +776,17 @@ class ManagerBrain:
         ):
             return "math"
 
-        if intent in {"code_generation", "code_analysis"} or action_intent in {"code_generation", "code_analysis"}:
-            return "code"
-
-        if topic == "code" and any(term in raw_text for term in ["code", "program", "python", "runnable", "terminal"]):
-            return "code"
-
         if intent == "image_generation" or topic == "image_generation":
             return "image_generation"
 
         if intent == "story_creation" or topic == "story":
             return "story"
+
+        if topic in {
+            "science", "geography", "technology", "history", "language",
+            "game", "voice", "vision", "security", "emotion", "planning"
+        }:
+            return topic
 
         if intent in {"question", "research"} and any(
             marker in raw_text

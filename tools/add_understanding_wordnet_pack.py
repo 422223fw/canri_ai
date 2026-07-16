@@ -12,6 +12,7 @@ existing JSON structure used by Canri's UnderstandingDk loader.
 
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
 from typing import Dict, Iterable, List, Tuple
@@ -26,7 +27,7 @@ MAIN_FILE = DATA_DIR / "main_dictionary.json"
 CONNECTIONS_FILE = DATA_DIR / "Connections_Dictionary.json"
 GRAMMAR_FILE = DATA_DIR / "Grammar_dictionary.json"
 
-ADD_COUNT = 10_000
+DEFAULT_ADD_COUNT = 10_000
 
 POS_NAMES = {
     "n": "noun",
@@ -409,7 +410,7 @@ def build_inflection_entry(base: str, synset) -> Dict[str, object]:
     }
 
 
-def add_entries() -> Dict[str, int]:
+def add_entries(add_count: int = DEFAULT_ADD_COUNT) -> Dict[str, int]:
     main_dictionary = load_json(MAIN_FILE)
     connections = load_json(CONNECTIONS_FILE)
     grammar = load_json(GRAMMAR_FILE)
@@ -430,7 +431,7 @@ def add_entries() -> Dict[str, int]:
 
     added_main_words: List[str] = []
     for word in candidate_words:
-        if len(added_main_words) >= ADD_COUNT:
+        if len(added_main_words) >= add_count:
             break
         if word in existing_main_words:
             continue
@@ -439,7 +440,7 @@ def add_entries() -> Dict[str, int]:
         existing_main_words.add(word)
         added_main_words.append(word)
 
-    if len(added_main_words) < ADD_COUNT:
+    if len(added_main_words) < add_count:
         raise RuntimeError(f"Only added {len(added_main_words)} main entries.")
 
     added_connections = 0
@@ -453,9 +454,9 @@ def add_entries() -> Dict[str, int]:
             existing_connections.add(word)
             added_connections += 1
 
-    if added_connections < ADD_COUNT:
+    if added_connections < add_count:
         for word in candidate_words:
-            if added_connections >= ADD_COUNT:
+            if added_connections >= add_count:
                 break
             if word in existing_connections:
                 continue
@@ -466,7 +467,7 @@ def add_entries() -> Dict[str, int]:
             existing_connections.add(word)
             added_connections += 1
 
-    if added_connections < ADD_COUNT:
+    if added_connections < add_count:
         raise RuntimeError(f"Only added {added_connections} connection entries.")
 
     added_grammar = 0
@@ -485,8 +486,8 @@ def add_entries() -> Dict[str, int]:
         )
     ]
 
-    for base in unique_keep_order(sorted_verb_words, ADD_COUNT * 3):
-        if added_grammar >= ADD_COUNT:
+    for base in unique_keep_order(sorted_verb_words, add_count * 3):
+        if added_grammar >= add_count:
             break
         if base in existing_grammar:
             continue
@@ -495,9 +496,9 @@ def add_entries() -> Dict[str, int]:
         existing_grammar.add(base)
         added_grammar += 1
 
-    if added_grammar < ADD_COUNT:
+    if added_grammar < add_count:
         for base in candidate_words:
-            if added_grammar >= ADD_COUNT:
+            if added_grammar >= add_count:
                 break
             if base in existing_grammar:
                 continue
@@ -506,7 +507,7 @@ def add_entries() -> Dict[str, int]:
             existing_grammar.add(base)
             added_grammar += 1
 
-    if added_grammar < ADD_COUNT:
+    if added_grammar < add_count:
         raise RuntimeError(f"Only added {added_grammar} grammar entries.")
 
     save_json(MAIN_FILE, main_dictionary)
@@ -524,4 +525,9 @@ def add_entries() -> Dict[str, int]:
 
 
 if __name__ == "__main__":
-    print(json.dumps(add_entries(), ensure_ascii=False, indent=2))
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--count", type=int, default=DEFAULT_ADD_COUNT)
+    arguments = parser.parse_args()
+    if arguments.count < 1:
+        raise SystemExit("--count must be positive")
+    print(json.dumps(add_entries(arguments.count), ensure_ascii=False, indent=2))

@@ -665,7 +665,7 @@ class LearningBrain:
             for task in fallback_tasks
             if any(
                 marker in task.get("problem", "").lower()
-                for marker in ["error", "does not look", "produced narrative", "unsafe", "missing confidence"]
+                for marker in ["error", "does not look", "produced narrative", "unsafe"]
             )
         ][:3]
 
