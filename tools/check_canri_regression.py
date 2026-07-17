@@ -34,6 +34,7 @@ from Learning_brain import LearningBrain  # noqa: E402
 from Planner_brain import PlannerBrain  # noqa: E402
 from Geography_brain import GeographyBrain  # noqa: E402
 from History_brain import HistoryBrain  # noqa: E402
+from Story_brain import StoryBrain  # noqa: E402
 from Emotion_brain import EmotionBrain  # noqa: E402
 from Image_brain import ImageBrain  # noqa: E402
 from Vision_brain import VisionBrain  # noqa: E402
@@ -1025,6 +1026,45 @@ def test_creative_registers_emotion_and_media_data():
     assert_true(required.issubset(creative.canri_index), "Creative index is missing emotional or media data.")
 
 
+def test_response_never_shows_internal_plans_or_reasoning_lists():
+    response = ResponseBrain()
+    response.update_statistics = lambda *args, **kwargs: None
+    result = response.process({
+        "original_text": "Tell me something useful.",
+        "understanding": {"main_topic": "general", "intent": "question"},
+        "results": {
+            "Planner_brain": {
+                "plan": ["review memory", "extract requirements", "implement and verify"]
+            },
+            "Reasoning_brain": {
+                "conclusions": [{"action": "Gather more information and reason step by step."}]
+            }
+        }
+    })
+    text = result.get("display_text", "").lower()
+    assert_true("review memory" not in text, "Planner instructions leaked to the user.")
+    assert_true("useful conclusion" not in text, "Reasoning report leaked to the user.")
+    assert_true(result.get("primary_brain") not in {"Planner_brain", "Reasoning_brain"}, "Response selected an internal-only brain.")
+
+
+def test_understanding_routes_simple_math_science_and_story_details():
+    understanding = UnderstandingBrain()
+    math_report = understanding.process("1 + 1")
+    science_report = understanding.process("Explain how gravity works in simple words.")
+    story_report = understanding.process("Write a short story about a boy who gets lost in an arcade.")
+
+    assert_true(math_report.get("main_topic") == "math", "Simple arithmetic did not route to Math_brain.")
+    assert_true(science_report.get("main_topic") == "science", "Gravity did not route to Science_brain.")
+    assert_true(story_report.get("main_topic") == "story", "Story request did not route to Story_brain.")
+
+    story = StoryBrain()
+    story.update_statistics = lambda *args, **kwargs: None
+    result = story.process({"original_text": "Write a short story about a boy who gets lost in an arcade."})
+    final_story = result.get("final_output", "").lower()
+    assert_true("arcade" in final_story and "lost" in final_story, "Story lost the requested arcade setting or conflict.")
+    assert_true("floating city" not in final_story, "Story returned a generic template instead of the requested story.")
+
+
 def main():
     tests = [
         test_expense_tracker_code_and_quality,
@@ -1072,6 +1112,8 @@ def main():
         test_vision_ast_and_safe_archive_inspection,
         test_voice_real_wav_signal_analysis,
         test_creative_registers_emotion_and_media_data,
+        test_response_never_shows_internal_plans_or_reasoning_lists,
+        test_understanding_routes_simple_math_science_and_story_details,
     ]
 
     for test in tests:
