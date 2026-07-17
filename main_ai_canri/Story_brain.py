@@ -46,8 +46,10 @@ class StoryBrain:
             file.write("\n")
 
     def get_understanding_report(self, data):
-        if isinstance(data, dict) and isinstance(data.get("understanding"), dict):
-            return data["understanding"]
+        if isinstance(data, dict):
+            for key in ["understanding", "understanding_report"]:
+                if isinstance(data.get(key), dict):
+                    return data[key]
         if isinstance(data, dict):
             return data
         return {"original_text": str(data), "main_topic": "story", "intent": "story_creation"}
@@ -218,8 +220,10 @@ class StoryBrain:
                 break
 
         setting = "an ordinary place"
-        if "park" in lowered:
-            setting = "the park"
+        park_match = re.search(r"\b(quiet|crowded|old|dark|empty|sunny)?\s*park\b", lowered)
+        if park_match:
+            modifier = park_match.group(1)
+            setting = f"the {modifier} park" if modifier else "the park"
         elif "hospital" in lowered or "patient" in lowered:
             setting = "a quiet hospital ward"
         elif "under his bed" in lowered or "tiny door" in lowered:
@@ -234,16 +238,41 @@ class StoryBrain:
             setting = "the city"
 
         trait = None
-        for trait_name in ["quiet", "shy", "brave", "careful", "curious", "honest", "stubborn", "kind", "patient"]:
-            if trait_name in lowered:
-                trait = trait_name
-                break
+        trait_match = re.search(
+            r"\b(quiet|shy|brave|careful|curious|honest|stubborn|kind|patient)\s+"
+            r"(?:girl|boy|hero|doctor|student|detective|inventor|child|character)\b",
+            lowered
+        )
+        if trait_match:
+            trait = trait_match.group(1)
+        else:
+            for trait_name in ["curious", "quiet", "shy", "brave", "careful", "honest", "stubborn", "kind", "patient"]:
+                if trait_name in lowered:
+                    trait = trait_name
+                    break
 
         if not trait and "extraordinary human trait" in lowered:
             trait = "patience"
 
         conflict = "a hidden problem forces a choice"
-        if "disappeared" in lowered or "vanished" in lowered:
+        choice = None
+        decision_match = re.search(
+            r"\bmust\s+decide\s+whether\s+to\s+([^,.!?]+)",
+            lowered
+        )
+        if decision_match:
+            choice = re.sub(r"\s+", " ", decision_match.group(1)).strip()
+            choice_parts = choice.split()
+            choice_verb = choice_parts[0]
+            if choice_verb.endswith("e") and not choice_verb.endswith("ee"):
+                gerund = choice_verb[:-1] + "ing"
+            elif choice_verb.endswith("ing"):
+                gerund = choice_verb
+            else:
+                gerund = choice_verb + "ing"
+            choice_action = " ".join([gerund] + choice_parts[1:])
+            conflict = f"{choice_action} was the right choice"
+        elif "disappeared" in lowered or "vanished" in lowered:
             conflict = "someone returns after disappearing and changes what everyone believes"
         elif "injured" in lowered or "hurt" in lowered:
             conflict = "an injury turns the first step into a test"
@@ -267,6 +296,7 @@ class StoryBrain:
             "setting": setting,
             "trait": trait,
             "conflict": conflict,
+            "choice": choice,
             "required_beats": required_beats
         }
 
@@ -303,6 +333,226 @@ class StoryBrain:
         ]
 
         return self.clean_sentence_list(sentences, count)
+
+    # ---------- dynamic narrative generation ----------
+
+    def extract_discovery(self, text, requirements):
+        match = re.search(
+            r"\b(?:finds?|discovers?|notices?|sees?)\s+(?:(?:a|an|the)\s+)?([^,.!?]+)",
+            text,
+            re.IGNORECASE
+        )
+        if match:
+            phrase = re.split(
+                r"\b(?:in|at|under|while|where|and\s+must)\b",
+                match.group(1),
+                maxsplit=1,
+                flags=re.IGNORECASE
+            )[0]
+            phrase = re.sub(r"\s+", " ", phrase).strip(" ,.-")
+            if 1 <= len(phrase.split()) <= 10:
+                article = "an" if phrase[:1].lower() in "aeiou" else "a"
+                return f"{article} {phrase}"
+
+        lowered = text.lower()
+        if "tiny door" in lowered:
+            return "a tiny door glowing beneath the bed"
+        if "key" in lowered:
+            return "a key marked with an unfamiliar symbol"
+        if "lost" in lowered:
+            return "a sign pointing toward a part of the building he did not recognize"
+        if requirements.get("role") == "patient":
+            return "a notebook containing a record of the missing months"
+        return "a detail that did not belong there"
+
+    def dynamic_story_components(self, text, report, creative):
+        requirements = self.extract_story_requirements(text)
+        role = requirements.get("role") or "character"
+        name = requirements.get("name") or {
+            "patient": "Daniel",
+            "boy": "Leo",
+            "girl": "Maya",
+            "hero": "Ari",
+            "child": "Noah"
+        }.get(role, "Ari")
+        trait = requirements.get("trait") or "careful attention"
+        trait = {
+            "curious": "curiosity",
+            "quiet": "quiet attention",
+            "brave": "courage",
+            "careful": "careful attention",
+            "honest": "honesty",
+            "kind": "kindness",
+            "patient": "patience"
+        }.get(trait, trait)
+        setting = requirements.get("setting") or "an unfamiliar place"
+        discovery = self.extract_discovery(text, requirements)
+        conflict = requirements.get("conflict") or "a difficult choice"
+
+        lexical = creative.get("dictionary_guided_composition", {})
+        lexical_candidates = lexical.get("alternatives", []) if isinstance(lexical, dict) else []
+        selected = lexical.get("selected", {}) if isinstance(lexical, dict) else {}
+        if selected:
+            lexical_candidates = [selected] + lexical_candidates
+
+        return {
+            "name": name,
+            "role": role,
+            "trait": trait,
+            "setting": setting,
+            "discovery": discovery,
+            "conflict": conflict,
+            "choice": requirements.get("choice"),
+            "required_beats": requirements.get("required_beats", {}),
+            "lexical_candidates": lexical_candidates[:16] or [{}],
+            "request_terms": [
+                str(item.get("word", "")).lower()
+                for item in report.get("advanced_word_tags", [])[:100]
+                if isinstance(item, dict) and item.get("word")
+            ]
+        }
+
+    def build_dynamic_event_graph(self, components, lexical):
+        name = components["name"]
+        setting = components["setting"]
+        discovery = components["discovery"]
+        conflict = components["conflict"]
+        explicit_choice = components.get("choice")
+        trait = components["trait"]
+        opener = lexical.get("opening_verb", "entered")
+        notice = lexical.get("noticing_verb", "noticed")
+        response = lexical.get("response_adverb", "carefully")
+        role = components.get("role")
+        pronoun = "she" if role == "girl" else "he" if role in {"boy", "patient"} else "they"
+
+        if opener in {"walked", "stepped", "moved", "wandered"}:
+            opening_action = f"{opener} into"
+        else:
+            opening_action = "entered"
+
+        lost_conflict = "find a way home" in conflict.lower()
+        return [
+            {
+                "role": "setup",
+                "subject": name,
+                "action": opening_action,
+                "object": setting,
+                "detail": f"guided by {trait} rather than confidence"
+            },
+            {
+                "role": "discovery",
+                "subject": pronoun,
+                "action": notice,
+                "object": discovery,
+                "detail": "and understood that the ordinary situation had changed"
+            },
+            {
+                "role": "conflict",
+                "subject": pronoun,
+                "action": "confronted the fact that",
+                "object": conflict,
+                "detail": "before there was time to ask someone else to decide"
+            },
+            {
+                "role": "reaction",
+                "subject": pronoun,
+                "action": "paused",
+                "object": "long enough to separate fear from the facts",
+                "detail": "instead of following the first impulse"
+            },
+            {
+                "role": "decision",
+                "subject": pronoun,
+                "action": "chose",
+                "object": (
+                    "to ask a trusted adult for help and retrace the last familiar path"
+                    if lost_conflict else
+                    f"to {explicit_choice} only after checking what the action could change"
+                    if explicit_choice else
+                    f"to examine the discovery {response} before acting"
+                ),
+                "detail": "because the choice would affect more than the next moment"
+            },
+            {
+                "role": "consequence",
+                "subject": "That decision",
+                "action": "revealed",
+                "object": "a path that had been hidden by haste",
+                "detail": f"and turned {trait} into a practical strength"
+            },
+            {
+                "role": "resolution",
+                "subject": name,
+                "action": "left",
+                "object": setting,
+                "detail": "changed not by sudden power, but by understanding how to choose"
+            }
+        ]
+
+    def realize_dynamic_event(self, event):
+        subject = event["subject"]
+        subject = subject[:1].upper() + subject[1:]
+        action = event["action"]
+        obj = event["object"]
+        detail = event.get("detail", "")
+        sentence = f"{subject} {action} {obj}"
+        if detail:
+            sentence += f", {detail}"
+        return sentence
+
+    def score_dynamic_story(self, story, components, event_graph):
+        lowered = story.lower()
+        required = [
+            components["name"],
+            components["setting"],
+            components["discovery"]
+        ]
+        coverage = sum(
+            1 for item in required
+            if str(item).lower() in lowered
+        ) / max(len(required), 1)
+        role_coverage = len({event["role"] for event in event_graph}) / 7
+        words = re.findall(r"[a-zA-Z][a-zA-Z-]+", lowered)
+        diversity = len(set(words)) / max(len(words), 1)
+        return round(min(100, 45 + coverage * 25 + role_coverage * 20 + diversity * 10), 2)
+
+    def build_dynamic_story(self, text, report, creative, count):
+        if re.search(r"[\u0590-\u05ff]", text):
+            return None
+        tags = report.get("advanced_word_tags", [])
+        if not isinstance(tags, list) or len(tags) < 3:
+            return None
+
+        components = self.dynamic_story_components(text, report, creative)
+        candidates = []
+        for index, lexical in enumerate(components["lexical_candidates"][:16]):
+            graph = self.build_dynamic_event_graph(components, lexical)
+            sentences = [self.realize_dynamic_event(event) for event in graph]
+            story = self.clean_sentence_list(sentences, count)
+            candidates.append({
+                "id": f"dynamic_story_{index}",
+                "story": story,
+                "event_graph": graph,
+                "lexical_plan": lexical,
+                "score": self.score_dynamic_story(story, components, graph)
+            })
+
+        candidates.sort(key=lambda item: item["score"], reverse=True)
+        if not candidates:
+            return None
+        return {
+            "story": candidates[0]["story"],
+            "event_graph": candidates[0]["event_graph"],
+            "selected_score": candidates[0]["score"],
+            "candidate_count": len(candidates),
+            "alternatives": [
+                {"id": item["id"], "score": item["score"]}
+                for item in candidates[:8]
+            ],
+            "components": components,
+            "generation_mode": "request_graph_dictionary_generation",
+            "template_used": False
+        }
 
     def build_final_story(self, text, length, outline, character, world, creative):
 
@@ -492,8 +742,26 @@ class StoryBrain:
         world = self.run_world(data)
         outline = self.build_outline(template, creative, character, world)
         draft = self.build_draft(length, outline, character, world, creative)
-        story = self.build_final_story(text, length, outline, character, world, creative)
-        confidence = min(100, template.get("confidence", 70) + creative.get("confidence", 60) * 0.15)
+        dynamic_generation = self.build_dynamic_story(
+            text,
+            report,
+            creative,
+            self.requested_sentence_count(text)
+        )
+        if isinstance(dynamic_generation, dict) and dynamic_generation.get("story"):
+            story = dynamic_generation["story"]
+            generation_mode = dynamic_generation.get("generation_mode")
+            template_used = False
+            confidence = min(
+                100,
+                dynamic_generation.get("selected_score", 70) * 0.8
+                + creative.get("confidence", 60) * 0.2
+            )
+        else:
+            story = self.build_final_story(text, length, outline, character, world, creative)
+            generation_mode = "legacy_template_fallback"
+            template_used = True
+            confidence = min(100, template.get("confidence", 70) + creative.get("confidence", 60) * 0.15)
         self.update_statistics(confidence, template.get("genre"))
 
         return {
@@ -511,6 +779,9 @@ class StoryBrain:
             "world_result": world,
             "outline": outline,
             "draft": draft,
+            "generation_mode": generation_mode,
+            "template_used": template_used,
+            "dynamic_generation": dynamic_generation or {},
             "story": story,
             "final_output": story,
             "confidence": round(confidence, 2),
