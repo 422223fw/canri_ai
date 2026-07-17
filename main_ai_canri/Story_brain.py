@@ -226,6 +226,10 @@ class StoryBrain:
             setting = "the tiny glowing city under the bed"
         elif "forest" in lowered:
             setting = "the old forest"
+        elif "arcade" in lowered or "game arcade" in lowered:
+            setting = "the crowded arcade"
+        elif "\u05e4\u05d0\u05e8\u05e7 \u05d4\u05de\u05e9\u05d7\u05e7\u05d9\u05dd" in lowered or "\u05e4\u05e8\u05e7 \u05d4\u05de\u05e9\u05d7\u05e7\u05d9\u05dd" in lowered:
+            setting = "\u05e4\u05d0\u05e8\u05e7 \u05d4\u05de\u05e9\u05d7\u05e7\u05d9\u05dd"
         elif "city" in lowered:
             setting = "the city"
 
@@ -247,6 +251,8 @@ class StoryBrain:
             conflict = "the hero must decide whether to wake a sleeping city"
         elif "trait" in lowered:
             conflict = "the hero must rely on an ordinary trait that others overlook"
+        elif "lost" in lowered or "\u05e0\u05d0\u05d1\u05d3" in lowered:
+            conflict = "the child must find a way home before the place closes"
 
         required_beats = {
             "defining_moment": "defining moment" in lowered or "discovers this trait" in lowered,
@@ -343,6 +349,32 @@ class StoryBrain:
                 or "habit" in lowered
             )
         )
+        arcade_lost_story = (
+            ("arcade" in lowered or "\u05e4\u05d0\u05e8\u05e7 \u05d4\u05de\u05e9\u05d7\u05e7\u05d9\u05dd" in lowered or "\u05e4\u05e8\u05e7 \u05d4\u05de\u05e9\u05d7\u05e7\u05d9\u05dd" in lowered)
+            and ("lost" in lowered or "\u05e0\u05d0\u05d1\u05d3" in lowered)
+        )
+
+        if arcade_lost_story:
+            hebrew = bool(re.search(r"[\u0590-\u05ff]", text))
+            if hebrew:
+                sentences = [
+                    "\u05d9\u05dc\u05d3 \u05e9\u05dd \u05dc\u05d1 \u05e9\u05d4\u05e8\u05e2\u05e9 \u05e9\u05dc \u05e4\u05d0\u05e8\u05e7 \u05d4\u05de\u05e9\u05d7\u05e7\u05d9\u05dd \u05e9\u05db\u05da \u05d1\u05e8\u05d2\u05e2 \u05e9\u05d4\u05d5\u05d0 \u05d4\u05d1\u05d9\u05df \u05e9\u05d4\u05d5\u05d0 \u05d0\u05d9\u05d1\u05d3 \u05d0\u05ea \u05d4\u05d3\u05e8\u05da \u05d0\u05dc \u05d4\u05d9\u05e6\u05d9\u05d0\u05d4",
+                    "\u05e1\u05d1\u05d9\u05d1\u05d5 \u05d4\u05d1\u05d4\u05d1\u05d5 \u05e0\u05e8\u05d5\u05ea \u05d5\u05de\u05e9\u05d7\u05e7\u05d9\u05dd, \u05d0\u05d1\u05dc \u05d0\u05e3 \u05e4\u05e0\u05d9\u05dd \u05dc\u05d0 \u05d4\u05d9\u05d5 \u05de\u05d5\u05db\u05e8\u05d5\u05ea \u05dc\u05d5",
+                    "\u05d1\u05de\u05e7\u05d5\u05dd \u05dc\u05e8\u05d5\u05e5, \u05d4\u05d5\u05d0 \u05e0\u05db\u05e8 \u05d1\u05e1\u05e4\u05e1\u05dc \u05d5\u05e0\u05d6\u05db\u05e8 \u05d1\u05e2\u05e6\u05d4 \u05e9\u05dc \u05d0\u05de\u05d0 \u05e9\u05dc\u05d5: \u05d0\u05dd \u05d0\u05d5\u05d1\u05d3\u05d9\u05dd, \u05de\u05d7\u05e4\u05e9\u05d9\u05dd \u05d0\u05d3\u05dd \u05e2\u05dd \u05ea\u05d2 \u05e9\u05dd",
+                    "\u05d4\u05d5\u05d0 \u05e9\u05dd \u05dc\u05d1 \u05dc\u05e2\u05d5\u05d1\u05d3 \u05e9\u05dc \u05d4\u05de\u05e7\u05d5\u05dd \u05e9\u05e2\u05de\u05d3 \u05dc\u05d9\u05d3 \u05de\u05e9\u05d7\u05e7 \u05de\u05e8\u05d5\u05e5 \u05d5\u05d1\u05d9\u05e7\u05e9 \u05e2\u05d6\u05e8\u05d4 \u05d1\u05e7\u05d5\u05dc \u05e8\u05d2\u05d5\u05e2",
+                    "\u05db\u05e2\u05d1\u05d5\u05e8 \u05db\u05de\u05d4 \u05d3\u05e7\u05d5\u05ea \u05d4\u05d5\u05e8\u05d9\u05d5 \u05de\u05e6\u05d0\u05d5 \u05d0\u05d5\u05ea\u05d5 \u05d5\u05d7\u05d9\u05d1\u05e7\u05d5 \u05d0\u05d5\u05ea\u05d5 \u05d7\u05d6\u05e7",
+                    "\u05d1\u05d3\u05e8\u05da \u05d4\u05d1\u05d9\u05ea\u05d4 \u05d4\u05d5\u05d0 \u05d4\u05d1\u05d9\u05df \u05e9\u05d0\u05de\u05d9\u05e5 \u05dc\u05d1\u05e7\u05e9 \u05e2\u05d6\u05e8\u05d4 \u05d6\u05d4 \u05dc\u05d0 \u05e4\u05d7\u05d5\u05ea \u05d7\u05e9\u05d5\u05d1 \u05de\u05dc\u05de\u05e6\u05d5\u05d0 \u05d0\u05ea \u05d4\u05d3\u05e8\u05da \u05dc\u05d1\u05d3"
+                ]
+            else:
+                sentences = [
+                    "Noah realized he was lost when the arcade music faded behind the flashing machines.",
+                    "He could see lights everywhere, but he could not find the entrance where his family had been waiting.",
+                    "Instead of running from game to game, he sat beside a prize counter and remembered the safety rule his mother had taught him.",
+                    "Noah found an employee with a name tag and asked for help in a calm voice.",
+                    "A few minutes later, his worried family found him near the counter and held him tightly.",
+                    "On the way home, Noah understood that asking for help had been the bravest move he made all day."
+                ]
+            return self.clean_sentence_list(sentences, count)
 
         if is_leo_tiny_door_story and is_story_continuation:
             sentences = [

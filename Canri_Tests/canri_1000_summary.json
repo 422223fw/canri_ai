@@ -1,12 +1,12 @@
 {
   "title": "Canri AI 1,000 Prompt End-to-End Test Report",
-  "generated_utc": "2026-07-16T11:22:13.127900+00:00",
+  "generated_utc": "2026-07-16T13:36:42.403278+00:00",
   "total_planned": 1000,
-  "total_completed": 510,
-  "total_passed": 431,
-  "total_failed": 79,
-  "pass_rate_percent": 84.51,
-  "estimated_canri_version": "benchmark incomplete",
+  "total_completed": 1000,
+  "total_passed": 669,
+  "total_failed": 331,
+  "pass_rate_percent": 66.9,
+  "estimated_canri_version": "0.6.0 alpha",
   "category_summary": {
     "algebra": {
       "completed": 50,
@@ -29,29 +29,29 @@
       "pass_rate_percent": 100.0
     },
     "context_continuation": {
-      "completed": 0,
-      "passed": 0,
-      "pass_rate_percent": 0.0
+      "completed": 25,
+      "passed": 4,
+      "pass_rate_percent": 16.0
     },
     "context_start": {
-      "completed": 0,
-      "passed": 0,
-      "pass_rate_percent": 0.0
+      "completed": 25,
+      "passed": 25,
+      "pass_rate_percent": 100.0
     },
     "conversation": {
-      "completed": 0,
-      "passed": 0,
-      "pass_rate_percent": 0.0
+      "completed": 50,
+      "passed": 30,
+      "pass_rate_percent": 60.0
     },
     "creative_design": {
-      "completed": 10,
-      "passed": 1,
+      "completed": 50,
+      "passed": 5,
       "pass_rate_percent": 10.0
     },
     "emotional_support": {
-      "completed": 0,
-      "passed": 0,
-      "pass_rate_percent": 0.0
+      "completed": 50,
+      "passed": 30,
+      "pass_rate_percent": 60.0
     },
     "fact_check": {
       "completed": 50,
@@ -59,9 +59,9 @@
       "pass_rate_percent": 20.0
     },
     "game_design": {
-      "completed": 0,
-      "passed": 0,
-      "pass_rate_percent": 0.0
+      "completed": 50,
+      "passed": 20,
+      "pass_rate_percent": 40.0
     },
     "geography": {
       "completed": 50,
@@ -74,17 +74,17 @@
       "pass_rate_percent": 40.0
     },
     "language": {
-      "completed": 0,
-      "passed": 0,
-      "pass_rate_percent": 0.0
+      "completed": 50,
+      "passed": 50,
+      "pass_rate_percent": 100.0
     },
     "planning": {
-      "completed": 0,
-      "passed": 0,
-      "pass_rate_percent": 0.0
+      "completed": 50,
+      "passed": 15,
+      "pass_rate_percent": 30.0
     },
     "reasoning": {
-      "completed": 0,
+      "completed": 50,
       "passed": 0,
       "pass_rate_percent": 0.0
     },
@@ -94,19 +94,19 @@
       "pass_rate_percent": 100.0
     },
     "security_safe": {
-      "completed": 0,
-      "passed": 0,
-      "pass_rate_percent": 0.0
+      "completed": 25,
+      "passed": 25,
+      "pass_rate_percent": 100.0
     },
     "security_unsafe": {
-      "completed": 0,
-      "passed": 0,
-      "pass_rate_percent": 0.0
+      "completed": 25,
+      "passed": 25,
+      "pass_rate_percent": 100.0
     },
     "spelling_grammar": {
-      "completed": 0,
-      "passed": 0,
-      "pass_rate_percent": 0.0
+      "completed": 50,
+      "passed": 10,
+      "pass_rate_percent": 20.0
     },
     "story": {
       "completed": 50,
@@ -118,5 +118,30 @@
       "passed": 50,
       "pass_rate_percent": 100.0
     }
+  },
+  "run_elapsed_seconds": 14313.603,
+  "completed_by_category": {
+    "arithmetic": 50,
+    "algebra": 50,
+    "code_generation": 50,
+    "code_explanation": 50,
+    "science": 50,
+    "technology": 50,
+    "geography": 50,
+    "history": 50,
+    "fact_check": 50,
+    "story": 50,
+    "creative_design": 50,
+    "language": 50,
+    "spelling_grammar": 50,
+    "planning": 50,
+    "reasoning": 50,
+    "emotional_support": 50,
+    "security_safe": 25,
+    "security_unsafe": 25,
+    "conversation": 50,
+    "game_design": 50,
+    "context_start": 25,
+    "context_continuation": 25
   }
 }

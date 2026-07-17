@@ -1078,6 +1078,29 @@ class UnderstandingBrain:
             scores["math"] = scores.get("math", 0) + 18
             hits.setdefault("math", []).append("math_expression")
 
+        if re.fullmatch(
+            r"\s*[-+]?\d+(?:\.\d+)?\s*[+\-*/]\s*[-+]?\d+(?:\.\d+)?\s*\??\s*",
+            lowered
+        ):
+            scores["math"] = scores.get("math", 0) + 24
+            hits.setdefault("math", []).append("simple_arithmetic_expression")
+
+        hebrew_science_markers = [
+            "\u05db\u05d5\u05d7 \u05d4\u05de\u05e9\u05d9\u05db\u05d4", "\u05db\u05d5\u05d7 \u05db\u05d1\u05d9\u05d3\u05d4", "\u05db\u05d5\u05db\u05d1\u05d9\u05dd", "\u05e4\u05d9\u05d6\u05d9\u05e7\u05d4", "\u05de\u05d3\u05e2"
+        ]
+        matched_science = [marker for marker in hebrew_science_markers if marker in lowered]
+        if matched_science:
+            scores["science"] = scores.get("science", 0) + 22 + len(matched_science) * 3
+            hits.setdefault("science", []).extend(matched_science)
+
+        hebrew_story_markers = [
+            "\u05e1\u05d9\u05e4\u05d5\u05e8", "\u05ea\u05e6\u05d5\u05e8 \u05dc\u05d9 \u05e1\u05d9\u05e4\u05d5\u05e8", "\u05db\u05ea\u05d5\u05d1 \u05dc\u05d9 \u05e1\u05d9\u05e4\u05d5\u05e8"
+        ]
+        matched_story = [marker for marker in hebrew_story_markers if marker in lowered]
+        if matched_story:
+            scores["story"] = scores.get("story", 0) + 24 + len(matched_story) * 3
+            hits.setdefault("story", []).extend(matched_story)
+
         if self.has_code_payload(text):
             scores["code"] = scores.get("code", 0) + 14
             hits.setdefault("code", []).append("code_payload")
@@ -1086,6 +1109,7 @@ class UnderstandingBrain:
             "i feel", "can we talk", "listen to me", "having a hard time",
             "need someone", "\u05e7\u05e9\u05d4 \u05dc\u05d9", "\u05d0\u05e0\u05d9 \u05de\u05e8\u05d2\u05d9\u05e9", "\u05d0\u05e0\u05d9 \u05de\u05e8\u05d2\u05d9\u05e9\u05d4",
             "\u05d0\u05e4\u05e9\u05e8 \u05dc\u05d3\u05d1\u05e8", "\u05d0\u05e0\u05d9 \u05e6\u05e8\u05d9\u05da \u05dc\u05d3\u05d1\u05e8", "\u05d0\u05e0\u05d9 \u05e6\u05e8\u05d9\u05db\u05d4 \u05dc\u05d3\u05d1\u05e8"
+            ,"\u05d9\u05d5\u05dd \u05e7\u05e9\u05d4", "\u05de\u05e2\u05d9\u05d9\u05e3", "\u05de\u05e2\u05d9\u05d9\u05e4\u05ea", "\u05e2\u05d9\u05d9\u05e3", "\u05e2\u05d9\u05d9\u05e4\u05d4"
         ]
         matched_emotion = [marker for marker in emotion_phrases if marker in lowered]
         if matched_emotion:
@@ -1176,6 +1200,9 @@ class UnderstandingBrain:
 
         if main_topic == "game" and "code" not in lowered:
             scores["game_design"] = scores.get("game_design", 0) + 4
+
+        if main_topic == "story":
+            scores["story_creation"] = scores.get("story_creation", 0) + 14
 
         if not scores:
             return "request", 45, {}

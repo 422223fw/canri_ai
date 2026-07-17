@@ -29,6 +29,17 @@ BLOCKED_SAFETY_HINTS = {
     "general": "אני לא יכול לעזור בחלק המסוכן של הבקשה, אבל אפשר להמשיך בכיוון בטוח."
 }
 
+INTERNAL_ONLY_BRAINS = {
+    "Manager_brain",
+    "Planner_brain",
+    "Reasoning_brain",
+    "Quality_Control_brain",
+    "Fact_Check_brain",
+    "Learning_brain",
+    "Memory_brain",
+    "Collaboration_brain",
+}
+
 
 class ResponseBrain:
 
@@ -541,11 +552,13 @@ class ResponseBrain:
                 "Learning_brain",
                 "Emotion_brain",
                 "Collaboration_brain"
-            }:
+            } or brain_name in INTERNAL_ONLY_BRAINS:
                 continue
             if brain_name == "Creative_brain" and not allow_creative:
                 continue
             if brain_name == "Code_brain" and not allow_code:
+                continue
+            if not self.has_user_facing_output(brain_name, result):
                 continue
 
             candidates.append((
@@ -585,7 +598,11 @@ class ResponseBrain:
         if is_code_request:
             preferred.append("Code_brain")
 
-        if not is_code_request and (topic == "math" or intent == "math" or (
+        simple_math_expression = bool(re.fullmatch(
+            r"\s*[-+]?\d+(?:\.\d+)?\s*[+\-*/]\s*[-+]?\d+(?:\.\d+)?\s*\??\s*",
+            lowered
+        ))
+        if not is_code_request and (topic == "math" or intent == "math" or simple_math_expression or (
             re.search(r"\d|\bx\b", lowered)
             and (
                 "=" in lowered
@@ -628,10 +645,17 @@ class ResponseBrain:
                 continue
             if result.get("error") or result.get("skipped"):
                 continue
-            if self.text_from_result(brain_name, result):
+            if self.has_user_facing_output(brain_name, result):
                 return brain_name, result
 
         return None, {}
+
+    def has_user_facing_output(self, brain_name, result):
+
+        if brain_name in INTERNAL_ONLY_BRAINS or not isinstance(result, dict):
+            return False
+        text = self.text_from_result(brain_name, result)
+        return bool(text and not self.looks_like_internal_report(text))
 
     def is_pure_emotional_conversation(self, report, results, user_text):
 
@@ -973,6 +997,9 @@ class ResponseBrain:
         if not isinstance(result, dict):
             return self.clean_text(result)
 
+        if brain_name in INTERNAL_ONLY_BRAINS:
+            return ""
+
         if brain_name == "Code_brain":
             return self.format_code_result(result)
 
@@ -992,12 +1019,6 @@ class ResponseBrain:
             value = result.get("final_output")
             if value:
                 return str(value)
-
-        if brain_name == "Reasoning_brain":
-            for key in ["solutions", "conclusions"]:
-                value = result.get(key)
-                if isinstance(value, list) and value:
-                    return self.format_list("Here is the useful conclusion:", value[:5])
 
         if result.get("generated_code"):
             return self.format_code_block(
@@ -1033,6 +1054,9 @@ class ResponseBrain:
                 concept = idea.get("concept", "")
                 return f"{title}\n{concept}".strip()
 
+        if result.get("plan") or result.get("steps") or result.get("facts") or result.get("local_matches"):
+            return ""
+
         if result.get("plan"):
             return self.format_plan(result["plan"])
 
@@ -1058,7 +1082,7 @@ class ResponseBrain:
         if result.get("game_design"):
             return self.format_structured(result["game_design"])
 
-        return self.format_structured(result)
+        return ""
 
     def looks_like_internal_report(self, text):
 
@@ -1073,8 +1097,19 @@ class ResponseBrain:
             "implementation:",
             "direction:"
         ]
-
-        return sum(1 for marker in markers if marker in lowered) >= 3
+        process_markers = [
+            "review relevant memory before",
+            "extract the complete request contract",
+            "map every requirement to an owner",
+            "implement and verify:",
+            "verify every requirement",
+            "quality correction requirements",
+            "here is the useful conclusion:"
+        ]
+        return (
+            sum(1 for marker in markers if marker in lowered) >= 2
+            or any(marker in lowered for marker in process_markers)
+        )
 
     def safe_alternative_result(self, results, report, user_text, current_brain=None):
 
@@ -1095,7 +1130,11 @@ class ResponseBrain:
                 "Security_brain",
                 "Quality_Control_brain",
                 "Learning_brain",
-                "Collaboration_brain"
+                "Collaboration_brain",
+                "Planner_brain",
+                "Reasoning_brain",
+                "Memory_brain",
+                "Fact_Check_brain"
             }:
                 continue
             candidates.append((brain_name, result))
@@ -1106,6 +1145,19 @@ class ResponseBrain:
                 return brain_name, result, text
 
         return None, {}, ""
+
+    def user_facing_fallback(self, report):
+
+        topic = str(report.get("main_topic", "general")).lower()
+        messages = {
+            "story": "I could not produce the story cleanly yet. Please send the story request again.",
+            "math": "I could not produce a verified math answer yet. Please send the expression again.",
+            "science": "I could not produce a clear science explanation yet. Please ask the question again."
+        }
+        return messages.get(
+            topic,
+            "I could not produce a useful final answer yet. Please send the request again in one sentence."
+        )
 
     def format_plan(self, plan):
 
@@ -1331,6 +1383,15 @@ class ResponseBrain:
             )
         )
 
+    def requests_verification_status(self, user_text):
+
+        lowered = str(user_text or "").lower()
+        markers = [
+            "reliable", "reliability", "fact check", "check if", "verify",
+            "sources", "source", "confidence", "\u05d1\u05d3\u05d5\u05e7 \u05e2\u05d5\u05d1\u05d3\u05d5\u05ea", "\u05de\u05e7\u05d5\u05e8\u05d5\u05ea", "\u05d0\u05de\u05d9\u05e0\u05d5\u05ea"
+        ]
+        return any(marker in lowered for marker in markers)
+
     def strip_internal_output(self, text):
 
         value = str(text or "").strip()
@@ -1443,10 +1504,7 @@ class ResponseBrain:
                         primary_result = alt_result
                         display_text = alt_text
                     else:
-                        display_text = (
-                            "I found internal planning output, but not a clean final answer yet. "
-                            "Quality_Control_brain should retry the specialist brain and ask it for the final user-facing result."
-                        )
+                        display_text = self.user_facing_fallback(report)
                 blocking_issue = self.blocking_quality_issue(results, primary_brain)
                 if blocking_issue:
                     display_text = (
@@ -1460,13 +1518,17 @@ class ResponseBrain:
             else:
                 display_text = "אין לי עדיין מידע מספיק כדי לבנות תשובה."
 
+            if not display_text or self.looks_like_internal_report(display_text):
+                display_text = self.user_facing_fallback(report)
+
             if not strict_output:
-                display_text = self.add_verification_note(
-                    display_text,
-                    results,
-                    report,
-                    primary_brain
-                )
+                if self.requests_verification_status(user_text):
+                    display_text = self.add_verification_note(
+                        display_text,
+                        results,
+                        report,
+                        primary_brain
+                    )
                 display_text = self.adapt_tone(display_text, results)
 
             confidence_values = [
