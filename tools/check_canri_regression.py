@@ -1145,6 +1145,27 @@ def test_reasoning_and_creative_evolve_source_backed_answers():
     assert_true("\n\n" in final_output, "Creative did not construct a multi-paragraph answer.")
 
 
+def test_story_uses_dynamic_request_graph_before_templates():
+    prompt = (
+        "Write a short original story in 6 sentences about a curious girl named Maya "
+        "who finds a silver key in a quiet park and must decide whether to open a hidden door."
+    )
+    understanding = UnderstandingBrain()
+    report = understanding.process({"original_text": prompt})
+    story = StoryBrain()
+    story.update_statistics = lambda *args, **kwargs: None
+    result = story.process({
+        "original_text": prompt,
+        "understanding_report": report
+    })
+    output = result.get("final_output", "").lower()
+    assert_true(result.get("generation_mode") == "request_graph_dictionary_generation", "Story did not use dynamic generation.")
+    assert_true(result.get("template_used") is False, "A prepared story template was used despite complete request context.")
+    assert_true(result.get("dynamic_generation", {}).get("candidate_count", 0) >= 8, "Story did not compare dynamic alternatives.")
+    assert_true("maya" in output and "silver key" in output and "quiet park" in output, "Dynamic story lost explicit details.")
+    assert_true("open a hidden door" in output, "Dynamic story lost the requested decision.")
+
+
 def main():
     tests = [
         test_expense_tracker_code_and_quality,
@@ -1196,6 +1217,7 @@ def main():
         test_understanding_routes_simple_math_science_and_story_details,
         test_creative_builds_dictionary_guided_lexical_candidates,
         test_reasoning_and_creative_evolve_source_backed_answers,
+        test_story_uses_dynamic_request_graph_before_templates,
     ]
 
     for test in tests:

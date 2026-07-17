@@ -3067,6 +3067,18 @@ class CreativeBrain:
             else name
         )
 
+        if lexical_plan:
+            generated_sentences = [
+                f"{character_intro} {opening_verb} into {elements['setting']} and {noticing_verb} {elements['discovery']}.",
+                f"The discovery seemed {reaction_adjective} because it changed what {name} believed about the place.",
+                f"The situation forced {name} to confront {elements['conflict']}.",
+                f"Instead of reacting immediately, {name} examined the available clues {response_adverb}.",
+                f"That pause revealed a choice connected to {elements['ending']}.",
+                f"By acting on the choice, {name} changed both the problem and the way it was understood.",
+                f"The experience ended with {name} carrying a clearer sense of what to do next."
+            ]
+            return " ".join(generated_sentences[:sentence_count])
+
         if "patient" in lowered and "six months" in lowered:
             sentences = [
                 f"For six months, nobody at the clinic knew where {name} had gone.",
