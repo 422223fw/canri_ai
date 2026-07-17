@@ -29,6 +29,7 @@ RULES_FILE = DATA_DIR / "Creative_scoring_rules.json"
 GRAPHS_FILE = DATA_DIR / "Creative_evolution_graphs.json"
 STATS_FILE = DATA_DIR / "Creative_statistics.json"
 MEMORY_FILE = DATA_DIR / "Creative_memory.json"
+WRITING_RULES_FILE = DATA_DIR / "Creative_writing_rules.json"
 
 ALWAYS_CANRI_DATA_FILES = [
     "Learning_history.json",
@@ -790,6 +791,497 @@ class CreativeCodeAssembler:
         return min(round(score, 2), 100)
 
 
+class DictionaryGuidedComposer:
+    """Build small, grammatical lexical alternatives from UnderstandingDk tags.
+
+    This is deliberately bounded.  It creates candidate phrasing plans rather
+    than blindly combining every dictionary word, which would make output slow
+    and incoherent.
+    """
+
+    STORY_OPENERS = ["walked", "stepped", "moved", "wandered"]
+    STORY_NOTICING_VERBS = ["noticed", "found", "spotted", "discovered"]
+    STORY_REACTIONS = ["strange", "important", "unsettling", "impossible"]
+    STORY_RESPONSES = ["carefully", "bravely", "quietly", "patiently"]
+
+    def __init__(self, writing_rules=None):
+        self.writing_rules = writing_rules if isinstance(writing_rules, dict) else {}
+
+    def lexical_evidence(self, report, terms):
+        report = report if isinstance(report, dict) else {}
+        tags = report.get("advanced_word_tags", [])
+        evidence = {
+            "nouns": [],
+            "verbs": [],
+            "adjectives": [],
+            "related": [],
+            "definitions": []
+        }
+
+        for tag in tags[:120] if isinstance(tags, list) else []:
+            if not isinstance(tag, dict):
+                continue
+            word = str(tag.get("word", "")).strip().lower()
+            if not re.fullmatch(r"[a-z][a-z-]{1,40}", word):
+                continue
+            word_type = str(tag.get("normalized_type", "")).lower()
+            if word_type == "noun":
+                evidence["nouns"].append(word)
+            elif word_type == "verb":
+                evidence["verbs"].append(word)
+            elif word_type == "adjective":
+                evidence["adjectives"].append(word)
+            evidence["related"].extend(
+                str(item).lower()
+                for item in tag.get("connection_hints", [])[:4]
+                if isinstance(item, str)
+            )
+            definition = tag.get("definition_hint")
+            if definition:
+                evidence["definitions"].append(str(definition)[:160])
+
+        for term in terms[:80]:
+            term = str(term).strip().lower()
+            if re.fullmatch(r"[a-z][a-z-]{1,40}", term):
+                evidence["nouns"].append(term)
+
+        return {
+            key: list(dict.fromkeys(values))[:60]
+            for key, values in evidence.items()
+        }
+
+    def score_plan(self, plan, text, evidence):
+        lowered = str(text or "").lower()
+        score = 50
+        anchors = set(evidence.get("nouns", []) + evidence.get("verbs", []))
+        request_words = set(re.findall(r"[a-z][a-z-]+", lowered))
+        score += min(len(anchors.intersection(request_words)) * 5, 25)
+        score += min(
+            len(set(evidence.get("related", [])).intersection(request_words)) * 2,
+            8
+        )
+        if evidence.get("definitions"):
+            score += 3
+        score += {
+            "walked": 10,
+            "stepped": 9,
+            "wandered": 7,
+            "moved": 4
+        }.get(plan["opening_verb"], 0)
+        if plan["noticing_verb"] in {"noticed", "found", "spotted", "discovered"}:
+            score += 8
+        score += {
+            "strange": 10,
+            "impossible": 8,
+            "unsettling": 6,
+            "important": 4
+        }.get(plan["reaction_adjective"], 0)
+        if plan["response_adverb"] in {"carefully", "bravely", "quietly", "patiently"}:
+            score += 6
+        if plan.get("character_descriptor"):
+            score += 7
+        if len({
+            plan["opening_verb"], plan["noticing_verb"],
+            plan["reaction_adjective"], plan["response_adverb"]
+        }) == 4:
+            score += 5
+        return min(score, 140)
+
+    def character_descriptors(self, evidence):
+        allowed = set(self.writing_rules.get("safe_character_descriptors", [
+            "curious", "quiet", "brave", "careful", "kind", "thoughtful"
+        ]))
+        requested = [
+            word for word in evidence.get("adjectives", [])
+            if word in allowed
+        ]
+        return requested or [""]
+
+    def build_plan(self, report, text, terms, domain, candidate_limit=96):
+        evidence = self.lexical_evidence(report, terms)
+        candidates = []
+
+        if domain != "story":
+            return {
+                "enabled": False,
+                "reason": "Lexical composition is reserved for user-facing creative language.",
+                "evidence": evidence,
+                "candidate_count": 0
+            }
+
+        descriptors = self.character_descriptors(evidence)
+        for index in range(candidate_limit):
+            plan = {
+                "opening_verb": self.STORY_OPENERS[index % len(self.STORY_OPENERS)],
+                "noticing_verb": self.STORY_NOTICING_VERBS[(index // 2) % len(self.STORY_NOTICING_VERBS)],
+                "reaction_adjective": self.STORY_REACTIONS[(index // 5) % len(self.STORY_REACTIONS)],
+                "response_adverb": self.STORY_RESPONSES[(index // 11) % len(self.STORY_RESPONSES)],
+                "character_descriptor": descriptors[index % len(descriptors)]
+            }
+            plan["score"] = self.score_plan(plan, text, evidence)
+            candidates.append(plan)
+
+        candidates.sort(
+            key=lambda item: (
+                item["score"],
+                item["noticing_verb"] == "discovered",
+                item["response_adverb"] == "carefully"
+            ),
+            reverse=True
+        )
+        selected = candidates[0] if candidates else {}
+        return {
+            "enabled": True,
+            "strategy": "dictionary_tags_plus_grammar_safe_sentence_frames",
+            "candidate_count": len(candidates),
+            "selected": selected,
+            "evidence": evidence,
+            "rules_applied": self.writing_rules.get("writing_rules", []),
+            "diversity": {
+                "unique_opening_verbs": len({item["opening_verb"] for item in candidates}),
+                "unique_noticing_verbs": len({item["noticing_verb"] for item in candidates}),
+                "unique_reaction_adjectives": len({item["reaction_adjective"] for item in candidates}),
+                "unique_response_adverbs": len({item["response_adverb"] for item in candidates})
+            },
+            "alternatives": candidates[:12]
+        }
+
+
+class EvolutionaryTextComposer:
+    """Evolve paragraph-level answers while preserving source claims."""
+
+    DEFAULT_MODES = [
+        "direct",
+        "deductive",
+        "inductive",
+        "causal",
+        "comparative",
+        "critical",
+        "systems"
+    ]
+    INTERNAL_BRAINS = {
+        "Manager_brain", "Planner_brain", "Quality_Control_brain",
+        "Memory_brain", "Learning_brain", "Collaboration_brain",
+        "Reasoning_brain", "Fact_Check_brain"
+    }
+    INTERNAL_MARKERS = {
+        "goal:", "core idea:", "novel twist:", "constraint:",
+        "validation:", "direction:", "review relevant memory",
+        "extract the complete request contract"
+    }
+
+    def split_sentences(self, text):
+        clean = re.sub(r"\s+", " ", str(text or "")).strip()
+        if not clean:
+            return []
+        parts = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9])", clean)
+        return [part.strip() for part in parts if len(part.strip()) >= 20][:36]
+
+    def looks_internal(self, text):
+        lowered = str(text or "").lower()
+        return sum(marker in lowered for marker in self.INTERNAL_MARKERS) >= 2
+
+    def extract_result_text(self, brain_name, result):
+        if brain_name in self.INTERNAL_BRAINS or not isinstance(result, dict):
+            return ""
+        for key in ["final_output", "answer", "explanation", "summary", "story"]:
+            value = result.get(key)
+            if isinstance(value, str) and value.strip() and not self.looks_internal(value):
+                return value.strip()
+        return ""
+
+    def collect_source_material(self, data, canri_context, base_output):
+        sources = []
+        data = data if isinstance(data, dict) else {}
+        results = data.get("results", {})
+        if isinstance(results, dict):
+            for brain_name, result in results.items():
+                text = self.extract_result_text(brain_name, result)
+                if text:
+                    sources.append({
+                        "source": brain_name,
+                        "text": text,
+                        "trust": float(result.get("confidence", 70) or 70)
+                    })
+
+        source_result = data.get("source_result")
+        if isinstance(source_result, dict):
+            text = self.extract_result_text(
+                str(data.get("source_brain", "specialist_brain")),
+                source_result
+            )
+            if text:
+                sources.append({
+                    "source": str(data.get("source_brain", "specialist_brain")),
+                    "text": text,
+                    "trust": float(source_result.get("confidence", 70) or 70)
+                })
+
+        for file_name, file_info in (canri_context or {}).items():
+            if not isinstance(file_info, dict):
+                continue
+            for snippet in file_info.get("snippets", [])[:3]:
+                if not isinstance(snippet, dict):
+                    continue
+                text = str(snippet.get("text", "")).strip()
+                if len(text) >= 60:
+                    sources.append({
+                        "source": file_name,
+                        "text": text,
+                        "trust": float(file_info.get("trust_score", 68) or 68)
+                    })
+
+        lowered_base = str(base_output or "").lower()
+        if (
+            base_output
+            and not self.looks_internal(base_output)
+            and "the final response should be the finished result" not in lowered_base
+        ):
+            sources.insert(0, {
+                "source": "Creative_brain_base_output",
+                "text": str(base_output),
+                "trust": 72.0
+            })
+
+        unique = []
+        seen = set()
+        for source in sources:
+            key = re.sub(r"\W+", " ", source["text"].lower())[:240]
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            unique.append(source)
+        return unique[:16]
+
+    def sentence_role(self, sentence, index, total):
+        lowered = sentence.lower()
+        if index == 0:
+            return "definition_or_overview"
+        if any(word in lowered for word in ["because", "causes", "results in", "therefore", "mechanism"]):
+            return "cause_or_mechanism"
+        if any(word in lowered for word in ["evidence", "study", "source", "measured", "observed"]):
+            return "evidence"
+        if any(word in lowered for word in ["example", "for instance", "such as", "application"]):
+            return "example_or_application"
+        if any(word in lowered for word in ["however", "but", "limit", "uncertain", "although"]):
+            return "limit_or_qualification"
+        if index == total - 1:
+            return "conclusion"
+        return "supporting_explanation"
+
+    def order_for_mode(self, records, mode):
+        priority = {
+            "direct": ["definition_or_overview", "supporting_explanation", "cause_or_mechanism", "evidence", "example_or_application", "limit_or_qualification", "conclusion"],
+            "deductive": ["definition_or_overview", "cause_or_mechanism", "supporting_explanation", "evidence", "conclusion", "limit_or_qualification"],
+            "inductive": ["evidence", "example_or_application", "supporting_explanation", "cause_or_mechanism", "definition_or_overview", "conclusion"],
+            "causal": ["cause_or_mechanism", "definition_or_overview", "supporting_explanation", "example_or_application", "evidence", "conclusion"],
+            "comparative": ["definition_or_overview", "example_or_application", "supporting_explanation", "limit_or_qualification", "conclusion"],
+            "critical": ["definition_or_overview", "limit_or_qualification", "evidence", "cause_or_mechanism", "supporting_explanation", "conclusion"],
+            "systems": ["definition_or_overview", "cause_or_mechanism", "supporting_explanation", "example_or_application", "evidence", "limit_or_qualification", "conclusion"]
+        }.get(mode, [])
+        rank = {role: index for index, role in enumerate(priority)}
+        return sorted(records, key=lambda item: (rank.get(item["role"], 99), item["index"]))
+
+    def build_article(self, ordered, paragraph_size):
+        paragraphs = []
+        for start in range(0, len(ordered), paragraph_size):
+            paragraph = " ".join(item["text"] for item in ordered[start:start + paragraph_size])
+            if paragraph:
+                paragraphs.append(paragraph)
+        return "\n\n".join(paragraphs)
+
+    def refine_order(self, ordered):
+        """Keep a readable article arc without changing any source sentence."""
+        overview = [item for item in ordered if item["role"] == "definition_or_overview"]
+        conclusion = [item for item in ordered if item["role"] == "conclusion"]
+        middle = [
+            item for item in ordered
+            if item["role"] not in {"definition_or_overview", "conclusion"}
+        ]
+        return overview[:1] + middle + overview[1:] + conclusion
+
+    def fact_profile(self, data):
+        results = data.get("results", {}) if isinstance(data, dict) else {}
+        fact = results.get("Fact_Check_brain", {}) if isinstance(results, dict) else {}
+        if not isinstance(fact, dict):
+            fact = {}
+        return {
+            "verdict": fact.get("verdict", "not_checked"),
+            "confidence": float(fact.get("confidence", 0) or 0),
+            "verified": bool(fact.get("verified")),
+            "evidence_count": int(fact.get("evidence_count", 0) or 0),
+            "needs_research": bool(fact.get("needs_research"))
+        }
+
+    def reasoning_modes(self, data):
+        results = data.get("results", {}) if isinstance(data, dict) else {}
+        reasoning = results.get("Reasoning_brain", {}) if isinstance(results, dict) else {}
+        directions = reasoning.get("reasoning_directions", {}) if isinstance(reasoning, dict) else {}
+        modes = []
+        selected = directions.get("selected", {}) if isinstance(directions, dict) else {}
+        if isinstance(selected, dict) and selected.get("mode"):
+            modes.append(selected["mode"])
+        for item in directions.get("alternatives", []) if isinstance(directions, dict) else []:
+            if isinstance(item, dict) and item.get("mode"):
+                modes.append(item["mode"])
+        modes.extend(self.DEFAULT_MODES)
+        return list(dict.fromkeys(modes))[:9]
+
+    def score_variant(self, variant, request_text, source_count, fact_profile):
+        request_terms = {
+            term for term in re.findall(r"[a-z][a-z-]{2,}", request_text.lower())
+            if term not in GENERIC_TERMS
+        }
+        output_terms = set(re.findall(r"[a-z][a-z-]{2,}", variant["text"].lower()))
+        coverage = len(request_terms.intersection(output_terms)) / max(len(request_terms), 1)
+        role_count = len(set(variant["roles"]))
+        score = 42 + coverage * 28 + min(role_count * 4, 20) + min(source_count * 2, 10)
+        if fact_profile["verified"]:
+            score += 8
+        elif fact_profile["needs_research"]:
+            score -= 10
+        if self.looks_internal(variant["text"]):
+            score -= 35
+        if len(variant["text"]) < 120:
+            score -= 12
+        variant["scores"] = {
+            "request_coverage": round(coverage * 100, 2),
+            "structural_roles": role_count,
+            "source_preservation": 100,
+            "fact_confidence": fact_profile["confidence"],
+            "total": round(max(0, min(score, 100)), 2)
+        }
+        return variant
+
+    def evolve(self, data, report, text, domain, base_output, canri_context):
+        sources = self.collect_source_material(data, canri_context, base_output)
+        sentences = []
+        for source in sources:
+            for sentence in self.split_sentences(source["text"]):
+                sentences.append({
+                    "text": sentence,
+                    "source": source["source"],
+                    "trust": source["trust"]
+                })
+
+        unique_sentences = []
+        seen = set()
+        for item in sentences:
+            signature = re.sub(r"\W+", " ", item["text"].lower()).strip()
+            if signature in seen:
+                continue
+            seen.add(signature)
+            item["index"] = len(unique_sentences)
+            item["role"] = self.sentence_role(item["text"], item["index"], len(sentences))
+            unique_sentences.append(item)
+        unique_sentences = unique_sentences[:24]
+
+        if not unique_sentences:
+            return {
+                "enabled": False,
+                "reason": "No source-backed sentences were available.",
+                "selected_output": base_output,
+                "candidate_count": 0
+            }
+
+        fact_profile = self.fact_profile(data)
+        modes = self.reasoning_modes(data)
+        candidates = []
+        for mode in modes:
+            ordered = self.order_for_mode(unique_sentences, mode)
+            for paragraph_size in [2, 3, 4]:
+                article = self.build_article(ordered, paragraph_size)
+                candidate = {
+                    "id": f"response_{mode}_{paragraph_size}",
+                    "mode": mode,
+                    "paragraph_size": paragraph_size,
+                    "text": article,
+                    "roles": [item["role"] for item in ordered],
+                    "sources": list(dict.fromkeys(item["source"] for item in ordered))
+                }
+                candidates.append(
+                    self.score_variant(candidate, text, len(sources), fact_profile)
+                )
+
+        candidates.sort(key=lambda item: item["scores"]["total"], reverse=True)
+        evolution_history = [{
+            "round": 1,
+            "population": len(candidates),
+            "best_id": candidates[0]["id"],
+            "best_score": candidates[0]["scores"]["total"]
+        }]
+
+        population = list(candidates)
+        for round_number in [2, 3]:
+            elites = sorted(
+                population,
+                key=lambda item: item["scores"]["total"],
+                reverse=True
+            )[:6]
+            children = []
+            for index, elite in enumerate(elites):
+                base_mode = elite["mode"].replace("_refined", "")
+                ordered = self.refine_order(
+                    self.order_for_mode(unique_sentences, base_mode)
+                )
+                paragraph_size = 2 + ((elite["paragraph_size"] + index + round_number) % 3)
+                child = {
+                    "id": f"response_{base_mode}_refined_r{round_number}_{index}",
+                    "mode": f"{base_mode}_refined",
+                    "paragraph_size": paragraph_size,
+                    "text": self.build_article(ordered, paragraph_size),
+                    "roles": [item["role"] for item in ordered],
+                    "sources": list(dict.fromkeys(item["source"] for item in ordered)),
+                    "parent_id": elite["id"],
+                    "evolution_stage": round_number
+                }
+                child = self.score_variant(child, text, len(sources), fact_profile)
+                if child["roles"] and child["roles"][0] == "definition_or_overview":
+                    child["scores"]["total"] = min(100, child["scores"]["total"] + 3)
+                children.append(child)
+            population.extend(children)
+            population.sort(key=lambda item: item["scores"]["total"], reverse=True)
+            evolution_history.append({
+                "round": round_number,
+                "population": len(population),
+                "children": len(children),
+                "best_id": population[0]["id"],
+                "best_score": population[0]["scores"]["total"]
+            })
+
+        candidates = population
+        selected = candidates[0]
+        # Narrative and code ordering must remain owned by their specialist builders.
+        selected_output = base_output if domain in {"story", "code", "emotion"} else selected["text"]
+        return {
+            "enabled": True,
+            "algorithm": "source_preserving_multi_direction_response_evolution",
+            "candidate_count": len(candidates),
+            "rounds_completed": len(evolution_history),
+            "evolution_history": evolution_history,
+            "selected_mode": selected["mode"],
+            "selected_score": selected["scores"]["total"],
+            "selected_output": selected_output,
+            "paragraph_plan": [
+                {"sentence": item["text"], "role": item["role"], "source": item["source"]}
+                for item in self.order_for_mode(unique_sentences, selected["mode"])
+            ],
+            "fact_profile": fact_profile,
+            "source_count": len(sources),
+            "sources": [source["source"] for source in sources],
+            "alternatives": [
+                {
+                    "id": item["id"],
+                    "mode": item["mode"],
+                    "scores": item["scores"]
+                }
+                for item in candidates[:10]
+            ],
+            "claims_rewritten": False,
+            "safety_rule": "Factual source sentences are preserved instead of invented from word combinations."
+        }
+
+
 class CreativeBrain:
 
     def __init__(self):
@@ -798,6 +1290,7 @@ class CreativeBrain:
         self.rules = self.load_json(RULES_FILE, {})
         self.graphs = self.load_json(GRAPHS_FILE, {})
         self.statistics = self.load_json(STATS_FILE, {})
+        self.writing_rules = self.load_json(WRITING_RULES_FILE, {})
         self.creative_memory = self.load_json(MEMORY_FILE, {
             "ideas": [],
             "direction_profiles": {},
@@ -815,6 +1308,8 @@ class CreativeBrain:
         self.graphs_by_seed = self.index_graphs_by_seed()
         self.canri_index = self.build_canri_index()
         self.code_assembler = CreativeCodeAssembler(self)
+        self.dictionary_composer = DictionaryGuidedComposer(self.writing_rules)
+        self.text_composer = EvolutionaryTextComposer()
 
         print("Creative Brain Loaded")
 
@@ -1250,10 +1745,10 @@ class CreativeBrain:
                 "words": []
             }
 
-        understanding = data.get("understanding")
-
-        if isinstance(understanding, dict):
-            return understanding
+        for key in ["understanding", "understanding_report"]:
+            understanding = data.get(key)
+            if isinstance(understanding, dict):
+                return understanding
 
         if "main_topic" in data or "intent" in data or "words" in data:
             return data
@@ -2556,6 +3051,21 @@ class CreativeBrain:
         name = self.extract_story_name(text)
         elements = self.story_elements_from_text(text)
         lowered = str(text or "").lower()
+        lexical_plan = (
+            best.get("lexical_plan", {}).get("selected", {})
+            if isinstance(best, dict)
+            else {}
+        )
+        opening_verb = lexical_plan.get("opening_verb", "stepped")
+        noticing_verb = lexical_plan.get("noticing_verb", "noticed")
+        reaction_adjective = lexical_plan.get("reaction_adjective", "strange")
+        response_adverb = lexical_plan.get("response_adverb", "carefully")
+        character_descriptor = lexical_plan.get("character_descriptor", "")
+        character_intro = (
+            f"{name}, a {character_descriptor} character,"
+            if character_descriptor
+            else name
+        )
 
         if "patient" in lowered and "six months" in lowered:
             sentences = [
@@ -2582,11 +3092,11 @@ class CreativeBrain:
             return " ".join(sentences[:sentence_count])
 
         sentences = [
-            f"{name} stepped into {elements['setting']} and noticed {elements['discovery']}.",
-            "At first the discovery seemed small, but it changed the whole shape of the day.",
+            f"{character_intro} {opening_verb} into {elements['setting']} and {noticing_verb} {elements['discovery']}.",
+            f"At first the discovery seemed {reaction_adjective}, but it changed the whole shape of the day.",
             f"The real problem was {elements['conflict']}.",
             f"{name} felt afraid, but curiosity made the next step feel possible.",
-            "Instead of rushing, the character listened for the quiet rule hidden inside the moment.",
+            f"Instead of rushing, {name} moved {response_adverb} and listened for the quiet rule hidden inside the moment.",
             f"In the end, the choice became {elements['ending']}.",
             "Nothing became simple, but the world felt wider than it had before.",
         ]
@@ -3090,6 +3600,12 @@ class CreativeBrain:
             text,
             domain
         )
+        lexical_plan = self.dictionary_composer.build_plan(
+            report,
+            text,
+            terms,
+            domain
+        )
 
         generation_size = execution_policy["generation_size"]
         max_rounds = execution_policy["max_rounds"]
@@ -3103,6 +3619,9 @@ class CreativeBrain:
         )
 
         best = scored[0] if scored else {}
+        if isinstance(best, dict):
+            best = dict(best)
+            best["lexical_plan"] = lexical_plan
         best_score = best.get("scores", {}).get("total", 0)
         final_output = self.build_creative_final_output(
             text,
@@ -3116,8 +3635,24 @@ class CreativeBrain:
             emotion_result = results.get("Emotion_brain", {}) if isinstance(results, dict) else {}
             final_output = self.build_conversation_output(text, emotion_result)
 
+        response_evolution = self.text_composer.evolve(
+            data if isinstance(data, dict) else {},
+            report,
+            text,
+            domain,
+            final_output,
+            canri_context
+        )
+        evolved_output = str(response_evolution.get("selected_output", "")).strip()
+        if (
+            response_evolution.get("enabled")
+            and evolved_output
+            and domain not in {"story", "code", "emotion"}
+            and not self.looks_like_internal_report(evolved_output)
+        ):
+            final_output = evolved_output
+
         if isinstance(best, dict):
-            best = dict(best)
             best["final_output"] = final_output
             if domain == "story":
                 best["story"] = final_output
@@ -3205,6 +3740,8 @@ class CreativeBrain:
                 "ideas_stored": len(self.creative_memory.get("ideas", [])),
                 "domain_profile": self.creative_memory.get("direction_profiles", {}).get(domain, {})
             },
+            "dictionary_guided_composition": lexical_plan,
+            "response_evolution": response_evolution,
             "confidence": min(100, round(best_score, 2)),
             "suggested_next_brains": [
                 brain_name

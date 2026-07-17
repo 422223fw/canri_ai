@@ -24,6 +24,7 @@ from Math_brain import MathBrain  # noqa: E402
 from Manager_brain import ManagerBrain  # noqa: E402
 from Memory_brain import MemoryBrain  # noqa: E402
 from Quality_Control_brain import QualityControlBrain  # noqa: E402
+from Reasoning_brain import ReasoningBrain  # noqa: E402
 from Response_brain import ResponseBrain  # noqa: E402
 from Science_brain import ScienceBrain  # noqa: E402
 from Spelling_brain import SpellingBrain  # noqa: E402
@@ -1065,6 +1066,85 @@ def test_understanding_routes_simple_math_science_and_story_details():
     assert_true("floating city" not in final_story, "Story returned a generic template instead of the requested story.")
 
 
+def test_creative_builds_dictionary_guided_lexical_candidates():
+    prompt = "Write a short story about a curious girl who finds a key in a quiet park."
+    understanding = UnderstandingBrain()
+    report = understanding.process({"original_text": prompt})
+
+    creative = CreativeBrain()
+    creative.update_statistics = lambda *args, **kwargs: None
+    creative.remember_creative_result = lambda *args, **kwargs: None
+    result = creative.process({
+        "original_text": prompt,
+        "understanding_report": report
+    })
+
+    composition = result.get("dictionary_guided_composition", {})
+    selected = composition.get("selected", {})
+    output = result.get("final_output", "").lower()
+    assert_true(composition.get("candidate_count") == 96, "Creative lexical candidate set was not built.")
+    assert_true(bool(composition.get("evidence", {}).get("nouns")), "Dictionary noun evidence was not used.")
+    assert_true(selected.get("character_descriptor") == "curious", "Dictionary adjective evidence was not used in the selected sentence plan.")
+    assert_true(selected.get("opening_verb") in {"walked", "stepped", "wandered", "moved"}, "Selected lexical plan is invalid.")
+    assert_true("park" in output and "key" in output, "Lexical composition lost requested story details.")
+
+
+def test_reasoning_and_creative_evolve_source_backed_answers():
+    prompt = "Explain how gravity works and include evidence and limitations."
+    understanding = UnderstandingBrain()
+    report = understanding.process({"original_text": prompt})
+
+    reasoning = ReasoningBrain()
+    reasoning.update_statistics = lambda *args, **kwargs: None
+    reasoning_result = reasoning.process({
+        "original_text": prompt,
+        "understanding_report": report,
+        "results": {
+            "Science_brain": {
+                "facts": [
+                    {"text": "Gravity attracts masses toward one another.", "confidence": 90},
+                    {"text": "Falling-object measurements support gravitational models.", "confidence": 88}
+                ],
+                "confidence": 89
+            }
+        }
+    })
+    directions = reasoning_result.get("reasoning_directions", {})
+    assert_true(directions.get("candidate_count", 0) >= 5, "Reasoning did not compare multiple thinking directions.")
+    assert_true(directions.get("selected", {}).get("mode") == "evidence_based", "Reasoning did not select the evidence-backed direction.")
+
+    source_text = (
+        "Gravity is the attraction between objects with mass. "
+        "Near Earth, it causes unsupported objects to accelerate toward the ground. "
+        "Measurements of falling bodies and planetary motion provide evidence for gravitational models. "
+        "However, simplified descriptions do not cover every relativistic or quantum-scale question."
+    )
+    creative = CreativeBrain()
+    creative.update_statistics = lambda *args, **kwargs: None
+    creative.remember_creative_result = lambda *args, **kwargs: None
+    creative_result = creative.process({
+        "original_text": prompt,
+        "understanding_report": report,
+        "results": {
+            "Science_brain": {"final_output": source_text, "confidence": 91},
+            "Reasoning_brain": reasoning_result,
+            "Fact_Check_brain": {
+                "verified": True,
+                "verdict": "verified",
+                "confidence": 91,
+                "evidence_count": 3
+            }
+        }
+    })
+    evolution = creative_result.get("response_evolution", {})
+    final_output = creative_result.get("final_output", "")
+    assert_true(evolution.get("candidate_count", 0) >= 15, "Creative did not evolve multiple full-answer structures.")
+    assert_true(evolution.get("rounds_completed") == 3, "Creative did not refine the best full-answer candidates.")
+    assert_true(evolution.get("claims_rewritten") is False, "Factual claims must be preserved during response evolution.")
+    assert_true("Gravity is the attraction between objects with mass." in final_output, "Source-backed definition was lost.")
+    assert_true("\n\n" in final_output, "Creative did not construct a multi-paragraph answer.")
+
+
 def main():
     tests = [
         test_expense_tracker_code_and_quality,
@@ -1114,6 +1194,8 @@ def main():
         test_creative_registers_emotion_and_media_data,
         test_response_never_shows_internal_plans_or_reasoning_lists,
         test_understanding_routes_simple_math_science_and_story_details,
+        test_creative_builds_dictionary_guided_lexical_candidates,
+        test_reasoning_and_creative_evolve_source_backed_answers,
     ]
 
     for test in tests:

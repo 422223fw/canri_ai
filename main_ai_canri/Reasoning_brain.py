@@ -90,10 +90,10 @@ class ReasoningBrain:
                 "words": []
             }
 
-        understanding = data.get("understanding")
-
-        if isinstance(understanding, dict):
-            return understanding
+        for key in ["understanding", "understanding_report"]:
+            understanding = data.get(key)
+            if isinstance(understanding, dict):
+                return understanding
 
         if (
             "main_topic" in data
@@ -560,6 +560,124 @@ class ReasoningBrain:
             return "inductive"
 
         return "deductive"
+
+    def candidate_reasoning_modes(self, domain, intent, facts, terms):
+
+        primary = self.choose_reasoning_mode(domain, intent, facts, terms)
+        modes = [primary, "deductive", "inductive", "causal", "systems"]
+
+        if intent == "comparison":
+            modes.extend(["comparative", "critical"])
+        if intent in {"question", "explanation", "research"}:
+            modes.extend(["evidence_based", "critical"])
+        if intent in {"debugging", "planning", "code_generation"}:
+            modes.extend(["diagnostic", "step_by_step", "counterfactual"])
+        if domain in {"science", "history", "geography"}:
+            modes.extend(["evidence_based", "causal", "comparative"])
+        if domain in {"security", "technology"}:
+            modes.extend(["risk_based", "counterfactual"])
+
+        return list(dict.fromkeys(modes))[:10]
+
+    def score_reasoning_mode(
+        self,
+        mode,
+        domain,
+        intent,
+        facts,
+        connections,
+        contradictions,
+        evidence
+    ):
+
+        score = 45
+        reasons = []
+
+        preferred = self.choose_reasoning_mode(domain, intent, facts, [])
+        if mode == preferred:
+            score += 18
+            reasons.append("matches the primary domain and intent")
+        if mode == "evidence_based" and evidence.get("source_count", 0) >= 2:
+            score += 18
+            reasons.append("multiple evidence sources are available")
+        if mode == "inductive" and len(facts) >= 4:
+            score += 14
+            reasons.append("several observations can support a pattern")
+        if mode == "deductive" and facts:
+            score += 10
+            reasons.append("explicit premises are available")
+        if mode == "causal" and connections:
+            score += 13
+            reasons.append("connected facts can be examined for cause and effect")
+        if mode == "comparative" and intent == "comparison":
+            score += 24
+            reasons.append("the request explicitly asks for comparison")
+        if mode == "critical" and (contradictions or evidence.get("evidence_level") in {"weak", "conflicted"}):
+            score += 20
+            reasons.append("claims require challenge or qualification")
+        if mode == "diagnostic" and intent == "debugging":
+            score += 24
+            reasons.append("the request asks for diagnosis")
+        if mode == "step_by_step" and domain in {"math", "code"}:
+            score += 18
+            reasons.append("the domain benefits from ordered operations")
+        if mode == "risk_based" and domain == "security":
+            score += 24
+            reasons.append("the domain requires explicit risk evaluation")
+        if mode == "systems" and len(connections) >= 2:
+            score += 12
+            reasons.append("several connected components are present")
+        if mode == "counterfactual" and intent in {"planning", "debugging"}:
+            score += 12
+            reasons.append("alternatives can expose failure causes")
+
+        if contradictions and mode not in {"critical", "evidence_based", "risk_based"}:
+            score -= 8
+            reasons.append("unresolved contradictions reduce confidence")
+
+        return {
+            "mode": mode,
+            "score": round(max(0, min(score, 100)), 2),
+            "reasons": reasons or ["useful secondary reasoning perspective"]
+        }
+
+    def evolve_reasoning_directions(
+        self,
+        domain,
+        intent,
+        facts,
+        connections,
+        contradictions,
+        evidence
+    ):
+
+        modes = self.candidate_reasoning_modes(domain, intent, facts, [])
+        candidates = [
+            self.score_reasoning_mode(
+                mode,
+                domain,
+                intent,
+                facts,
+                connections,
+                contradictions,
+                evidence
+            )
+            for mode in modes
+        ]
+        candidates.sort(key=lambda item: item["score"], reverse=True)
+
+        selected = candidates[0] if candidates else {
+            "mode": "deductive",
+            "score": 40,
+            "reasons": ["safe default"]
+        }
+        return {
+            "algorithm": "multi_direction_reasoning_selection",
+            "candidate_count": len(candidates),
+            "selected": selected,
+            "alternatives": candidates[1:6],
+            "perspectives_preserved": [item["mode"] for item in candidates[:5]]
+        }
 
     # ---------- pattern/rule matching ----------
 
@@ -1113,6 +1231,18 @@ class ReasoningBrain:
             contradictions
         )
 
+        reasoning_directions = self.evolve_reasoning_directions(
+            domain,
+            intent,
+            facts,
+            connections + graph_connections,
+            contradictions,
+            evidence
+        )
+        mode = reasoning_directions.get("selected", {}).get("mode", mode)
+        pattern = self.select_pattern(domain, intent, mode, terms)
+        rule = self.select_rule(domain, intent, mode)
+
         missing_information = self.identify_missing_information(
             domain,
             intent,
@@ -1184,6 +1314,7 @@ class ReasoningBrain:
             "main_topic": domain,
             "intent": intent,
             "reasoning_mode": mode,
+            "reasoning_directions": reasoning_directions,
             "terms_used": terms,
             "graph_used": bool(graph_connections),
             "facts_used": [
