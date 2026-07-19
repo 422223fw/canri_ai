@@ -9,6 +9,8 @@ import ast
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
+from Code_artifact_catalog import CodeArtifactCatalog
+
 try:
     from Scanner_knowledge import scanner_evidence
 except Exception:
@@ -1802,6 +1804,7 @@ class CodeBrain:
         self.advanced_profiles = {}
         self.recipe_by_kind = {}
         self.code_by_id = {}
+        self.library_catalog = CodeArtifactCatalog()
         self.self_reviewer = CodeSelfReviewer()
         self.project_reviewer = CodeProjectReviewer()
         self.code_explainer = CodeExplainer()
@@ -2063,7 +2066,12 @@ class CodeBrain:
             ],
         }
 
-    def finalize_code_result(self, result, scanner_articles=None):
+    def finalize_code_result(
+        self,
+        result,
+        scanner_articles=None,
+        library_context=None
+    ):
 
         if not isinstance(result, dict):
             return result
@@ -2083,6 +2091,49 @@ class CodeBrain:
             "Use official documentation and package metadata as design evidence; "
             "never paste unverified forum or repository code into the output."
         )
+        library_context = [
+            item for item in (library_context or [])
+            if isinstance(item, dict) and isinstance(item.get("function"), dict)
+        ][:12]
+        result["library_api_context"] = [
+            {
+                "score": item.get("score", 0),
+                "matched_terms": item.get("matched_terms", []),
+                "library": item["function"].get("library"),
+                "function": item["function"].get("function"),
+                "qualified_name": item["function"].get("qualified_name"),
+                "callable_type": item["function"].get("callable_type"),
+                "signature": item["function"].get("signature"),
+                "summary": item["function"].get("summary"),
+                "source": item["function"].get("source", {}),
+                "risk_level": item["function"].get("risk_level", "standard"),
+                "requires_security_review": item["function"].get(
+                    "requires_security_review",
+                    False
+                ),
+                "call_template": item.get("template", {}).get("call_template"),
+                "import_statement": item.get("template", {}).get("import_statement"),
+            }
+            for item in library_context
+        ]
+        result["library_catalog_used"] = bool(library_context)
+        catalog_requires_security = any(
+            item["function"].get("requires_security_review", False)
+            for item in library_context[:5]
+        )
+        if catalog_requires_security:
+            result["needs_security"] = True
+            next_brains = result.get("suggested_next_brains", [])
+            if isinstance(next_brains, list) and "Security_brain" not in next_brains:
+                next_brains.insert(0, "Security_brain")
+                result["suggested_next_brains"] = next_brains
+        data_files_used = result.get("data_files_used", [])
+        if not isinstance(data_files_used, list):
+            data_files_used = []
+        for file_name in ["Library_functions.json", "Code_library_templates.json"]:
+            if file_name not in data_files_used:
+                data_files_used.append(file_name)
+        result["data_files_used"] = data_files_used
 
         project_files = self.project_reviewer.normalize_files(
             result.get("project_files")
@@ -6163,6 +6214,24 @@ if __name__ == "__main__":
             text
         )
 
+        library_context = self.library_catalog.search(
+            [text, *terms],
+            limit=12,
+            language="python" if language in [None, "python"] else language
+        )
+        expanded_terms = list(terms)
+        for match in library_context[:8]:
+            function_data = match.get("function", {})
+            for term in [
+                function_data.get("library"),
+                function_data.get("function"),
+                function_data.get("qualified_name"),
+                *function_data.get("tags", [])[:8]
+            ]:
+                clean_term = str(term or "").strip().lower()
+                if clean_term and clean_term not in expanded_terms:
+                    expanded_terms.append(clean_term)
+
         if self.is_code_analysis_request(
             text,
             report
@@ -6202,6 +6271,16 @@ if __name__ == "__main__":
                 ]
             }
             result["scanner_knowledge_used"] = scanner_articles
+            result["library_api_context"] = [
+                {
+                    "library": item["function"].get("library"),
+                    "function": item["function"].get("function"),
+                    "qualified_name": item["function"].get("qualified_name"),
+                    "signature": item["function"].get("signature"),
+                    "source": item["function"].get("source", {}),
+                }
+                for item in library_context[:8]
+            ]
             return result
 
         code_only = self.is_code_only_request(
@@ -6238,7 +6317,8 @@ if __name__ == "__main__":
                     report,
                     existing_project_files
                 ),
-                scanner_articles
+                scanner_articles,
+                library_context
             )
 
         if self.is_python_text_rpg_request(
@@ -6252,7 +6332,8 @@ if __name__ == "__main__":
                     text,
                     terms
                 ),
-                scanner_articles
+                scanner_articles,
+                library_context
             )
 
         if (
@@ -6275,11 +6356,12 @@ if __name__ == "__main__":
                     task_type,
                     existing_code
                 ),
-                scanner_articles
+                scanner_articles,
+                library_context
             )
 
         matches = self.search_code(
-            terms,
+            expanded_terms,
             language,
             task_type
         )
@@ -6381,6 +6463,11 @@ if __name__ == "__main__":
             "terms_used":
                 terms,
 
+            "library_terms_used": [
+                term for term in expanded_terms
+                if term not in terms
+            ][:40],
+
             "confidence":
                 confidence,
 
@@ -6469,7 +6556,8 @@ if __name__ == "__main__":
 
         return self.finalize_code_result(
             result,
-            scanner_articles
+            scanner_articles,
+            library_context
         )
 
 

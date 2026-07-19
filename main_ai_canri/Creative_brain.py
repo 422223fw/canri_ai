@@ -54,6 +54,8 @@ DOMAIN_CANRI_DATA_FILES = {
         "Code_composition_tables.json",
         "Code_assembly_patterns.json",
         "Code_project_recipes.json",
+        "Library_functions.json",
+        "Code_library_templates.json",
         "Code_statistics.json",
         "Technology_terms.json",
         "Technical_terms.json"
@@ -180,6 +182,8 @@ CANRI_DATA_FILES = [
     "Reasoning_patterns.json",
     "Code_dependency_graph.json",
     "Code_project_recipes.json",
+    "Library_functions.json",
+    "Code_library_templates.json",
     "Translation_dictionary.json",
     "Synonyms.json",
     "Articles.json",

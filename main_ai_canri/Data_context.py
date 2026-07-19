@@ -42,7 +42,10 @@ STOP_WORDS = {
 
 
 DOMAIN_HINTS = {
-    "code": ["code", "function", "python", "javascript", "api", "json", "class"],
+    "code": [
+        "code", "function", "method", "library", "module", "package",
+        "python", "javascript", "api", "json", "class", "template"
+    ],
     "creative": ["creative", "story", "character", "world", "idea", "plot"],
     "game": ["game", "player", "enemy", "inventory", "level", "mechanic"],
     "planner": ["plan", "task", "step", "dependency", "risk", "schedule"],
