@@ -6,6 +6,7 @@ Run from the project root:
 """
 
 import struct
+import subprocess
 import sys
 import wave
 import zipfile
@@ -1166,6 +1167,142 @@ def test_story_uses_dynamic_request_graph_before_templates():
     assert_true("open a hidden door" in output, "Dynamic story lost the requested decision.")
 
 
+def advanced_project_prompt():
+    return (
+        "Build an advanced professional Python multi-file REST API with a SQLite database, "
+        "user authentication, asynchronous and concurrent operations, secure password hashing, "
+        "cryptography, explicit dependencies, layered architecture, and comprehensive pytest tests."
+    )
+
+
+def test_advanced_code_project_is_complete_and_executable():
+    prompt = advanced_project_prompt()
+    understanding = {
+        "intent": "code_generation",
+        "main_topic": "code",
+        "original_text": prompt,
+    }
+    result = CodeBrain().process({
+        "original_text": prompt,
+        "understanding": understanding,
+    })
+
+    files = result.get("project_files", {})
+    required_files = {
+        "pyproject.toml",
+        "README.md",
+        "app/database.py",
+        "app/models.py",
+        "app/repository.py",
+        "app/security.py",
+        "app/crypto.py",
+        "app/service.py",
+        "app/api.py",
+        "tests/test_api.py",
+        "tests/test_security.py",
+        "tests/test_service.py",
+    }
+    assert_true(result.get("output_mode") == "project_bundle", "Advanced request did not use project-bundle mode.")
+    assert_true(required_files.issubset(files), "Advanced project is missing required files.")
+    assert_true(result.get("project_review", {}).get("ready") is True, "Advanced project failed self-review.")
+    assert_true(result.get("project_review", {}).get("capability_coverage") == 100.0, "Advanced capability coverage is incomplete.")
+    assert_true("VALUES (?, ?)" in files["app/repository.py"], "Repository must use parameterized SQL.")
+    assert_true("pbkdf2_hmac" in files["app/security.py"], "Password hashing is not implemented.")
+    assert_true("asyncio.to_thread" in files["app/service.py"], "Blocking work is not isolated from the event loop.")
+
+    root = PROJECT_ROOT / "Canri_Tests" / "_runtime" / "advanced_project"
+    root.mkdir(parents=True, exist_ok=True)
+    for relative_path, content in files.items():
+        target = root / relative_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8")
+    database_file = root / "behavior.db"
+    if database_file.exists():
+        database_file.unlink()
+    scenario = (
+        "import asyncio\n"
+        "from app.database import initialize_database\n"
+        "from app.repository import Repository\n"
+        "from app.service import ApplicationService\n"
+        "path='behavior.db'\n"
+        "initialize_database(path)\n"
+        "service=ApplicationService(Repository(path))\n"
+        "async def run():\n"
+        " user=await service.register('alice','correct horse battery staple');\n"
+        " token=await service.authenticate('alice','correct horse battery staple');\n"
+        " owner=await service.authorize(token);\n"
+        " item=await service.create_item(owner,'Stable behavior','verified');\n"
+        " items=await service.list_items(owner);\n"
+        " assert user.id == owner and items == [item]\n"
+        "asyncio.run(run())"
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", scenario],
+        cwd=root,
+        text=True,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+    assert_true(
+        completed.returncode == 0,
+        f"Generated service behavior failed: {completed.stderr}",
+    )
+
+    quality = QualityControlBrain().process({
+        "original_text": prompt,
+        "understanding": understanding,
+        "results": {"Code_brain": result},
+    })
+    assert_true(quality.get("passed") is True, "Quality control rejected the complete advanced project.")
+    assert_true(quality.get("quality_score") == 100, "Advanced project should pass every quality gate.")
+
+
+def test_advanced_project_response_is_clean_multi_file_code():
+    prompt = advanced_project_prompt()
+    understanding = {
+        "intent": "code_generation",
+        "main_topic": "code",
+        "original_text": prompt,
+    }
+    code_result = CodeBrain().process({
+        "original_text": prompt,
+        "understanding": understanding,
+    })
+    response = ResponseBrain().process({
+        "original_text": prompt,
+        "understanding": understanding,
+        "results": {"Code_brain": code_result},
+    })
+    display = response.get("display_text", "")
+    assert_true("### `app/api.py`" in display, "Response did not label project files.")
+    assert_true("```python" in display and "```toml" in display, "Project files do not use suitable code fences.")
+    assert_true("Main pieces:" not in display and "Plan:" not in display, "Internal planning leaked into project output.")
+
+
+def test_advanced_existing_project_files_are_never_silently_overwritten():
+    prompt = (
+        "Improve this existing project into a professional multi-file Python architecture "
+        "with tests without breaking existing behavior."
+    )
+    legacy = "def public_total(left, right):\n    return left + right\n"
+    result = CodeBrain().process({
+        "original_text": prompt,
+        "understanding": {
+            "intent": "code_generation",
+            "main_topic": "code",
+            "original_text": prompt,
+        },
+        "existing_project_files": {"app/legacy.py": legacy},
+    })
+    assert_true(result.get("project_files", {}).get("app/legacy.py") == legacy, "Existing code was overwritten.")
+    preservation = result.get("project_review", {}).get("preservation_checks", [])
+    assert_true(
+        any(item.get("path") == "app/legacy.py" and item.get("preserved") for item in preservation),
+        "Project review did not verify preservation of the existing file.",
+    )
+
+
 def main():
     tests = [
         test_expense_tracker_code_and_quality,
@@ -1218,6 +1355,9 @@ def main():
         test_creative_builds_dictionary_guided_lexical_candidates,
         test_reasoning_and_creative_evolve_source_backed_answers,
         test_story_uses_dynamic_request_graph_before_templates,
+        test_advanced_code_project_is_complete_and_executable,
+        test_advanced_project_response_is_clean_multi_file_code,
+        test_advanced_existing_project_files_are_never_silently_overwritten,
     ]
 
     for test in tests:

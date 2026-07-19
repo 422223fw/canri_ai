@@ -38,6 +38,11 @@ except Exception:
     text_terms = None
 
 try:
+    from Scanner_knowledge import search_scanner_knowledge
+except Exception:
+    search_scanner_knowledge = None
+
+try:
     from UnderstandingDk import (
         get_forms as dk_get_forms,
         get_meanings as dk_get_meanings,
@@ -69,7 +74,8 @@ ALWAYS_AVAILABLE_SAFETY_BRAINS = [
 REQUEST_TIME_BUDGET_SECONDS = 25.0
 DEFAULT_BRAIN_SOFT_TIMEOUT_SECONDS = 8.0
 MAX_QUALITY_RETRIES_PER_BRAIN = 2
-MAX_COLLABORATION_PARTICIPANTS = 3
+MAX_COLLABORATION_PARTICIPANTS = 5
+MAX_CENTRAL_DOMAINS = 4
 
 
 class ManagerBrain:
@@ -300,11 +306,11 @@ class ManagerBrain:
             "query": query,
             "matches": [],
             "available": False,
-            "source": "Knowledge_database",
+            "source": "unified_scanner_indexes",
             "queue_update": {}
         }
 
-        if not query or search_knowledge is None:
+        if not query or (search_scanner_knowledge is None and search_knowledge is None):
             return context
 
         if enqueue_knowledge_topics:
@@ -319,7 +325,10 @@ class ManagerBrain:
                 }
 
         try:
-            matches = search_knowledge(query, limit=6)
+            if search_scanner_knowledge is not None:
+                matches = search_scanner_knowledge(query, limit=12)
+            else:
+                matches = search_knowledge(query, limit=6)
         except Exception as error:
             context["error"] = str(error)
             return context
@@ -344,20 +353,48 @@ class ManagerBrain:
             "Geography_brain", "History_brain", "Technology_brain", "Learning_brain",
             "Quality_Control_brain", "Collaboration_brain"
         }
-        matches = []
+        preferred_collections = {
+            "Code_brain": {"code", "general", "trusted_knowledge"},
+            "Technology_brain": {"code", "product", "general", "trusted_knowledge"},
+            "Science_brain": {"general", "trusted_knowledge", "product"},
+            "Research_brain": {"general", "trusted_knowledge", "product", "code"},
+            "Fact_Check_brain": {"general", "trusted_knowledge", "product", "code"},
+            "Creative_brain": {"product", "general", "code", "trusted_knowledge"},
+            "Understanding_brain": {"product", "general", "code", "trusted_knowledge"},
+        }
+        raw_matches = []
         if isinstance(knowledge, dict):
-            for item in knowledge.get("matches", [])[:5]:
+            raw_matches = [
+                item for item in knowledge.get("matches", [])
+                if isinstance(item, dict)
+            ]
+        wanted = preferred_collections.get(brain_name)
+        if wanted:
+            ordered = [
+                item for item in raw_matches if item.get("collection", "trusted_knowledge") in wanted
+            ]
+            ordered.extend(item for item in raw_matches if item not in ordered)
+        else:
+            ordered = raw_matches
+
+        matches = []
+        for item in ordered[:8]:
                 if not isinstance(item, dict):
                     continue
                 matches.append({
                     "article_id": item.get("article_id"),
+                    "record_id": item.get("record_id"),
+                    "collection": item.get("collection", "trusted_knowledge"),
                     "title": item.get("title"),
                     "summary": str(item.get("summary", ""))[:700],
                     "content_excerpt": str(item.get("content_excerpt", ""))[:1400],
                     "trust_score": item.get("trust_score", 0),
                     "score": item.get("score", 0),
                     "source_count": item.get("source_count", 0),
-                    "sources": item.get("sources", [])[:3]
+                    "sources": item.get("sources", [])[:3],
+                    "url": item.get("url"),
+                    "source_type": item.get("source_type"),
+                    "metadata": item.get("metadata", {})
                 })
 
         required = brain_name in factual_brains and bool(matches)
@@ -642,16 +679,23 @@ class ManagerBrain:
             ]
             if report.get(key)
         ).lower()
-        term_text = " ".join(terms + [raw_text])
-
         domains = []
+        for item in report.get("central_domains", []):
+            domain = item.get("domain") if isinstance(item, dict) else item
+            domain = str(domain or "").lower().strip()
+            if domain and domain not in {"unknown", "general"}:
+                domains.append(domain)
 
         domain_rules = [
             ("code", ["code", "program", "python", "javascript", "java", "function", "api", "json"]),
             ("science", ["science", "physics", "chemistry", "biology", "article", "experiment", "photosynthesis", "dna", "genetics", "evolution", "ecosystem", "water cycle", "volcano", "immune system", "electric current", "sound wave", "climate", "atom", "atoms"]),
             ("language", ["language", "translation", "translate", "grammar", "synonym", "antonym"]),
             ("geography", ["geography", "country", "city", "capital", "map", "gps", "river", "mountain"]),
-            ("technology", ["technology", "hardware", "computer", "cpu", "gpu", "robot", "server"]),
+            ("technology", [
+                "technology", "hardware", "computer", "cpu", "gpu", "robot", "server",
+                "microcontroller", "arduino", "raspberry pi", "sensor", "gpio", "serial",
+                "embedded", "firmware", "circuit", "electronics", "iot"
+            ]),
             ("history", ["history", "historical", "empire", "war", "ancient"]),
             ("math", ["math", "number", "equation", "calculate", "solve", "step by step", "algebra", "x^2", "x**2"]),
             ("security", ["security", "password", "token", "encrypt", "danger", "bomb", "suicide"]),
@@ -669,8 +713,17 @@ class ManagerBrain:
             ("game", ["game", "player", "enemy", "level", "inventory"])
         ]
 
+        def keyword_is_explicit(keyword):
+            keyword = str(keyword).lower().strip()
+            if not keyword:
+                return False
+            return re.search(
+                r"(?<![a-z0-9])" + re.escape(keyword) + r"(?![a-z0-9])",
+                raw_text
+            ) is not None
+
         for domain, keywords in domain_rules:
-            if topic == domain or intent == domain or any(keyword in term_text for keyword in keywords):
+            if topic == domain or intent == domain or any(keyword_is_explicit(keyword) for keyword in keywords):
                 domains.append(domain)
 
         if intent in {"code_generation", "code_analysis"}:
@@ -857,11 +910,25 @@ class ManagerBrain:
         if primary == "emotion":
             supporting.extend(["Creative_brain", "Response_brain"])
 
+        for domain in domains:
+            specialist = specialist_map.get(domain)
+            if specialist and specialist != primary_brain:
+                supporting.append(specialist)
+        if len([domain for domain in domains if domain != "memory_context"]) > 1:
+            supporting.extend(["Planner_brain", "Reasoning_brain", "Collaboration_brain"])
+            if primary == "code" and any(
+                domain in domains for domain in {"science", "technology", "game", "creative"}
+            ):
+                supporting.append("Creative_brain")
+
         return {
             "primary_domain": primary,
             "primary_brain": primary_brain,
             "supporting_brains": list(dict.fromkeys(supporting)),
             "domains": domains,
+            "multi_domain": len([
+                domain for domain in domains if domain != "memory_context"
+            ]) > 1,
             "action": action,
             "intent": intent,
             "continuation": bool(
@@ -884,17 +951,17 @@ class ManagerBrain:
             ]
 
         if primary == "code":
-            focused = ["code"]
-            if "game" in domain_set and any(
-                marker in " ".join(str(report.get(key, "")) for key in ["original_text", "corrected_text", "text", "goal", "prompt"]).lower()
-                for marker in ["game", "rpg", "player", "enemy", "inventory"]
-            ):
-                focused.append("game")
-            if "security" in domain_set:
-                focused.append("security")
+            ordered = [
+                "code", "science", "technology", "math", "game", "security",
+                "vision", "voice", "image_generation", "creative", "research"
+            ]
+            focused = [domain for domain in ordered if domain in domain_set]
+            if "code" not in focused:
+                focused.insert(0, "code")
+            core = focused[:MAX_CENTRAL_DOMAINS]
             if "memory_context" in domain_set:
-                focused.append("memory_context")
-            return focused
+                core.append("memory_context")
+            return list(dict.fromkeys(core))
 
         if primary == "story":
             return [
@@ -917,7 +984,9 @@ class ManagerBrain:
                 if domain in domain_set
             ] or ["research"]
 
-        return domains
+        memory_domain = ["memory_context"] if "memory_context" in domain_set else []
+        central = [domain for domain in domains if domain != "memory_context"][:MAX_CENTRAL_DOMAINS]
+        return list(dict.fromkeys(central + memory_domain))
 
     def build_plan(self, report, memory_report=None):
 
@@ -1071,6 +1140,17 @@ class ManagerBrain:
                 "Technology_brain",
                 "Planner_brain"
             ])
+
+        central_domains = [
+            domain for domain in domains if domain != "memory_context"
+        ]
+        if len(central_domains) > 1:
+            core.extend(["Reasoning_brain", "Planner_brain"])
+            if "code" in central_domains and any(
+                domain in central_domains
+                for domain in {"science", "technology", "game", "creative"}
+            ):
+                experts.append("Creative_brain")
 
         for phase in phases:
             phase["brains"] = list(dict.fromkeys(phase["brains"]))
@@ -1976,6 +2056,32 @@ class ManagerBrain:
 
         return list(dict.fromkeys(suggested))
 
+    def collect_follow_up_tasks(self, results, limit=5):
+
+        collected = []
+        seen = set()
+        for result in results.values():
+            if not isinstance(result, dict):
+                continue
+            for task in result.get("suggested_follow_up_tasks", []):
+                if not isinstance(task, dict):
+                    continue
+                identity = str(task.get("id") or task.get("title") or "").strip().lower()
+                if not identity or identity in seen:
+                    continue
+                seen.add(identity)
+                collected.append({
+                    "id": task.get("id"),
+                    "title": task.get("title"),
+                    "goal": task.get("goal"),
+                    "owner_brains": task.get("owner_brains", [])[:6],
+                    "acceptance_checks": task.get("acceptance_checks", [])[:6],
+                    "evidence_groups": task.get("evidence_groups", [])[:8],
+                })
+                if len(collected) >= max(1, int(limit)):
+                    return collected
+        return collected
+
     # ---------- process ----------
 
     def process(self, data):
@@ -2128,6 +2234,30 @@ class ManagerBrain:
                 "loop_prevention": True
             },
             "suggested_next_brains": self.collect_suggested_next_brains(results),
+            "suggested_follow_up_tasks": self.collect_follow_up_tasks(results),
+            "visible_work_summary": {
+                "central_domains": self.focus_domains(
+                    self.classify_request(report, memory_report),
+                    report,
+                    memory_report
+                ),
+                "domain_experts_used": [
+                    name
+                    for name in plan
+                    if name not in {
+                        "Memory_brain", "Emotion_brain", "Security_brain",
+                        "Manager_brain", "Quality_Control_brain", "Response_brain",
+                        "Learning_brain", "Collaboration_brain"
+                    }
+                ],
+                "collaboration_used": "Collaboration_brain" in plan,
+                "quality_retry_count": sum(self._retry_counts.values()),
+                "scanner_collections_available": sorted({
+                    str(item.get("collection", "trusted_knowledge"))
+                    for item in shared_knowledge.get("matches", [])
+                    if isinstance(item, dict)
+                }),
+            },
             "missing_or_skipped": {
                 name: result
                 for name, result in results.items()

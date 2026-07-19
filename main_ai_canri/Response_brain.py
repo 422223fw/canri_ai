@@ -478,11 +478,14 @@ class ResponseBrain:
             "plan", "steps", "best_idea", "facts", "articles", "local_matches",
             "game_design", "response", "translated_text", "story", "draft",
             "final_output", "image_file", "generated_image_prompt"
+            , "project_files"
         ]
 
         score += sum(5 for key in useful_keys if result.get(key))
 
-        if brain_name == "Code_brain" and result.get("generated_code"):
+        if brain_name == "Code_brain" and (
+            result.get("generated_code") or result.get("project_files")
+        ):
             score += 35
 
         if brain_name == "Story_brain" and (
@@ -746,6 +749,46 @@ class ResponseBrain:
 
         return f"```{language}\n{code}\n```"
 
+    def project_file_language(self, path):
+
+        suffix = str(path).lower().rsplit(".", 1)[-1] if "." in str(path) else ""
+        return {
+            "py": "python",
+            "toml": "toml",
+            "json": "json",
+            "md": "markdown",
+            "yaml": "yaml",
+            "yml": "yaml",
+            "txt": "text",
+        }.get(suffix, "text")
+
+    def format_project_files(self, project_files):
+
+        if isinstance(project_files, list):
+            normalized = {
+                str(item.get("path") or item.get("name")): str(item.get("content", ""))
+                for item in project_files
+                if isinstance(item, dict) and (item.get("path") or item.get("name"))
+            }
+        elif isinstance(project_files, dict):
+            normalized = {
+                str(path): str(content)
+                for path, content in project_files.items()
+            }
+        else:
+            normalized = {}
+
+        sections = []
+        for path in sorted(normalized):
+            sections.append(f"### `{path}`")
+            sections.append(
+                self.format_code_block(
+                    normalized[path],
+                    self.project_file_language(path)
+                )
+            )
+        return "\n\n".join(sections).strip()
+
     def format_code_result(self, result):
 
         if result.get("mode") == "code_analysis":
@@ -754,6 +797,10 @@ class ResponseBrain:
                 or result.get("summary")
                 or "I analyzed the code."
             ).strip()
+
+        project_files = result.get("project_files")
+        if project_files:
+            return self.format_project_files(project_files)
 
         code = result.get("generated_code", "")
 
@@ -1403,6 +1450,31 @@ class ResponseBrain:
         ).strip()
         return value
 
+    def collect_follow_up_tasks(self, results, limit=4):
+
+        tasks = []
+        seen = set()
+        for result in results.values():
+            if not isinstance(result, dict):
+                continue
+            for task in result.get("suggested_follow_up_tasks", []):
+                if not isinstance(task, dict):
+                    continue
+                identity = str(task.get("id") or task.get("title") or "").strip().lower()
+                if not identity or identity in seen:
+                    continue
+                seen.add(identity)
+                tasks.append({
+                    "id": task.get("id"),
+                    "title": task.get("title"),
+                    "goal": task.get("goal"),
+                    "owner_brains": task.get("owner_brains", [])[:6],
+                    "acceptance_checks": task.get("acceptance_checks", [])[:6],
+                })
+                if len(tasks) >= max(1, int(limit)):
+                    return tasks
+        return tasks
+
     # ---------- statistics ----------
 
     def update_statistics(self, primary_brain, confidence, blocked):
@@ -1478,7 +1550,10 @@ class ResponseBrain:
             if (
                 is_code_request
                 and isinstance(code_result, dict)
-                and code_result.get("generated_code")
+                and (
+                    code_result.get("generated_code")
+                    or code_result.get("project_files")
+                )
             ):
                 primary_brain, primary_result = "Code_brain", code_result
             else:
@@ -1541,6 +1616,7 @@ class ResponseBrain:
 
         display_text = self.strip_internal_output(display_text)
         display_text = self.final_polish(display_text)
+        follow_up_tasks = self.collect_follow_up_tasks(results)
 
         self.update_statistics(
             primary_brain,
@@ -1560,6 +1636,8 @@ class ResponseBrain:
             "used_results": sorted(results.keys()),
             "screen_ready": True,
             "strict_output": strict_output,
+            "suggested_follow_up_tasks": follow_up_tasks,
+            "follow_up_tasks_visible": False,
             "rules": [
                 "Return one clear answer for the screen.",
                 "Do not invent facts that no brain provided.",

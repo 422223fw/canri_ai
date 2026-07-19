@@ -24,3 +24,8 @@ save_game.json
 tasks.json
 main_ai_canri/generated_images/
 Canri_Tests/_runtime/
+
+# Rebuildable search indexes for the bounded web scanners.
+main_ai_canri/data/*_scan_index.sqlite3
+main_ai_canri/data/*_scan_index.sqlite3-shm
+main_ai_canri/data/*_scan_index.sqlite3-wal

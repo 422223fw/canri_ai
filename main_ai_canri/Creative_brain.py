@@ -1578,7 +1578,10 @@ class CreativeBrain:
                 if not isinstance(match, dict):
                     continue
                 title = str(match.get("title", "knowledge article")).strip()
-                context[f"Knowledge_database::{title}"] = {
+                collection = str(
+                    match.get("collection") or "trusted_knowledge"
+                ).strip().lower()
+                context[f"Scanner::{collection}::{title}"] = {
                     "count": 1,
                     "sample_terms": [title],
                     "matched_terms": [
@@ -1590,12 +1593,16 @@ class CreativeBrain:
                         "summary": str(match.get("summary", ""))[:900],
                         "content_excerpt": str(match.get("content_excerpt", ""))[:1400],
                         "trust_score": match.get("trust_score", 0),
-                        "sources": match.get("sources", [])[:4]
+                        "sources": match.get("sources", [])[:4],
+                        "collection": collection,
+                        "source_type": match.get("source_type"),
+                        "metadata": match.get("metadata", {})
                     }],
-                    "source_group": "knowledge_index",
+                    "source_group": f"scanner_{collection}",
+                    "collection": collection,
                     "used": True,
                     "full_file_loaded": False,
-                    "retrieval_mode": "knowledge_index_lookup"
+                    "retrieval_mode": "unified_scanner_index_lookup"
                 }
 
         dictionary_context = data.get("dictionary", {})
@@ -3191,6 +3198,109 @@ class CreativeBrain:
             source_brain
         )
 
+    def central_domains_for_request(self, report, data, selected_domain):
+
+        routing = data.get("routing_decision", {}) if isinstance(data, dict) else {}
+        candidates = routing.get("domains", []) if isinstance(routing, dict) else []
+        if not candidates:
+            candidates = report.get("central_domains", []) if isinstance(report, dict) else []
+        domains = []
+        for item in candidates:
+            name = item.get("domain") if isinstance(item, dict) else item
+            name = str(name or "").strip().lower()
+            if name and name not in {"unknown", "memory_context"}:
+                domains.append(name)
+        if selected_domain and selected_domain not in {"general", "unknown"}:
+            domains.insert(0, selected_domain)
+        return list(dict.fromkeys(domains))[:4]
+
+    def build_follow_up_tasks(self, text, domains, best, canri_context):
+        """Create bounded, testable next tasks without exposing evolution internals."""
+
+        domains = [domain for domain in domains if domain not in {"general", "unknown"}]
+        if len(domains) < 2:
+            return []
+
+        brain_for_domain = {
+            "code": "Code_brain",
+            "science": "Science_brain",
+            "technology": "Technology_brain",
+            "math": "Math_brain",
+            "security": "Security_brain",
+            "game": "Game_brain",
+            "story": "Story_brain",
+            "geography": "Geography_brain",
+            "history": "History_brain",
+            "language": "Language_brain",
+        }
+        goal = self.extract_primary_goal(
+            {},
+            str(text or "the current request"),
+            domains[0],
+        )
+        goal = re.sub(r"\s+", " ", str(goal)).strip()[:180]
+        evidence_groups = sorted({
+            str(item.get("source_group"))
+            for item in canri_context.values()
+            if isinstance(item, dict) and item.get("source_group")
+        })[:6]
+        owners = list(dict.fromkeys(
+            brain_for_domain.get(domain)
+            for domain in domains
+            if brain_for_domain.get(domain)
+        ))
+        tasks = [{
+            "id": "cross_domain_integration",
+            "title": f"Integrate {', '.join(domains)} into one verified result",
+            "goal": goal,
+            "owner_brains": owners,
+            "acceptance_checks": [
+                f"Every central domain is represented: {', '.join(domains)}",
+                "The integrated result preserves every explicit user constraint",
+                "Claims and generated behavior are checked before delivery",
+            ],
+            "evidence_groups": evidence_groups,
+        }]
+
+        if "code" in domains:
+            checks = [
+                "Run syntax and focused behavior tests",
+                "Confirm the implementation matches the physical or scientific assumptions",
+            ]
+            if "technology" in domains:
+                checks.append("Test with a simulator before connecting real hardware")
+            tasks.append({
+                "id": "prototype_validation",
+                "title": "Validate the generated prototype against real interfaces",
+                "goal": goal,
+                "owner_brains": [
+                    name for name in [
+                        "Code_brain",
+                        "Technology_brain" if "technology" in domains else None,
+                        "Science_brain" if "science" in domains else None,
+                        "Quality_Control_brain",
+                    ]
+                    if name
+                ],
+                "acceptance_checks": checks,
+                "evidence_groups": evidence_groups,
+            })
+
+        selected_title = str((best or {}).get("title") or "").strip()
+        if selected_title:
+            tasks.append({
+                "id": "alternative_comparison",
+                "title": "Compare the selected approach with one simpler alternative",
+                "goal": selected_title[:180],
+                "owner_brains": ["Creative_brain", "Reasoning_brain"],
+                "acceptance_checks": [
+                    "Compare correctness, complexity, maintainability, and risk",
+                    "Keep the current approach unless the alternative is measurably better",
+                ],
+                "evidence_groups": evidence_groups,
+            })
+        return tasks[:3]
+
     def creative_execution_policy(self, report, text, detected_domain):
 
         report = report if isinstance(report, dict) else {}
@@ -3588,6 +3698,11 @@ class CreativeBrain:
             domain
         )
         domain = execution_policy["domain"]
+        central_domains = self.central_domains_for_request(
+            report,
+            data if isinstance(data, dict) else {},
+            domain
+        )
         canri_context = self.collect_indexed_project_context(
             data,
             report,
@@ -3671,6 +3786,13 @@ class CreativeBrain:
             if domain == "code":
                 best["generated_code"] = final_output
 
+        follow_up_tasks = self.build_follow_up_tasks(
+            text,
+            central_domains,
+            best,
+            canri_context
+        )
+
         self.remember_creative_result(
             domain,
             final_direction,
@@ -3685,6 +3807,7 @@ class CreativeBrain:
             "used_understanding_report": bool(report),
             "used_memory_report": bool(memory_report),
             "domain": domain,
+            "central_domains": central_domains,
             "execution_policy": execution_policy,
             "terms_used": terms,
             "direction_analysis": final_direction,
@@ -3754,6 +3877,23 @@ class CreativeBrain:
             },
             "dictionary_guided_composition": lexical_plan,
             "response_evolution": response_evolution,
+            "suggested_follow_up_tasks": follow_up_tasks,
+            "visible_work_summary": {
+                "domains_combined": central_domains,
+                "candidate_count": sum(
+                    int(item.get("candidate_count", 0))
+                    for item in history
+                    if isinstance(item, dict)
+                ),
+                "rounds_completed": len(history),
+                "selected_direction": final_direction.get("preferred_strategy"),
+                "evidence_groups": sorted({
+                    str(item.get("source_group"))
+                    for item in canri_context.values()
+                    if isinstance(item, dict) and item.get("source_group")
+                })[:8],
+                "follow_up_tasks_created": len(follow_up_tasks),
+            },
             "confidence": min(100, round(best_score, 2)),
             "suggested_next_brains": [
                 brain_name
