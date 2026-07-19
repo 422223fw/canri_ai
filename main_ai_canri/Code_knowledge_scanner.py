@@ -9,6 +9,10 @@ import re
 import time
 from urllib.parse import urlencode
 
+from Code_artifact_catalog import (
+    CodeArtifactCatalog,
+    extract_python_documentation_callables,
+)
 from Web_scanner_core import (
     DATA_DIR,
     BaseWebScanner,
@@ -32,6 +36,8 @@ class CodeKnowledgeScanner(BaseWebScanner):
     def __init__(self) -> None:
         super().__init__("code", SOURCE_FILE, sleep_seconds=300)
         self._stack_backoff_until = 0.0
+        self.artifact_catalog = CodeArtifactCatalog()
+        self.artifact_catalog.seed_local_standard_library()
 
     def _json(self, url: str, *, headers=None, state=None):
         state = state or {}
@@ -269,6 +275,19 @@ class CodeKnowledgeScanner(BaseWebScanner):
         if not text:
             raise ScannerFetchError(f"Python documentation page had no text: {target['url']}")
         module = str(target.get("module") or title or "Python documentation")
+        version_match = re.search(
+            r"Python\s+(\d+\.\d+(?:\.\d+)?)",
+            f"{title} {text[:500]}",
+            flags=re.IGNORECASE,
+        )
+        callables = extract_python_documentation_callables(
+            result.content,
+            library=module,
+            source_url=result.url,
+            retrieved_utc=result.retrieved_utc,
+            library_version=version_match.group(1) if version_match else None,
+        )
+        catalog_update = self.artifact_catalog.upsert_many(callables)
         return [{
             "record_id": record_id,
             "title": title or f"Python documentation: {module}",
@@ -283,7 +302,15 @@ class CodeKnowledgeScanner(BaseWebScanner):
             "last_modified": result.last_modified,
             "retrieved_utc": result.retrieved_utc,
             "terms": [module, "python", "documentation"],
-            "metadata": {"module_or_section": module},
+            "metadata": {
+                "module_or_section": module,
+                "library_callables_discovered": len(callables),
+                "library_catalog_update": catalog_update,
+                "artifact_policy": (
+                    "Only structured API signatures and generated call templates are indexed; "
+                    "arbitrary executable page examples are not copied."
+                ),
+            },
             "sources": [{
                 "source_id": "python_docs",
                 "source_name": "Python documentation",
@@ -292,6 +319,11 @@ class CodeKnowledgeScanner(BaseWebScanner):
                 "retrieved_utc": result.retrieved_utc,
             }],
         }]
+
+    def run_once(self, max_targets: int | None = None) -> dict:
+        result = super().run_once(max_targets=max_targets)
+        result["artifact_catalog"] = self.artifact_catalog.summary()
+        return result
 
     def process_target(self, target: dict) -> list[dict]:
         adapter = str(target.get("adapter", ""))
