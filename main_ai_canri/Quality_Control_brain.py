@@ -146,8 +146,104 @@ class QualityControlBrain:
 
     # ---------- request model ----------
 
+    def advanced_code_capabilities(self, lowered):
+        markers = {
+            "multi_file": [
+                "multi-file", "multiple files", "several files", "large system",
+                "large project", "architecture", "production-ready", "professional project",
+            ],
+            "database": ["database", "sqlite", "sql", "repository"],
+            "api": ["api", "rest", "endpoint", "fastapi", "web service"],
+            "authentication": ["authentication", "authenticate", "login", "bearer token"],
+            "async": ["async", "asynchronous", "await", "non-blocking"],
+            "concurrency": ["concurrent", "parallel", "worker", "thread", "task group"],
+            "security": ["security", "secure", "password hashing", "authorization"],
+            "cryptography": ["cryptography", "encrypt", "encryption", "decrypt", "fernet", "aes"],
+            "tests": ["tests", "testing", "pytest", "test suite", "coverage", "regression"],
+            "dependencies": ["dependencies", "requirements.txt", "pyproject.toml"],
+            "hardware_integration": [
+                "hardware", "arduino", "raspberry pi", "gpio", "sensor",
+                "serial", "microcontroller", "embedded", "firmware", "iot",
+            ],
+            "scientific_computing": [
+                "science", "scientific", "physics", "measurement", "calibration",
+                "experiment", "gravity", "temperature", "voltage", "signal",
+            ],
+        }
+        detected = {
+            name: any(marker in lowered for marker in values)
+            for name, values in markers.items()
+        }
+        advanced_count = sum(
+            detected[name]
+            for name in [
+                "database", "api", "authentication", "async", "concurrency",
+                "security", "cryptography", "tests", "hardware_integration",
+                "scientific_computing",
+            ]
+        )
+        detected["advanced_project"] = (
+            detected["multi_file"]
+            or advanced_count >= 3
+            or detected["hardware_integration"]
+        )
+        if detected["authentication"]:
+            detected["database"] = True
+            detected["api"] = True
+            detected["security"] = True
+        if detected["api"]:
+            detected["database"] = True
+            detected["async"] = True
+            detected["dependencies"] = True
+        if detected["cryptography"]:
+            detected["security"] = True
+            detected["dependencies"] = True
+        if detected["hardware_integration"]:
+            detected["async"] = True
+            detected["concurrency"] = True
+            detected["dependencies"] = True
+            detected["tests"] = True
+        if detected["advanced_project"]:
+            detected["multi_file"] = True
+        return detected
+
+    def project_files_from_result(self, result):
+        if not isinstance(result, dict):
+            return {}
+        value = result.get("project_files")
+        if isinstance(value, dict):
+            return {
+                str(path).replace("\\", "/"): str(content)
+                for path, content in value.items()
+            }
+        files = {}
+        for item in value or []:
+            if not isinstance(item, dict):
+                continue
+            path = item.get("path") or item.get("name")
+            if path:
+                files[str(path).replace("\\", "/")] = str(item.get("content", ""))
+        return files
+
+    def code_text_from_result(self, result):
+        files = self.project_files_from_result(result)
+        if files:
+            return "\n\n".join(
+                f"# FILE: {path}\n{files[path]}"
+                for path in sorted(files)
+            )
+        if not isinstance(result, dict):
+            return str(result or "")
+        return str(
+            result.get("generated_code")
+            or result.get("code")
+            or result.get("answer")
+            or ""
+        )
+
     def request_requirements(self, text, report):
         lowered = text.lower()
+        advanced_capabilities = self.advanced_code_capabilities(lowered)
         topic = str(report.get("main_topic", "")).lower()
         intent = str(report.get("intent", "")).lower()
         contract = report.get("request_contract", {})
@@ -188,6 +284,8 @@ class QualityControlBrain:
             "requested_sentence_count": self.extract_requested_sentence_count(lowered),
             "expected_program_kind": self.detect_expected_program_kind(lowered),
             "requested_code_features": self.extract_requested_code_features(lowered),
+            "advanced_code_capabilities": advanced_capabilities,
+            "is_advanced_code_project": advanced_capabilities.get("advanced_project", False),
             "needs_local_data": (
                 topic != "code"
                 and intent not in {"code_generation", "code_analysis"}
@@ -256,7 +354,7 @@ class QualityControlBrain:
         code_result = results.get("Code_brain", {})
         code = ""
         if isinstance(code_result, dict):
-            code = str(code_result.get("generated_code") or code_result.get("code") or "")
+            code = self.code_text_from_result(code_result)
 
         if kind == "feature" and feature:
             passed = self.code_feature_present(feature, code) if requirements.get("is_code_generation") else True
@@ -265,8 +363,13 @@ class QualityControlBrain:
         if requirement_id == "runnable_output":
             if not requirements.get("is_code_generation"):
                 return True, "not a code-generation request"
-            syntax_ok = self.python_syntax_error(code) is None if code else False
-            structure_ok = self.code_has_real_structure(code)
+            project_review = code_result.get("project_review", {}) if isinstance(code_result, dict) else {}
+            if self.project_files_from_result(code_result):
+                syntax_ok = not self.project_syntax_errors(code_result)
+                structure_ok = bool(project_review.get("ready"))
+            else:
+                syntax_ok = self.python_syntax_error(code) is None if code else False
+                structure_ok = self.code_has_real_structure(code)
             self_review = code_result.get("self_review", {}) if isinstance(code_result, dict) else {}
             ready = self_review.get("ready")
             passed = bool(code and syntax_ok and structure_ok and ready is not False)
@@ -349,7 +452,7 @@ class QualityControlBrain:
         code_result = results.get("Code_brain", {})
         code = ""
         if isinstance(code_result, dict):
-            code = str(code_result.get("generated_code") or code_result.get("code") or "")
+            code = self.code_text_from_result(code_result)
 
         if requirements.get("is_code_generation"):
             lowered_code = code.lower()
@@ -557,12 +660,8 @@ class QualityControlBrain:
                 )
             return
 
-        code = str(
-            result.get("generated_code")
-            or result.get("code")
-            or result.get("answer")
-            or ""
-        )
+        project_files = self.project_files_from_result(result)
+        code = self.code_text_from_result(result)
         lowered_code = code.lower()
 
         if not code.strip():
@@ -584,16 +683,50 @@ class QualityControlBrain:
                 "Replace placeholders with real working logic that satisfies the requested features."
             )
 
-        syntax_error = self.python_syntax_error(code)
-        if syntax_error:
+        syntax_errors = self.project_syntax_errors(result) if project_files else []
+        syntax_error = self.python_syntax_error(code) if not project_files else None
+        if syntax_error or syntax_errors:
             self.add_issue(
                 issues,
                 "Code_brain",
                 "critical",
                 "Generated Python code has a syntax error.",
                 "Fix the code so it can be parsed by Python before returning it.",
-                syntax_error
+                syntax_error or "; ".join(syntax_errors[:5])
             )
+
+        if requirements.get("is_advanced_code_project"):
+            if len(project_files) < 5:
+                self.add_issue(
+                    issues,
+                    "Code_brain",
+                    "critical",
+                    "The advanced request did not return a real multi-file project.",
+                    "Return structured project_files with separate model, repository, service, transport, and test files."
+                )
+            project_review = result.get("project_review", {})
+            if not isinstance(project_review, dict) or not project_review.get("ready"):
+                self.add_issue(
+                    issues,
+                    "Code_brain",
+                    "critical",
+                    "The generated project did not pass project-level self-review.",
+                    "Fix every project review error before returning the project.",
+                    project_review.get("errors", []) if isinstance(project_review, dict) else []
+                )
+            requested_capabilities = requirements.get("advanced_code_capabilities", {})
+            delivered_capabilities = result.get("capabilities", {})
+            for capability, requested in requested_capabilities.items():
+                if capability == "advanced_project" or not requested:
+                    continue
+                if not delivered_capabilities.get(capability):
+                    self.add_issue(
+                        issues,
+                        "Code_brain",
+                        "high",
+                        f"Advanced capability was requested but not delivered: {capability}.",
+                        "Regenerate the project with executable evidence for this capability."
+                    )
 
         expected_kind = requirements.get("expected_program_kind")
         actual_kind = result.get("program_kind")
@@ -617,7 +750,12 @@ class QualityControlBrain:
                     "Return only the final runnable code."
                 )
 
-        if requirements["wants_runnable"] and "if __name__" not in code and "def main(" not in code:
+        if (
+            requirements["wants_runnable"]
+            and not project_files
+            and "if __name__" not in code
+            and "def main(" not in code
+        ):
             self.add_issue(
                 issues,
                 "Code_brain",
@@ -697,6 +835,17 @@ class QualityControlBrain:
             return f"line {error.lineno}: {error.msg}"
 
         return None
+
+    def project_syntax_errors(self, result):
+        errors = []
+        for path, content in self.project_files_from_result(result).items():
+            if not path.endswith(".py"):
+                continue
+            try:
+                ast.parse(content)
+            except SyntaxError as error:
+                errors.append(f"{path}: line {error.lineno}: {error.msg}")
+        return errors
 
     def code_feature_present(self, feature, code):
 
@@ -779,12 +928,7 @@ class QualityControlBrain:
             return
 
         result = results.get("Code_brain", {})
-        code = str(
-            result.get("generated_code")
-            or result.get("code")
-            or result.get("answer")
-            or ""
-        )
+        code = self.code_text_from_result(result)
 
         missing = [
             feature
@@ -1012,6 +1156,9 @@ class QualityControlBrain:
             return str(result)
 
         parts = []
+        project_files = self.project_files_from_result(result)
+        if project_files:
+            parts.append(self.code_text_from_result(result))
         for key in [
             "display_text",
             "answer",
@@ -1023,6 +1170,8 @@ class QualityControlBrain:
             "result",
             "best_answer"
         ]:
+            if key == "generated_code" and project_files:
+                continue
             value = result.get(key)
             if value:
                 parts.append(str(value))
@@ -1277,12 +1426,7 @@ class QualityControlBrain:
             code_result = results.get("Code_brain", {})
             code = ""
             if isinstance(code_result, dict):
-                code = str(
-                    code_result.get("generated_code")
-                    or code_result.get("code")
-                    or code_result.get("answer")
-                    or ""
-                )
+                code = self.code_text_from_result(code_result)
 
             expected_kind = requirements.get("expected_program_kind")
             if expected_kind:

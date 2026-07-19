@@ -13,6 +13,11 @@ import json
 import re
 from pathlib import Path
 
+try:
+    from Scanner_knowledge import search_scanner_knowledge
+except Exception:
+    search_scanner_knowledge = None
+
 
 DATA_DIR = Path(__file__).parent / "data"
 UNDERSTANDING_DATA_DIR = Path(__file__).parent / "UnderstandingDk" / "data"
@@ -420,6 +425,7 @@ def build_context_pack(context, query):
         "domains": domains,
         "data_sources": compact_matches,
         "evidence_snippets": evidence_snippets[:10],
+        "scanner_evidence": context.get("scanner_matches", [])[:8],
         "recommended_brains": recommended_brains_from_domains(domains),
         "confidence": min(95, 35 + top_score) if compact_matches else 0,
         "usage_policy": [
@@ -433,6 +439,16 @@ def build_context_pack(context, query):
 
 def build_shared_data_context(query, limit=12):
     context = search_data_context(query, limit=limit)
+    if search_scanner_knowledge is not None:
+        try:
+            context["scanner_matches"] = search_scanner_knowledge(
+                query,
+                limit=min(10, max(4, int(limit)))
+            )
+        except Exception:
+            context["scanner_matches"] = []
+    else:
+        context["scanner_matches"] = []
     context["context_pack"] = build_context_pack(context, query)
     return context
 
@@ -529,6 +545,19 @@ def context_view_for_brain(context, brain_name, max_sources=6):
         "domains": context.get("domains", [])[:12],
         "matches": matches,
         "evidence_snippets": evidence[:8],
+        "scanner_matches": [
+            {
+                "article_id": item.get("article_id") or item.get("record_id"),
+                "collection": item.get("collection", "trusted_knowledge"),
+                "title": item.get("title"),
+                "summary": str(item.get("summary", ""))[:700],
+                "content_excerpt": str(item.get("content_excerpt", ""))[:1200],
+                "trust_score": item.get("trust_score", 0),
+                "sources": item.get("sources", [])[:3]
+            }
+            for item in context.get("scanner_matches", [])[:max_sources]
+            if isinstance(item, dict)
+        ],
         "profiled_files": context.get("profiled_files", 0),
         "total_profiled_bytes": context.get("total_profiled_bytes", 0),
         "selection_policy": "domain_filtered_lazy_context",

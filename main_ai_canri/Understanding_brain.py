@@ -14,6 +14,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 try:
+    from Scanner_knowledge import search_scanner_knowledge
+except Exception:
+    search_scanner_knowledge = None
+
+try:
     import UnderstandingDk as dk
 except Exception:
     dk = None
@@ -1158,6 +1163,79 @@ class UnderstandingBrain:
 
         return main_topic, topic_confidence, hits
 
+    def select_central_domains(
+        self,
+        main_topic,
+        topic_confidence,
+        topic_hits,
+        intent,
+        limit=4
+    ):
+        """Keep several meaningful domains instead of collapsing the request to one label."""
+
+        scores = dict(topic_confidence or {})
+        if main_topic and main_topic not in {"general", "unknown"}:
+            scores.setdefault(main_topic, 100.0 if not scores else max(scores.values()))
+        if intent in {"code_generation", "code_analysis"}:
+            scores["code"] = max(float(scores.get("code", 0)), 25.0)
+        if intent == "math":
+            scores["math"] = max(float(scores.get("math", 0)), 25.0)
+        if intent == "story_creation":
+            scores["story"] = max(float(scores.get("story", 0)), 25.0)
+
+        if not scores:
+            return [{
+                "domain": main_topic or "general",
+                "confidence": 20.0,
+                "rank": 1,
+                "role": "primary",
+                "evidence": []
+            }]
+
+        top_score = max(float(value or 0) for value in scores.values())
+        threshold = max(6.0, top_score * 0.20)
+        ranked = sorted(
+            scores.items(),
+            key=lambda item: (
+                item[0] == main_topic,
+                float(item[1] or 0)
+            ),
+            reverse=True
+        )
+        selected = []
+        for domain, score in ranked:
+            score = float(score or 0)
+            evidence = list(dict.fromkeys((topic_hits or {}).get(domain, [])))[:10]
+            explicit = bool(evidence) or domain == main_topic
+            if domain in {"general", "unknown"} and len(ranked) > 1:
+                continue
+            if score < threshold and not explicit:
+                continue
+            selected.append({
+                "domain": domain,
+                "confidence": round(score, 2),
+                "rank": len(selected) + 1,
+                "role": "primary" if not selected else "supporting",
+                "evidence": evidence
+            })
+            if len(selected) >= max(1, min(int(limit), 4)):
+                break
+
+        if main_topic and all(item["domain"] != main_topic for item in selected):
+            selected.insert(0, {
+                "domain": main_topic,
+                "confidence": round(float(scores.get(main_topic, top_score)), 2),
+                "rank": 1,
+                "role": "primary",
+                "evidence": list(dict.fromkeys((topic_hits or {}).get(main_topic, [])))[:10]
+            })
+            selected = selected[:max(1, min(int(limit), 4))]
+
+        for index, item in enumerate(selected, start=1):
+            item["rank"] = index
+            item["role"] = "primary" if index == 1 else "supporting"
+        return selected
+
     def detect_intent(self, text, words, main_topic):
 
         scores, hits = self.score_rules(text, words, INTENT_RULES)
@@ -2224,7 +2302,7 @@ class UnderstandingBrain:
 
         return list(dict.fromkeys(tasks))
 
-    def routing_hints(self, main_topic, intent, features):
+    def routing_hints(self, main_topic, intent, features, central_domains=None):
 
         route = ["Memory_brain"]
 
@@ -2258,6 +2336,31 @@ class UnderstandingBrain:
         }:
             route.append(f"{main_topic.capitalize()}_brain")
 
+        specialist_routes = {
+            "code": "Code_brain",
+            "science": "Science_brain",
+            "technology": "Technology_brain",
+            "geography": "Geography_brain",
+            "history": "History_brain",
+            "language": "Language_brain",
+            "math": "Math_brain",
+            "security": "Security_brain",
+            "game": "Game_brain",
+            "vision": "Vision_brain",
+            "voice": "Voice_brain",
+            "image_generation": "Image_brain",
+            "creative": "Creative_brain",
+            "story": "Story_brain"
+        }
+        for domain in central_domains or []:
+            domain_name = domain.get("domain") if isinstance(domain, dict) else domain
+            specialist = specialist_routes.get(str(domain_name).lower())
+            if specialist:
+                route.append(specialist)
+
+        if len(central_domains or []) > 1:
+            route.extend(["Reasoning_brain", "Collaboration_brain"])
+
         route.append("Response_brain")
 
         return list(dict.fromkeys(route))
@@ -2287,6 +2390,12 @@ class UnderstandingBrain:
         word_reports = self.analyze_words(words)
         language = self.detect_language(text, words)
         code_context = self.extract_code_context(text)
+        scanner_context = []
+        if search_scanner_knowledge is not None and str(text).strip():
+            try:
+                scanner_context = search_scanner_knowledge(text, limit=6)
+            except Exception:
+                scanner_context = []
 
         main_topic, topics, topic_hits = self.detect_topics(
             text,
@@ -2360,11 +2469,34 @@ class UnderstandingBrain:
             advanced_understanding
         )
         request_contract["code_context"] = code_context
+        request_contract["scanner_entities"] = [
+            {
+                "title": item.get("title"),
+                "collection": item.get("collection", "trusted_knowledge"),
+                "trust_score": item.get("trust_score", 0)
+            }
+            for item in scanner_context[:6]
+            if isinstance(item, dict)
+        ]
         request_contract.setdefault("detail_inventory", {})["code_terms"] = [
             item.get("name")
             for item in code_context.get("identifiers", [])
             if isinstance(item, dict) and item.get("name")
         ][:80]
+
+        central_domain_details = self.select_central_domains(
+            main_topic,
+            topics,
+            topic_hits,
+            intent
+        )
+        central_domains = [
+            item.get("domain")
+            for item in central_domain_details
+            if isinstance(item, dict) and item.get("domain")
+        ]
+        request_contract["central_domains"] = central_domains
+        request_contract["domain_details"] = central_domain_details
 
         tasks = self.possible_tasks(
             main_topic,
@@ -2373,7 +2505,12 @@ class UnderstandingBrain:
             requested_action
         )
         output_format = OUTPUT_RULES.get(intent, "answer")
-        routes = self.routing_hints(main_topic, intent, features)
+        routes = self.routing_hints(
+            main_topic,
+            intent,
+            features,
+            central_domain_details
+        )
         confidence = self.estimate_confidence(
             words,
             word_reports,
@@ -2390,6 +2527,8 @@ class UnderstandingBrain:
             "main_topic": main_topic,
             "topics": topics,
             "topic_hits": topic_hits,
+            "central_domains": central_domains,
+            "central_domain_details": central_domain_details,
             "intent": intent,
             "intent_confidence": intent_confidence,
             "intent_hits": intent_hits,
@@ -2403,6 +2542,7 @@ class UnderstandingBrain:
             "global_picture": request_contract.get("global_picture", {}),
             "detail_inventory": request_contract.get("detail_inventory", {}),
             "code_context": code_context,
+            "scanner_context": request_contract.get("scanner_entities", []),
             "punctuation_analysis": code_context.get("punctuation", {}),
             "advanced_word_tags": advanced_understanding.get(
                 "tokens",

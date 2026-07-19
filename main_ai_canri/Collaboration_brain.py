@@ -42,7 +42,7 @@ class CollaborationBrain:
 
     def __init__(self):
         self.rules = self._load_json(RULES_FILE, {})
-        self.max_participants = max(1, min(3, int(self.rules.get("max_participants", 3))))
+        self.max_participants = max(1, min(5, int(self.rules.get("max_participants", 5))))
         self.max_summary_chars = max(120, int(self.rules.get("max_summary_chars", 480)))
         print("Collaboration Brain Loaded")
 
@@ -77,6 +77,18 @@ class CollaborationBrain:
             if topic:
                 return str(topic).lower()
         return "general"
+
+    def _domains(self, data):
+        routing = data.get("routing_decision", {})
+        if isinstance(routing, dict) and isinstance(routing.get("domains"), list):
+            domains = [
+                str(domain).lower()
+                for domain in routing["domains"]
+                if domain and str(domain).lower() != "memory_context"
+            ]
+            if domains:
+                return list(dict.fromkeys(domains))[:4]
+        return [self._domain(data)]
 
     def _useful_results(self, data):
         results = data.get("results", {})
@@ -113,11 +125,18 @@ class CollaborationBrain:
             parts.append(json.dumps(visible, ensure_ascii=False, default=str))
         return " ".join(parts)[:self.max_summary_chars]
 
-    def _participants(self, domain, results):
-        configured = self.rules.get("domain_teams", {}).get(domain, [])
-        candidates = configured or self.DEFAULT_DOMAIN_TEAMS.get(
-            domain, self.DEFAULT_DOMAIN_TEAMS["general"]
-        )
+    def _participants(self, domains, results, primary_brain=None):
+        candidates = []
+        for domain in domains:
+            configured = self.rules.get("domain_teams", {}).get(domain, [])
+            candidates.extend(
+                configured or self.DEFAULT_DOMAIN_TEAMS.get(
+                    domain, self.DEFAULT_DOMAIN_TEAMS["general"]
+                )
+            )
+        if primary_brain:
+            candidates.insert(0, primary_brain)
+        candidates = list(dict.fromkeys(candidates))
         selected = [name for name in candidates if name in results]
         if not selected:
             selected = list(results)[:self.max_participants]
@@ -154,11 +173,12 @@ class CollaborationBrain:
         if not isinstance(data, dict):
             data = {"original_text": str(data)}
         domain = self._domain(data)
+        domains = self._domains(data)
         results = self._useful_results(data)
-        participants = self._participants(domain, results)
         round_name = str(data.get("collaboration_round", "planning"))
         routing = data.get("routing_decision", {})
         primary_brain = routing.get("primary_brain") if isinstance(routing, dict) else None
+        participants = self._participants(domains, results, primary_brain)
         if primary_brain not in participants and participants:
             primary_brain = participants[0]
 
@@ -185,6 +205,7 @@ class CollaborationBrain:
             "brain": "Collaboration_brain",
             "round": round_name,
             "domain": domain,
+            "domains": domains,
             "participants": participants,
             "primary_brain": primary_brain,
             "transcript": transcript,

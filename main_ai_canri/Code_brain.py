@@ -7,7 +7,12 @@ import json
 import re
 import ast
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+
+try:
+    from Scanner_knowledge import scanner_evidence
+except Exception:
+    scanner_evidence = None
 
 
 DATA_DIR = Path(__file__).parent / "data"
@@ -18,6 +23,7 @@ DEPENDENCY_GRAPH_FILE = DATA_DIR / "Code_dependency_graph.json"
 COMPOSITION_TABLE_FILE = DATA_DIR / "Code_composition_tables.json"
 ASSEMBLY_PATTERNS_FILE = DATA_DIR / "Code_assembly_patterns.json"
 PROJECT_RECIPES_FILE = DATA_DIR / "Code_project_recipes.json"
+ADVANCED_PROFILES_FILE = DATA_DIR / "Code_advanced_profiles.json"
 
 GENERIC_CODE_TERMS = {
     "code",
@@ -658,6 +664,1131 @@ class CodeExplainer:
         }
 
 
+class CodeProjectReviewer:
+
+    CAPABILITY_EVIDENCE = {
+        "multi_file": lambda paths, text: len(paths) >= 5,
+        "dependencies": lambda paths, text: any(
+            path in paths for path in {"pyproject.toml", "requirements.txt"}
+        ),
+        "database": lambda paths, text: (
+            "sqlite3" in text
+            or "sqlalchemy" in text.lower()
+            or any("database" in path for path in paths)
+        ),
+        "api": lambda paths, text: (
+            "FastAPI(" in text
+            or "APIRouter(" in text
+            or "ThreadingHTTPServer(" in text
+        ),
+        "authentication": lambda paths, text: (
+            "hash_password" in text
+            and "verify_password" in text
+            and ("Authorization" in text or "bearer" in text.lower())
+        ),
+        "async": lambda paths, text: "async def " in text and "await " in text,
+        "concurrency": lambda paths, text: any(
+            marker in text
+            for marker in ["asyncio.to_thread", "TaskGroup", "ThreadPoolExecutor", "RLock("]
+        ),
+        "security": lambda paths, text: (
+            "secrets." in text
+            and "compare_digest" in text
+            and "pbkdf2_hmac" in text
+        ),
+        "cryptography": lambda paths, text: any(
+            marker in text for marker in ["Fernet", "AESGCM", "ChaCha20Poly1305"]
+        ),
+        "tests": lambda paths, text: (
+            any(path.startswith("tests/") and path.endswith(".py") for path in paths)
+            and "assert " in text
+        ),
+        "layered_architecture": lambda paths, text: all(
+            path in paths
+            for path in ["app/models.py", "app/repository.py", "app/service.py"]
+        ),
+        "hardware_integration": lambda paths, text: (
+            "app/hardware.py" in paths
+            and "class Sensor" in text
+            and ("SerialSensor" in text or "gpio" in text.lower())
+        ),
+        "scientific_computing": lambda paths, text: (
+            "app/science.py" in paths
+            and "summarize_measurements" in text
+            and "calibrate" in text
+        ),
+    }
+
+    def normalize_files(self, project_files):
+        if isinstance(project_files, dict):
+            return {
+                str(path).replace("\\", "/"): str(content)
+                for path, content in project_files.items()
+                if path and content is not None
+            }
+        normalized = {}
+        for item in project_files or []:
+            if not isinstance(item, dict):
+                continue
+            path = item.get("path") or item.get("name")
+            if path:
+                normalized[str(path).replace("\\", "/")] = str(
+                    item.get("content", "")
+                )
+        return normalized
+
+    def review(self, project_files, requested_capabilities=None, existing_files=None):
+        files = self.normalize_files(project_files)
+        existing = self.normalize_files(existing_files)
+        requested = {
+            key
+            for key, enabled in (requested_capabilities or {}).items()
+            if enabled and key in self.CAPABILITY_EVIDENCE
+        }
+        paths = set(files)
+        errors = []
+        warnings = []
+        file_checks = []
+
+        for path, content in files.items():
+            pure_path = PurePosixPath(path)
+            invalid_path = (
+                pure_path.is_absolute()
+                or ".." in pure_path.parts
+                or not pure_path.parts
+            )
+            if invalid_path:
+                errors.append(f"Unsafe project path: {path}")
+                continue
+            if not content.strip() and not path.endswith("__init__.py"):
+                errors.append(f"Project file is empty: {path}")
+
+            check = {"path": path, "syntax_valid": None, "error": None}
+            if path.endswith(".py"):
+                try:
+                    tree = ast.parse(content)
+                    check["syntax_valid"] = True
+                    for node in ast.walk(tree):
+                        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                            continue
+                        meaningful = [
+                            child
+                            for child in node.body
+                            if not (
+                                isinstance(child, ast.Expr)
+                                and isinstance(getattr(child, "value", None), ast.Constant)
+                                and isinstance(child.value.value, str)
+                            )
+                        ]
+                        if len(meaningful) == 1 and isinstance(meaningful[0], ast.Pass):
+                            errors.append(f"Function {node.name} is empty in {path}.")
+                        if len(meaningful) == 1 and isinstance(meaningful[0], ast.Raise):
+                            raised = ast.unparse(meaningful[0]).lower()
+                            if "notimplemented" in raised:
+                                errors.append(f"Function {node.name} is not implemented in {path}.")
+                except SyntaxError as error:
+                    check["syntax_valid"] = False
+                    check["error"] = f"line {error.lineno}: {error.msg}"
+                    errors.append(f"Python syntax error in {path}: {check['error']}")
+            file_checks.append(check)
+
+        combined = "\n\n".join(files.values())
+        lowered = combined.lower()
+        placeholder_markers = [
+            "production_draft",
+            "planner_ready",
+            "creative_ready",
+            "not implemented",
+            "insert code here",
+        ]
+        for marker in placeholder_markers:
+            if marker in lowered:
+                errors.append(f"Project contains placeholder marker: {marker}")
+
+        dangerous_markers = [
+            ("eval(", "Avoid eval() in generated applications."),
+            ("exec(", "Avoid exec() in generated applications."),
+            ("shell=true", "Avoid subprocess shell=True with user-controlled input."),
+            ("pickle.loads", "Avoid deserializing untrusted pickle data."),
+        ]
+        for marker, message in dangerous_markers:
+            if marker in lowered:
+                errors.append(message)
+
+        if re.search(r"(?:secret|password|api_key)\s*=\s*['\"][^'\"]{6,}['\"]", combined, re.I):
+            errors.append("A credential or secret appears to be hard-coded.")
+
+        capability_checks = []
+        for capability in sorted(requested):
+            passed = bool(self.CAPABILITY_EVIDENCE[capability](paths, combined))
+            capability_checks.append({
+                "capability": capability,
+                "passed": passed,
+            })
+            if not passed:
+                errors.append(f"Requested project capability is missing: {capability}")
+
+        if "fastapi" in lowered:
+            manifest = files.get("pyproject.toml", "") + files.get("requirements.txt", "")
+            if "fastapi" not in manifest.lower():
+                errors.append("FastAPI is imported but missing from the dependency manifest.")
+        if "from cryptography" in lowered:
+            manifest = files.get("pyproject.toml", "") + files.get("requirements.txt", "")
+            if "cryptography" not in manifest.lower():
+                errors.append("cryptography is imported but missing from the dependency manifest.")
+
+        preservation_checks = []
+        for path, original_content in existing.items():
+            preserved = path in files and files[path] == original_content
+            preservation_checks.append({"path": path, "preserved": preserved})
+            if not preserved:
+                errors.append(f"Existing file changed without a verified patch: {path}")
+
+        if requested and "tests" not in requested:
+            warnings.append("A professional project should normally include automated tests.")
+        if len(files) > 1 and "README.md" not in files:
+            warnings.append("Multi-file project has no README.md.")
+
+        errors = list(dict.fromkeys(errors))
+        warnings = list(dict.fromkeys(warnings))
+        passed_capabilities = sum(1 for item in capability_checks if item["passed"])
+        coverage = (
+            round(passed_capabilities / len(capability_checks) * 100, 2)
+            if capability_checks
+            else 100.0
+        )
+        score = max(0, 100 - len(errors) * 14 - len(warnings) * 3)
+        return {
+            "ready": not errors and score >= 90 and coverage == 100.0,
+            "quality_score": score,
+            "capability_coverage": coverage,
+            "errors": errors,
+            "warnings": warnings,
+            "file_checks": file_checks,
+            "capability_checks": capability_checks,
+            "preservation_checks": preservation_checks,
+            "files_reviewed": len(files),
+            "python_files_reviewed": sum(path.endswith(".py") for path in files),
+        }
+
+
+class AdvancedCodeProjectBuilder:
+
+    CAPABILITY_MARKERS = {
+        "multi_file": [
+            "multi-file", "multiple files", "several files", "large system",
+            "large project", "architecture", "production-ready", "professional project",
+        ],
+        "database": ["database", "sqlite", "sql", "persistence", "repository"],
+        "api": ["api", "rest", "endpoint", "fastapi", "web service"],
+        "authentication": ["authentication", "authenticate", "login", "user account", "bearer token"],
+        "async": ["async", "asynchronous", "await", "non-blocking"],
+        "concurrency": ["concurrent", "parallel", "worker", "thread", "task group"],
+        "security": ["security", "secure", "password hashing", "authorization"],
+        "cryptography": ["cryptography", "encrypt", "encryption", "decrypt", "fernet", "aes"],
+        "tests": ["tests", "testing", "pytest", "test suite", "coverage", "regression"],
+        "dependencies": ["dependencies", "requirements.txt", "pyproject.toml", "package"],
+        "layered_architecture": ["architecture", "service layer", "repository", "separation of concerns"],
+        "hardware_integration": [
+            "hardware", "arduino", "raspberry pi", "gpio", "sensor", "serial",
+            "microcontroller", "embedded", "firmware", "iot",
+        ],
+        "scientific_computing": [
+            "science", "scientific", "physics", "measurement", "calibration",
+            "experiment", "signal", "gravity", "temperature", "voltage",
+        ],
+    }
+
+    def __init__(self, profiles=None):
+        self.profiles = profiles if isinstance(profiles, dict) else {}
+
+    def detect_capabilities(self, text, report=None, existing_files=None):
+        lowered = str(text or "").lower()
+        capabilities = {
+            name: any(marker in lowered for marker in markers)
+            for name, markers in self.CAPABILITY_MARKERS.items()
+        }
+        advanced_count = sum(
+            capabilities[name]
+            for name in [
+                "database", "api", "authentication", "async", "concurrency",
+                "security", "cryptography", "tests", "hardware_integration",
+                "scientific_computing",
+            ]
+        )
+        professional = any(
+            marker in lowered
+            for marker in [
+                "advanced", "professional", "production-ready", "production ready",
+                "large system", "large project", "robust architecture",
+            ]
+        )
+        capabilities["multi_file"] = capabilities["multi_file"] or advanced_count >= 3
+        capabilities["layered_architecture"] = (
+            capabilities["layered_architecture"] or capabilities["multi_file"]
+        )
+        capabilities["dependencies"] = (
+            capabilities["dependencies"] or capabilities["api"] or capabilities["cryptography"]
+        )
+        capabilities["tests"] = capabilities["tests"] or professional
+        if capabilities["hardware_integration"]:
+            capabilities["async"] = True
+            capabilities["concurrency"] = True
+            capabilities["multi_file"] = True
+            capabilities["tests"] = True
+        if capabilities["scientific_computing"]:
+            capabilities["tests"] = True
+        capabilities["security"] = (
+            capabilities["security"] or capabilities["authentication"] or capabilities["cryptography"]
+        )
+        if capabilities["authentication"]:
+            capabilities["database"] = True
+            capabilities["api"] = True
+        if capabilities["api"]:
+            capabilities["async"] = True
+            capabilities["database"] = True
+        capabilities["existing_project"] = bool(existing_files) or any(
+            marker in lowered
+            for marker in [
+                "existing project", "existing codebase", "current project",
+                "without breaking", "preserve behavior", "regression-safe",
+            ]
+        )
+        capabilities["professional"] = professional or capabilities["multi_file"]
+        capabilities["advanced_project"] = (
+            capabilities["multi_file"]
+            or advanced_count >= 3
+            or (
+                capabilities["hardware_integration"]
+                and capabilities["scientific_computing"]
+            )
+            or (capabilities["existing_project"] and professional)
+        )
+        return capabilities
+
+    def project_slug(self, text):
+        match = re.search(
+            r"\b(?:called|named)\s+([a-zA-Z][a-zA-Z0-9_-]{1,30})",
+            str(text or ""),
+            re.I,
+        )
+        if match:
+            return match.group(1).lower().replace("-", "_")
+        for label, markers in [
+            ("sensor_lab", ["sensor", "arduino", "raspberry pi", "gpio", "measurement"]),
+            ("task_service", ["task", "todo"]),
+            ("notes_service", ["note"]),
+            ("expense_service", ["expense"]),
+            ("inventory_service", ["inventory", "product"]),
+            ("account_service", ["account", "user"]),
+        ]:
+            if any(marker in str(text or "").lower() for marker in markers):
+                return label
+        return "canri_service"
+
+    def select_profile(self, capabilities):
+        profiles = self.profiles.get("profiles", {})
+        if not isinstance(profiles, dict):
+            return {}
+        eligible = []
+        for profile in profiles.values():
+            if not isinstance(profile, dict):
+                continue
+            required = profile.get("required_capabilities", [])
+            if all(capabilities.get(capability) for capability in required):
+                eligible.append(profile)
+        if not eligible:
+            default_id = self.profiles.get("default_profile")
+            return profiles.get(default_id, {})
+        return max(
+            eligible,
+            key=lambda profile: (
+                len(profile.get("required_capabilities", [])),
+                profile.get("score", 0),
+            ),
+        )
+
+    def build_pyproject(self, project_name, capabilities):
+        dependencies = []
+        if capabilities.get("api"):
+            dependencies.extend(["fastapi>=0.110", "uvicorn>=0.27"])
+        if capabilities.get("cryptography"):
+            dependencies.append("cryptography>=42")
+        if capabilities.get("hardware_integration"):
+            dependencies.append("pyserial>=3.5")
+        dependency_lines = "\n".join(f'    "{item}",' for item in dependencies)
+        return f'''[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "{project_name.replace('_', '-')}"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+{dependency_lines}
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "httpx>=0.27"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+'''
+
+    def build_files(self, text, capabilities):
+        project_name = self.project_slug(text)
+        files = {
+            "pyproject.toml": self.build_pyproject(project_name, capabilities),
+            "app/__init__.py": '__all__ = ["service"]\n',
+            "app/models.py": '''from dataclasses import dataclass
+
+
+@dataclass(frozen=True, slots=True)
+class Item:
+    id: int
+    owner_id: int
+    title: str
+    description: str
+
+
+@dataclass(frozen=True, slots=True)
+class User:
+    id: int
+    username: str
+''',
+        }
+
+        if capabilities.get("database"):
+            files["app/database.py"] = '''import sqlite3
+from contextlib import contextmanager
+from pathlib import Path
+from typing import Iterator
+
+
+DEFAULT_DATABASE = Path("canri_service.db")
+
+
+def connect(database_path: str | Path = DEFAULT_DATABASE) -> sqlite3.Connection:
+    connection = sqlite3.connect(str(database_path), timeout=5.0)
+    connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA foreign_keys = ON")
+    return connection
+
+
+@contextmanager
+def transaction(database_path: str | Path = DEFAULT_DATABASE) -> Iterator[sqlite3.Connection]:
+    connection = connect(database_path)
+    try:
+        yield connection
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def initialize_database(database_path: str | Path = DEFAULT_DATABASE) -> None:
+    with transaction(database_path) as connection:
+        connection.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS access_tokens (
+                token_hash TEXT PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                expires_at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                owner_id INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT ''
+            );
+            """
+        )
+'''
+            files["app/repository.py"] = '''import time
+from pathlib import Path
+
+from app.database import DEFAULT_DATABASE, transaction
+from app.models import Item, User
+
+
+class Repository:
+    def __init__(self, database_path: str | Path = DEFAULT_DATABASE) -> None:
+        self.database_path = database_path
+
+    def create_user(self, username: str, password_hash: str) -> User:
+        with transaction(self.database_path) as connection:
+            cursor = connection.execute(
+                "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+                (username, password_hash),
+            )
+            return User(id=int(cursor.lastrowid), username=username)
+
+    def find_user_credentials(self, username: str):
+        with transaction(self.database_path) as connection:
+            return connection.execute(
+                "SELECT id, username, password_hash FROM users WHERE username = ?",
+                (username,),
+            ).fetchone()
+
+    def save_token(self, user_id: int, token_hash: str, expires_at: int) -> None:
+        with transaction(self.database_path) as connection:
+            connection.execute(
+                "INSERT INTO access_tokens (token_hash, user_id, expires_at) VALUES (?, ?, ?)",
+                (token_hash, user_id, expires_at),
+            )
+
+    def user_id_for_token(self, token_hash: str) -> int | None:
+        with transaction(self.database_path) as connection:
+            row = connection.execute(
+                "SELECT user_id FROM access_tokens WHERE token_hash = ? AND expires_at > ?",
+                (token_hash, int(time.time())),
+            ).fetchone()
+            return int(row["user_id"]) if row else None
+
+    def create_item(self, owner_id: int, title: str, description: str) -> Item:
+        with transaction(self.database_path) as connection:
+            cursor = connection.execute(
+                "INSERT INTO items (owner_id, title, description) VALUES (?, ?, ?)",
+                (owner_id, title, description),
+            )
+            return Item(int(cursor.lastrowid), owner_id, title, description)
+
+    def list_items(self, owner_id: int) -> list[Item]:
+        with transaction(self.database_path) as connection:
+            rows = connection.execute(
+                "SELECT id, owner_id, title, description FROM items WHERE owner_id = ? ORDER BY id",
+                (owner_id,),
+            ).fetchall()
+        return [Item(**dict(row)) for row in rows]
+'''
+        else:
+            files["app/repository.py"] = '''from threading import RLock
+
+from app.models import Item
+
+
+class Repository:
+    def __init__(self) -> None:
+        self._items: list[Item] = []
+        self._lock = RLock()
+
+    def create_item(self, owner_id: int, title: str, description: str) -> Item:
+        with self._lock:
+            item = Item(len(self._items) + 1, owner_id, title, description)
+            self._items.append(item)
+            return item
+
+    def list_items(self, owner_id: int) -> list[Item]:
+        with self._lock:
+            return [item for item in self._items if item.owner_id == owner_id]
+'''
+
+        if capabilities.get("security"):
+            files["app/security.py"] = '''import base64
+import binascii
+import hashlib
+import hmac
+import secrets
+
+
+PBKDF2_ITERATIONS = 600_000
+
+
+def hash_password(password: str) -> str:
+    if len(password) < 12:
+        raise ValueError("Password must contain at least 12 characters.")
+    salt = secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), salt, PBKDF2_ITERATIONS
+    )
+    return "pbkdf2_sha256${}${}${}".format(
+        PBKDF2_ITERATIONS,
+        base64.urlsafe_b64encode(salt).decode("ascii"),
+        base64.urlsafe_b64encode(digest).decode("ascii"),
+    )
+
+
+def verify_password(password: str, encoded: str) -> bool:
+    try:
+        algorithm, iterations, salt_text, digest_text = encoded.split("$", 3)
+        if algorithm != "pbkdf2_sha256":
+            return False
+        salt = base64.urlsafe_b64decode(salt_text.encode("ascii"))
+        expected = base64.urlsafe_b64decode(digest_text.encode("ascii"))
+        actual = hashlib.pbkdf2_hmac(
+            "sha256", password.encode("utf-8"), salt, int(iterations)
+        )
+        return hmac.compare_digest(actual, expected)
+    except (ValueError, TypeError, binascii.Error):
+        return False
+
+
+def create_access_token() -> tuple[str, str]:
+    raw_token = secrets.token_urlsafe(32)
+    return raw_token, hash_token(raw_token)
+
+
+def hash_token(raw_token: str) -> str:
+    return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+'''
+
+        if capabilities.get("cryptography"):
+            files["app/crypto.py"] = '''from cryptography.fernet import Fernet, InvalidToken
+
+
+class SecretBox:
+    def __init__(self, key: bytes) -> None:
+        self._fernet = Fernet(key)
+
+    def encrypt(self, plaintext: str) -> str:
+        return self._fernet.encrypt(plaintext.encode("utf-8")).decode("ascii")
+
+    def decrypt(self, ciphertext: str) -> str:
+        try:
+            return self._fernet.decrypt(ciphertext.encode("ascii")).decode("utf-8")
+        except InvalidToken as error:
+            raise ValueError("Ciphertext authentication failed.") from error
+'''
+
+        security_imports = ""
+        auth_methods = ""
+        concurrency_methods = ""
+        if capabilities.get("authentication"):
+            security_imports = "from app.security import create_access_token, hash_password, hash_token, verify_password\n"
+            auth_methods = '''
+    async def register(self, username: str, password: str):
+        clean_username = username.strip().lower()
+        if len(clean_username) < 3:
+            raise ValueError("Username must contain at least 3 characters.")
+        encoded = await asyncio.to_thread(hash_password, password)
+        return await asyncio.to_thread(
+            self.repository.create_user, clean_username, encoded
+        )
+
+    async def authenticate(self, username: str, password: str) -> str:
+        row = await asyncio.to_thread(
+            self.repository.find_user_credentials, username.strip().lower()
+        )
+        if row is None or not await asyncio.to_thread(
+            verify_password, password, row["password_hash"]
+        ):
+            raise PermissionError("Invalid credentials.")
+        raw_token, token_digest = create_access_token()
+        expires_at = int(time.time()) + 3600
+        await asyncio.to_thread(
+            self.repository.save_token, int(row["id"]), token_digest, expires_at
+        )
+        return raw_token
+
+    async def authorize(self, raw_token: str) -> int:
+        user_id = await asyncio.to_thread(
+            self.repository.user_id_for_token, hash_token(raw_token)
+        )
+        if user_id is None:
+            raise PermissionError("Invalid or expired access token.")
+        return user_id
+'''
+        if capabilities.get("concurrency"):
+            concurrency_methods = '''
+    async def list_items_for_owners(self, owner_ids: list[int]):
+        async with asyncio.TaskGroup() as group:
+            tasks = [
+                group.create_task(self.list_items(owner_id))
+                for owner_id in owner_ids
+            ]
+        return {
+            owner_id: task.result()
+            for owner_id, task in zip(owner_ids, tasks)
+        }
+'''
+        files["app/service.py"] = f'''import asyncio
+import time
+
+from app.repository import Repository
+{security_imports}
+
+class ApplicationService:
+    def __init__(self, repository: Repository | None = None) -> None:
+        self.repository = repository or Repository()
+{auth_methods}
+    async def create_item(self, owner_id: int, title: str, description: str = ""):
+        clean_title = title.strip()
+        if not clean_title:
+            raise ValueError("Title is required.")
+        return await asyncio.to_thread(
+            self.repository.create_item,
+            owner_id,
+            clean_title,
+            description.strip(),
+        )
+
+    async def list_items(self, owner_id: int):
+        return await asyncio.to_thread(self.repository.list_items, owner_id)
+{concurrency_methods}
+'''
+
+        if capabilities.get("api"):
+            auth_dependency = ""
+            auth_routes = ""
+            current_user_expression = "1"
+            security_scheme_import = ""
+            if capabilities.get("authentication"):
+                security_scheme_import = ", Depends\nfrom fastapi.security import HTTPAuthorizationCredentials, HTTPBearer"
+                auth_dependency = '''
+bearer = HTTPBearer(auto_error=True)
+
+
+async def current_user_id(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer),
+) -> int:
+    try:
+        return await service.authorize(credentials.credentials)
+    except PermissionError as error:
+        raise HTTPException(status_code=401, detail=str(error)) from error
+'''
+                auth_routes = '''
+@app.post("/auth/register", status_code=201)
+async def register(payload: Credentials):
+    try:
+        return await service.register(payload.username, payload.password)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@app.post("/auth/token")
+async def token(payload: Credentials):
+    try:
+        return {"access_token": await service.authenticate(payload.username, payload.password)}
+    except PermissionError as error:
+        raise HTTPException(status_code=401, detail=str(error)) from error
+'''
+                current_user_expression = "Depends(current_user_id)"
+            files["app/api.py"] = f'''from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, HTTPException{security_scheme_import}
+from pydantic import BaseModel, Field
+
+from app.database import initialize_database
+from app.service import ApplicationService
+
+
+class Credentials(BaseModel):
+    username: str = Field(min_length=3, max_length=80)
+    password: str = Field(min_length=12, max_length=256)
+
+
+class ItemInput(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    description: str = Field(default="", max_length=2000)
+
+
+service = ApplicationService()
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    initialize_database()
+    yield
+
+
+app = FastAPI(title="Canri Professional Service", lifespan=lifespan)
+{auth_dependency}
+
+@app.get("/health")
+async def health():
+    return {{"status": "ok"}}
+
+{auth_routes}
+
+@app.post("/items", status_code=201)
+async def create_item(payload: ItemInput, owner_id: int = {current_user_expression}):
+    try:
+        return await service.create_item(owner_id, payload.title, payload.description)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@app.get("/items")
+async def list_items(owner_id: int = {current_user_expression}):
+    return await service.list_items(owner_id)
+'''
+        else:
+            files["app/main.py"] = '''import asyncio
+
+from app.service import ApplicationService
+
+
+async def main() -> None:
+    service = ApplicationService()
+    item = await service.create_item(1, "First item", "Created by the CLI")
+    print(item)
+    print(await service.list_items(1))
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+'''
+
+        if capabilities.get("tests"):
+            if capabilities.get("security"):
+                files["tests/test_security.py"] = '''from app.security import hash_password, verify_password
+
+
+def test_password_hash_round_trip():
+    encoded = hash_password("correct horse battery staple")
+    assert "correct horse battery staple" not in encoded
+    assert verify_password("correct horse battery staple", encoded)
+    assert not verify_password("wrong password", encoded)
+'''
+            if capabilities.get("authentication"):
+                files["tests/test_service.py"] = '''import asyncio
+
+from app.database import initialize_database
+from app.repository import Repository
+from app.service import ApplicationService
+
+
+def test_register_authenticate_and_create_item(tmp_path):
+    database_path = tmp_path / "test.db"
+    initialize_database(database_path)
+    service = ApplicationService(Repository(database_path))
+
+    async def scenario():
+        user = await service.register("alice", "correct horse battery staple")
+        token = await service.authenticate("alice", "correct horse battery staple")
+        owner_id = await service.authorize(token)
+        item = await service.create_item(owner_id, "Read tests", "Keep behavior stable")
+        items = await service.list_items(owner_id)
+        assert user.username == "alice"
+        assert item.title == "Read tests"
+        assert items == [item]
+
+    asyncio.run(scenario())
+'''
+            elif capabilities.get("database"):
+                files["tests/test_service.py"] = '''import asyncio
+
+from app.database import initialize_database
+from app.repository import Repository
+from app.service import ApplicationService
+
+
+def test_create_and_list_item(tmp_path):
+    database_path = tmp_path / "test.db"
+    initialize_database(database_path)
+    service = ApplicationService(Repository(database_path))
+
+    async def scenario():
+        item = await service.create_item(1, "Read tests", "Keep behavior stable")
+        assert await service.list_items(1) == [item]
+
+    asyncio.run(scenario())
+'''
+            else:
+                files["tests/test_service.py"] = '''import asyncio
+
+from app.service import ApplicationService
+
+
+def test_create_and_list_item():
+    service = ApplicationService()
+
+    async def scenario():
+        item = await service.create_item(1, "Read tests", "Keep behavior stable")
+        assert await service.list_items(1) == [item]
+
+    asyncio.run(scenario())
+'''
+            if capabilities.get("api") and capabilities.get("authentication"):
+                files["tests/test_api.py"] = '''from fastapi.testclient import TestClient
+
+from app import api
+from app.database import initialize_database
+from app.repository import Repository
+from app.service import ApplicationService
+
+
+def test_authenticated_item_flow(tmp_path):
+    database_path = tmp_path / "api.db"
+    initialize_database(database_path)
+    api.service = ApplicationService(Repository(database_path))
+
+    with TestClient(api.app) as client:
+        registered = client.post(
+            "/auth/register",
+            json={"username": "alice", "password": "correct horse battery staple"},
+        )
+        assert registered.status_code == 201
+        authenticated = client.post(
+            "/auth/token",
+            json={"username": "alice", "password": "correct horse battery staple"},
+        )
+        assert authenticated.status_code == 200
+        headers = {"Authorization": f"Bearer {authenticated.json()['access_token']}"}
+        created = client.post(
+            "/items",
+            json={"title": "API test", "description": "verified"},
+            headers=headers,
+        )
+        assert created.status_code == 201
+        listed = client.get("/items", headers=headers)
+        assert listed.status_code == 200
+        assert listed.json()[0]["title"] == "API test"
+'''
+            elif capabilities.get("api"):
+                files["tests/test_api.py"] = '''from fastapi.testclient import TestClient
+
+from app.api import app
+
+
+def test_health_endpoint():
+    with TestClient(app) as client:
+        response = client.get("/health")
+        assert response.status_code == 200
+        assert response.json() == {"status": "ok"}
+'''
+
+        if capabilities.get("hardware_integration"):
+            files["app/hardware.py"] = '''import time
+from dataclasses import dataclass
+from typing import Protocol
+
+
+@dataclass(frozen=True, slots=True)
+class SensorReading:
+    timestamp: float
+    value: float
+    unit: str
+
+
+class Sensor(Protocol):
+    def read(self) -> SensorReading:
+        """Return one measurement from the device."""
+
+
+class SimulatedSensor:
+    def __init__(self, values: list[float], unit: str = "m/s^2") -> None:
+        if not values:
+            raise ValueError("At least one simulated value is required.")
+        self._values = list(values)
+        self._unit = unit
+        self._index = 0
+
+    def read(self) -> SensorReading:
+        value = self._values[self._index % len(self._values)]
+        self._index += 1
+        return SensorReading(time.time(), float(value), self._unit)
+
+
+class SerialSensor:
+    def __init__(self, port: str, baudrate: int = 115_200, timeout: float = 1.0) -> None:
+        if not port.strip():
+            raise ValueError("A serial port is required.")
+        import serial
+
+        self._serial = serial.Serial(port, baudrate=baudrate, timeout=timeout)
+
+    def read(self) -> SensorReading:
+        line = self._serial.readline().decode("utf-8", errors="strict").strip()
+        parts = [part.strip() for part in line.split(",")]
+        if len(parts) != 2:
+            raise ValueError("Expected serial data in value,unit format.")
+        value, unit = parts
+        return SensorReading(time.time(), float(value), unit)
+
+    def close(self) -> None:
+        self._serial.close()
+'''
+            files["app/science.py"] = '''import math
+from dataclasses import dataclass
+from statistics import fmean, pstdev
+
+from app.hardware import SensorReading
+
+
+@dataclass(frozen=True, slots=True)
+class MeasurementSummary:
+    count: int
+    mean: float
+    minimum: float
+    maximum: float
+    standard_deviation: float
+    unit: str
+
+
+def calibrate(reading: SensorReading, scale: float = 1.0, offset: float = 0.0) -> SensorReading:
+    value = reading.value * scale + offset
+    if not math.isfinite(value):
+        raise ValueError("Calibrated measurement must be finite.")
+    return SensorReading(reading.timestamp, value, reading.unit)
+
+
+def summarize_measurements(readings: list[SensorReading]) -> MeasurementSummary:
+    if not readings:
+        raise ValueError("At least one measurement is required.")
+    units = {reading.unit for reading in readings}
+    if len(units) != 1:
+        raise ValueError("All measurements must use the same unit.")
+    values = [reading.value for reading in readings]
+    if not all(math.isfinite(value) for value in values):
+        raise ValueError("Measurements must be finite.")
+    return MeasurementSummary(
+        count=len(values),
+        mean=fmean(values),
+        minimum=min(values),
+        maximum=max(values),
+        standard_deviation=pstdev(values),
+        unit=readings[0].unit,
+    )
+'''
+            files["app/controller.py"] = '''import asyncio
+
+from app.hardware import Sensor, SensorReading
+from app.science import calibrate
+
+
+async def collect_measurements(
+    sensor: Sensor,
+    sample_count: int,
+    interval_seconds: float = 0.1,
+    scale: float = 1.0,
+    offset: float = 0.0,
+) -> list[SensorReading]:
+    if sample_count < 1 or sample_count > 100_000:
+        raise ValueError("sample_count must be between 1 and 100000.")
+    if interval_seconds < 0:
+        raise ValueError("interval_seconds cannot be negative.")
+    readings = []
+    for index in range(sample_count):
+        raw = await asyncio.to_thread(sensor.read)
+        readings.append(calibrate(raw, scale=scale, offset=offset))
+        if interval_seconds and index + 1 < sample_count:
+            await asyncio.sleep(interval_seconds)
+    return readings
+'''
+            files["app/main.py"] = '''import asyncio
+
+from app.controller import collect_measurements
+from app.hardware import SimulatedSensor
+from app.science import summarize_measurements
+
+
+async def run() -> None:
+    sensor = SimulatedSensor([9.79, 9.81, 9.82, 9.80])
+    readings = await collect_measurements(sensor, sample_count=4, interval_seconds=0)
+    summary = summarize_measurements(readings)
+    print(summary)
+
+
+if __name__ == "__main__":
+    asyncio.run(run())
+'''
+            files["tests/test_hardware_science.py"] = '''import asyncio
+
+import pytest
+
+from app.controller import collect_measurements
+from app.hardware import SensorReading, SimulatedSensor
+from app.science import calibrate, summarize_measurements
+
+
+def test_collect_calibrate_and_summarize_measurements():
+    sensor = SimulatedSensor([9.8, 9.9])
+    readings = asyncio.run(
+        collect_measurements(sensor, 2, interval_seconds=0, offset=0.1)
+    )
+    summary = summarize_measurements(readings)
+    assert summary.count == 2
+    assert summary.minimum == pytest.approx(9.9)
+    assert summary.maximum == pytest.approx(10.0)
+
+
+def test_rejects_non_finite_calibration():
+    with pytest.raises(ValueError):
+        calibrate(SensorReading(0.0, float("inf"), "m/s^2"))
+'''
+
+        run_command = (
+            "python -m uvicorn app.api:app --reload"
+            if capabilities.get("api")
+            else "python -m app.main"
+        )
+        security_note = (
+            "Passwords are salted and hashed. Raw access tokens are returned once and only their hashes are stored."
+            if capabilities.get("security")
+            else "The project contains no built-in credential storage."
+        )
+        hardware_note = (
+            "Hardware access is isolated behind a Sensor protocol and includes a deterministic simulator for tests."
+            if capabilities.get("hardware_integration")
+            else ""
+        )
+        files["README.md"] = f'''# {project_name.replace('_', ' ').title()}
+
+This project uses separate model, repository, service, and transport layers.
+
+## Install
+
+```powershell
+python -m venv .venv
+.venv\\Scripts\\python -m pip install -e .[dev]
+```
+
+## Run
+
+```powershell
+{run_command}
+```
+
+## Test
+
+```powershell
+python -m pytest
+```
+
+{security_note}
+{hardware_note}
+'''
+        return files
+
+    def build(self, text, report=None, existing_files=None):
+        capabilities = self.detect_capabilities(text, report, existing_files)
+        profile = self.select_profile(capabilities)
+        generated = self.build_files(text, capabilities)
+        existing = CodeProjectReviewer().normalize_files(existing_files)
+        files = dict(existing)
+        conflicts = []
+        added = []
+        for path, content in generated.items():
+            if path in files:
+                if files[path] != content:
+                    conflicts.append(path)
+                continue
+            files[path] = content
+            added.append(path)
+        return {
+            "project_name": self.project_slug(text),
+            "architecture_profile": profile,
+            "project_files": files,
+            "capabilities": capabilities,
+            "change_safety": {
+                "existing_files_preserved": sorted(existing),
+                "added_files": sorted(added),
+                "conflicting_files_not_overwritten": sorted(conflicts),
+                "strategy": "preserve_existing_add_missing",
+            },
+        }
+
+
 class CodeBrain:
 
     def __init__(self):
@@ -668,12 +1799,17 @@ class CodeBrain:
         self.composition_tables = {}
         self.assembly_patterns = {}
         self.project_recipes = {}
+        self.advanced_profiles = {}
         self.recipe_by_kind = {}
         self.code_by_id = {}
         self.self_reviewer = CodeSelfReviewer()
+        self.project_reviewer = CodeProjectReviewer()
         self.code_explainer = CodeExplainer()
 
         self.load_data()
+        self.advanced_project_builder = AdvancedCodeProjectBuilder(
+            self.advanced_profiles
+        )
 
         print("Code Brain Loaded")
 
@@ -739,6 +1875,16 @@ class CodeBrain:
 
                 self.project_recipes = json.load(f)
 
+        if ADVANCED_PROFILES_FILE.exists():
+
+            with open(
+                ADVANCED_PROFILES_FILE,
+                "r",
+                encoding="utf-8"
+            ) as f:
+
+                self.advanced_profiles = json.load(f)
+
         self.code_by_id = {
             item.get("id"): item
             for item in self.code_database
@@ -795,15 +1941,191 @@ class CodeBrain:
 
             f.write("\n")
 
-    def finalize_code_result(self, result):
+    def extract_existing_project_files(self, data, existing_code=""):
+
+        candidates = []
+        if isinstance(data, dict):
+            candidates.extend([
+                data.get("existing_project_files"),
+                data.get("project_files"),
+            ])
+            results = data.get("results")
+            if isinstance(results, dict):
+                code_result = results.get("Code_brain")
+                if isinstance(code_result, dict):
+                    candidates.append(code_result.get("project_files"))
+
+        for candidate in candidates:
+            normalized = self.project_reviewer.normalize_files(candidate)
+            if normalized:
+                return normalized
+
+        if existing_code:
+            return {"app/legacy.py": str(existing_code)}
+        return {}
+
+    def is_advanced_project_request(self, text, report=None, existing_files=None):
+
+        capabilities = self.advanced_project_builder.detect_capabilities(
+            text,
+            report,
+            existing_files
+        )
+        return bool(capabilities.get("advanced_project"))
+
+    def build_advanced_project_result(
+        self,
+        text,
+        terms,
+        task_type,
+        report=None,
+        existing_files=None
+    ):
+
+        project = self.advanced_project_builder.build(
+            text,
+            report,
+            existing_files
+        )
+        files = project["project_files"]
+        capabilities = project["capabilities"]
+        review = self.project_reviewer.review(
+            files,
+            capabilities,
+            existing_files
+        )
+        entrypoint = "app/api.py" if "app/api.py" in files else "app/main.py"
+        generated_code = files.get(entrypoint, "")
+
+        return {
+            "brain": "Code_brain",
+            "used_understanding_report": bool(report),
+            "used_memory_report": True,
+            "language": "python",
+            "task_type": task_type,
+            "program_kind": "advanced_python_project",
+            "output_mode": "project_bundle",
+            "professional_mode": True,
+            "project_name": project["project_name"],
+            "architecture_profile": project.get("architecture_profile", {}),
+            "project_files": files,
+            "existing_project_files": self.project_reviewer.normalize_files(
+                existing_files
+            ),
+            "generated_code": generated_code,
+            "entrypoint": entrypoint,
+            "capabilities": capabilities,
+            "project_review": review,
+            "change_safety": project["change_safety"],
+            "terms_used": terms,
+            "confidence": 94 if review.get("ready") else 68,
+            "matched_functions": sum(path.endswith(".py") for path in files),
+            "selected": sorted(files),
+            "assembly_plan": {
+                "architecture": "layered_service_repository_transport",
+                "steps": [
+                    "Extract requested technical capabilities and output constraints.",
+                    "Separate models, persistence, business logic, and transport layers.",
+                    "Use parameterized SQL and one-way password hashing for stored credentials.",
+                    "Keep blocking SQLite and password work outside the async event loop.",
+                    "Generate tests and validate every Python file before returning the project.",
+                ],
+                "quality_gates": [
+                    "all Python files parse",
+                    "requested capability coverage is 100 percent",
+                    "no placeholder functions",
+                    "no dangerous eval, exec, shell=True, or hard-coded credentials",
+                    "existing files are preserved unless a verified patch is available",
+                ],
+                "data_files_used": [
+                    "Code_advanced_profiles.json",
+                    "Code_project_recipes.json",
+                    "Code_dependency_graph.json",
+                ],
+            },
+            "request_text": text,
+            "missing": list(review.get("errors", [])),
+            "needs_creative_brain": False,
+            "needs_security": bool(
+                capabilities.get("security")
+                or capabilities.get("authentication")
+                or capabilities.get("cryptography")
+            ),
+            "suggested_next_brains": [
+                "Security_brain",
+                "Quality_Control_brain",
+                "Response_brain",
+            ],
+            "rules": [
+                "Prefer a complete reviewed project bundle for explicit advanced requests.",
+                "Do not overwrite existing project files without a validated patch.",
+                "Use established cryptographic libraries for reversible encryption.",
+            ],
+        }
+
+    def finalize_code_result(self, result, scanner_articles=None):
 
         if not isinstance(result, dict):
             return result
 
+        scanner_articles = [
+            item for item in (scanner_articles or [])
+            if isinstance(item, dict)
+        ][:8]
+        result["scanner_knowledge_used"] = scanner_articles
+        result["scanner_sources_used"] = list(dict.fromkeys(
+            source.get("source_id")
+            for item in scanner_articles
+            for source in item.get("sources", [])
+            if isinstance(source, dict) and source.get("source_id")
+        ))
+        result["scanner_usage_policy"] = (
+            "Use official documentation and package metadata as design evidence; "
+            "never paste unverified forum or repository code into the output."
+        )
+
+        project_files = self.project_reviewer.normalize_files(
+            result.get("project_files")
+        )
         code = result.get(
             "generated_code",
             ""
         )
+
+        if project_files:
+            project_review = self.project_reviewer.review(
+                project_files,
+                result.get("capabilities", {}),
+                result.get("existing_project_files")
+            )
+            result["project_files"] = project_files
+            result["project_review"] = project_review
+            result["self_reviewed"] = True
+            result["self_improved"] = False
+            result["self_review"] = {
+                "ready": project_review.get("ready", False),
+                "after": project_review,
+                "changes": [],
+                "improved": False,
+                "request_alignment": {
+                    "passed": project_review.get("capability_coverage") == 100.0,
+                    "coverage": project_review.get("capability_coverage", 0),
+                    "checks": project_review.get("capability_checks", []),
+                },
+            }
+            result["code_metrics"] = {
+                "files": len(project_files),
+                "python_files": project_review.get("python_files_reviewed", 0),
+                "syntax_valid": not any(
+                    check.get("syntax_valid") is False
+                    for check in project_review.get("file_checks", [])
+                ),
+            }
+            if not project_review.get("ready", False):
+                result.setdefault("warnings", []).append(
+                    "Project self-review found blocking issues."
+                )
+            return result
 
         if not code:
             return result
@@ -4780,6 +6102,16 @@ if __name__ == "__main__":
             report
         )
 
+        scanner_articles = (
+            scanner_evidence(
+                data,
+                limit=8,
+                collections={"code", "general", "trusted_knowledge"}
+            )
+            if scanner_evidence is not None
+            else []
+        )
+
         retry_request = data.get("retry_request", {})
         retry_instructions = data.get("retry_instructions", [])
         if (
@@ -4848,7 +6180,7 @@ if __name__ == "__main__":
                 language
             )
 
-            return {
+            result = {
                 "brain": "Code_brain",
                 "used_understanding_report": bool(report),
                 "mode": "code_analysis",
@@ -4869,6 +6201,8 @@ if __name__ == "__main__":
                     "Return a screen-ready answer plus structured code_explanation."
                 ]
             }
+            result["scanner_knowledge_used"] = scanner_articles
+            return result
 
         code_only = self.is_code_only_request(
             text
@@ -4883,6 +6217,30 @@ if __name__ == "__main__":
             text
         )
 
+        existing_project_files = self.extract_existing_project_files(
+            data,
+            existing_code
+        )
+
+        if (
+            not skeleton_requested
+            and self.is_advanced_project_request(
+                text,
+                report,
+                existing_project_files
+            )
+        ):
+            return self.finalize_code_result(
+                self.build_advanced_project_result(
+                    text,
+                    terms,
+                    task_type,
+                    report,
+                    existing_project_files
+                ),
+                scanner_articles
+            )
+
         if self.is_python_text_rpg_request(
             text,
             terms,
@@ -4893,7 +6251,8 @@ if __name__ == "__main__":
                 self.build_python_text_rpg_result(
                     text,
                     terms
-                )
+                ),
+                scanner_articles
             )
 
         if (
@@ -4915,7 +6274,8 @@ if __name__ == "__main__":
                     terms,
                     task_type,
                     existing_code
-                )
+                ),
+                scanner_articles
             )
 
         matches = self.search_code(
@@ -5108,7 +6468,8 @@ if __name__ == "__main__":
         }
 
         return self.finalize_code_result(
-            result
+            result,
+            scanner_articles
         )
 
 

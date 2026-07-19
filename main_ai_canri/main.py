@@ -46,6 +46,7 @@ from Emotion_brain import brain as emotion_brain
 
 from Security_brain import brain as security_brain
 from Knowledge_collector import start_background_collector
+from Scanner_knowledge import start_background_web_scanners
 
 
 ACTIVE_SESSION_ID = "session_" + uuid4().hex
@@ -439,6 +440,12 @@ def summarize_brain_result(result):
             "data_files_used": plan.get("data_files_used", [])
         }
 
+    if isinstance(result.get("visible_work_summary"), dict):
+        summary["visible_work_summary"] = result["visible_work_summary"]
+
+    if isinstance(result.get("suggested_follow_up_tasks"), list):
+        summary["suggested_follow_up_tasks"] = result["suggested_follow_up_tasks"][:4]
+
     return {
         key: value
         for key, value in summary.items()
@@ -475,6 +482,8 @@ def build_thinking_trace(spelling_report, understanding_report, memory_result, m
         "understanding": {
             "main_topic": understanding_report.get("main_topic"),
             "topics": understanding_report.get("topics"),
+            "central_domains": understanding_report.get("central_domains"),
+            "central_domain_details": understanding_report.get("central_domain_details"),
             "intent": understanding_report.get("intent"),
             "language": understanding_report.get("language"),
             "features": understanding_report.get("features"),
@@ -499,6 +508,8 @@ def build_thinking_trace(spelling_report, understanding_report, memory_result, m
             "phases": manager_result.get("phases"),
             "system_confidence": manager_result.get("system_confidence"),
             "suggested_next_brains": manager_result.get("suggested_next_brains"),
+            "suggested_follow_up_tasks": manager_result.get("suggested_follow_up_tasks"),
+            "visible_work_summary": manager_result.get("visible_work_summary"),
             "missing_or_skipped": manager_result.get("missing_or_skipped")
         } if isinstance(manager_result, dict) else {},
         "brain_results": {
@@ -521,6 +532,11 @@ def main():
         start_background_collector()
     except Exception as error:
         print(f"Knowledge collector skipped: {error}")
+
+    try:
+        start_background_web_scanners()
+    except Exception as error:
+        print(f"Web scanners skipped: {error}")
 
     brain = MainBrain()
 
