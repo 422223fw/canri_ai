@@ -8,6 +8,7 @@ Run from the project root:
 import struct
 import subprocess
 import sys
+import time
 import wave
 import zipfile
 from pathlib import Path
@@ -85,6 +86,170 @@ def test_expense_tracker_code_and_quality():
 
     assert_true(quality["passed"], f"Quality check failed: {quality.get('issues')}")
     assert_true(quality["quality_score"] == 100, "Expense tracker should score 100 in this regression.")
+
+
+def test_library_manager_full_requirements_and_old_json_compatibility():
+    prompt = """Build a real runnable Python library management program for the terminal.
+The program must add books with title, author, and year, list books, search by
+title or author, borrow a book, return a book, delete a book by number, and save
+and load data from library.json. Keep data compatible with older library.json
+files. Use only the Python standard library. Only output final Python code.
+Do not output a plan, explanation, modules, placeholders, or draft structures."""
+    understanding = UnderstandingBrain().process({"original_text": prompt})
+    contract = understanding.get("request_contract", {})
+    atomic_texts = [
+        str(item.get("text", "")).lower()
+        for item in contract.get("requirements", [])
+        if isinstance(item, dict)
+    ]
+    assert_true(
+        "or draft structures" not in atomic_texts,
+        "A prohibited output item was incorrectly extracted as a positive code requirement.",
+    )
+    forbidden = set(contract.get("output_constraints", {}).get("forbidden_sections", []))
+    assert_true(
+        {"plan", "explanation", "modules", "placeholders", "drafts"}.issubset(forbidden),
+        f"The comma-separated output prohibitions were not fully parsed: {sorted(forbidden)}",
+    )
+    code_brain = CodeBrain()
+    result = code_brain.process({
+        "original_text": prompt,
+        "understanding": understanding,
+    })
+    code = result.get("generated_code", "")
+    assert_true(result.get("program_kind") == "library_manager", "Wrong library program kind.")
+    compile(code, "generated_library_manager.py", "exec")
+    for marker in (
+        'Path("library.json")',
+        "def add_book",
+        "def list_books",
+        "def search_books",
+        "def borrow_book",
+        "def return_book",
+        "def delete_book",
+        "def normalize_book",
+    ):
+        assert_true(marker in code, f"Library manager is missing {marker}.")
+
+    namespace = {"__name__": "generated_library_test"}
+    exec(compile(code, "generated_library_manager.py", "exec"), namespace)
+    migrated = namespace["normalize_book"]({
+        "name": "Old Book",
+        "writer": "Old Author",
+        "published_year": "1999",
+        "status": "borrowed",
+    })
+    assert_true(
+        migrated == {
+            "title": "Old Book",
+            "author": "Old Author",
+            "year": 1999,
+            "borrowed": True,
+        },
+        f"Old library record was not migrated correctly: {migrated}",
+    )
+    assert_true(
+        code_brain.extract_existing_code({
+            "previous_attempt": {"generated_code": code},
+        }) == code,
+        "A quality retry did not preserve the previous generated program for correction.",
+    )
+
+    quality = QualityControlBrain().process({
+        "original_text": prompt,
+        "understanding": understanding,
+        "results": {"Code_brain": result},
+    })
+    assert_true(quality.get("passed") is True, f"Library quality failed: {quality.get('issues')}")
+    requested_features = set(quality.get("requirements", {}).get("requested_code_features", []))
+    assert_true(
+        "search_title_body_tag" not in requested_features,
+        "Library title search incorrectly activated a notes-only body/tag requirement.",
+    )
+
+
+def test_manager_retries_target_brain_until_quality_passes():
+    class ImprovingCodeBrain:
+        def __init__(self):
+            self.attempts = 0
+
+        def process(self, data):
+            self.attempts += 1
+            return {
+                "brain": "Code_brain",
+                "attempt": self.attempts,
+                "generated_code": "def main():\n    return 'ok'\n",
+                "confidence": 80,
+            }
+
+    class ThirdAttemptQualityBrain:
+        def process(self, data):
+            attempt = data.get("results", {}).get("Code_brain", {}).get("attempt", 0)
+            if attempt >= 3:
+                return {
+                    "brain": "Quality_Control_brain",
+                    "passed": True,
+                    "needs_retry": False,
+                    "retry_requests": [],
+                    "issues": [],
+                    "quality_score": 100,
+                }
+            return {
+                "brain": "Quality_Control_brain",
+                "passed": False,
+                "needs_retry": True,
+                "quality_score": 50,
+                "issues": [{
+                    "target_brain": "Code_brain",
+                    "severity": "high",
+                    "problem": "Required behavior is incomplete.",
+                    "instruction": "Complete the missing behavior.",
+                }],
+                "retry_requests": [{
+                    "target_brain": "Code_brain",
+                    "severity": "high",
+                    "problem": "Required behavior is incomplete.",
+                    "instruction": "Complete the missing behavior.",
+                    "failed_requirements": ["required_behavior"],
+                }],
+            }
+
+    manager = ManagerBrain()
+    code_brain = ImprovingCodeBrain()
+    manager.register_brain("Code_brain", code_brain)
+    manager.register_brain("Quality_Control_brain", ThirdAttemptQualityBrain())
+    manager._request_started = time.perf_counter()
+    manager._request_deadline = None
+    manager._request_id = "retry_regression"
+    manager._retry_counts = {}
+    initial_quality = {
+        "passed": False,
+        "needs_retry": True,
+        "retry_requests": [{
+            "target_brain": "Code_brain",
+            "severity": "high",
+            "problem": "Required behavior is incomplete.",
+            "instruction": "Complete the missing behavior.",
+            "failed_requirements": ["required_behavior"],
+        }],
+    }
+    all_results = {
+        "Code_brain": {"brain": "Code_brain", "attempt": 0},
+        "Quality_Control_brain": initial_quality,
+    }
+    rounds, final_quality = manager.resolve_quality_until_stable(
+        {"original_text": "Build complete code."},
+        {"original_text": "Build complete code.", "main_topic": "code", "intent": "code_generation"},
+        {},
+        all_results,
+        initial_quality,
+        {"available": False, "matches": []},
+        {"available": False},
+        {"available": False},
+    )
+    assert_true(code_brain.attempts == 3, f"Expected three retries, got {code_brain.attempts}.")
+    assert_true(len(rounds) == 3, f"Expected three retry rounds, got {len(rounds)}.")
+    assert_true(final_quality.get("passed") is True, "Quality did not pass after improvement.")
 
 
 def test_quadratic_math():
@@ -1429,6 +1594,8 @@ def test_advanced_existing_project_files_are_never_silently_overwritten():
 def main():
     tests = [
         test_expense_tracker_code_and_quality,
+        test_library_manager_full_requirements_and_old_json_compatibility,
+        test_manager_retries_target_brain_until_quality_passes,
         test_quadratic_math,
         test_math_ignores_request_words_around_expression,
         test_science_prefers_the_exact_user_topic,

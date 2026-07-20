@@ -75,9 +75,9 @@ ALWAYS_AVAILABLE_SAFETY_BRAINS = [
     "Security_brain"
 ]
 
-REQUEST_TIME_BUDGET_SECONDS = 25.0
-DEFAULT_BRAIN_SOFT_TIMEOUT_SECONDS = 8.0
-MAX_QUALITY_RETRIES_PER_BRAIN = 2
+REQUEST_TIME_BUDGET_SECONDS = None
+DEFAULT_BRAIN_SOFT_TIMEOUT_SECONDS = None
+MAX_QUALITY_RETRIES_PER_BRAIN = 4
 MAX_COLLABORATION_PARTICIPANTS = 5
 MAX_CENTRAL_DOMAINS = 4
 
@@ -1807,7 +1807,7 @@ class ManagerBrain:
 
             quality_result = results.get("Quality_Control_brain")
             if isinstance(quality_result, dict) and quality_result.get("needs_retry"):
-                retry_results = self.execute_quality_retry(
+                retry_rounds, _ = self.resolve_quality_until_stable(
                     data,
                     report,
                     memory_report,
@@ -1815,35 +1815,10 @@ class ManagerBrain:
                     quality_result,
                     shared_knowledge,
                     shared_dictionary,
-                    shared_data_context
+                    shared_data_context,
+                    phase_prefix="quality"
                 )
-
-                if retry_results:
-                    all_results.update(retry_results)
-                    phase_results.append({
-                        "phase": "quality_retry",
-                        "brains": list(retry_results.keys()),
-                        "results": retry_results,
-                        "quality_feedback": quality_result.get("retry_requests", [])
-                    })
-
-                    recheck_results = self.execute_quality_recheck(
-                        data,
-                        report,
-                        memory_report,
-                        all_results,
-                        shared_knowledge,
-                        shared_dictionary,
-                        shared_data_context
-                    )
-
-                    if recheck_results:
-                        all_results.update(recheck_results)
-                        phase_results.append({
-                            "phase": "quality_recheck",
-                            "brains": list(recheck_results.keys()),
-                            "results": recheck_results
-                        })
+                phase_results.extend(retry_rounds)
 
             if phase_name == "response" and "Quality_Control_brain" in self.brains:
                 final_recheck_results = self.execute_quality_recheck(
@@ -1866,7 +1841,7 @@ class ManagerBrain:
 
                     final_quality = final_recheck_results.get("Quality_Control_brain", {})
                     if isinstance(final_quality, dict) and final_quality.get("needs_retry"):
-                        final_retry_results = self.execute_quality_retry(
+                        final_retry_rounds, _ = self.resolve_quality_until_stable(
                             data,
                             report,
                             memory_report,
@@ -1874,34 +1849,10 @@ class ManagerBrain:
                             final_quality,
                             shared_knowledge,
                             shared_dictionary,
-                            shared_data_context
+                            shared_data_context,
+                            phase_prefix="final_quality"
                         )
-
-                        if final_retry_results:
-                            all_results.update(final_retry_results)
-                            phase_results.append({
-                                "phase": "final_quality_retry",
-                                "brains": list(final_retry_results.keys()),
-                                "results": final_retry_results,
-                                "quality_feedback": final_quality.get("retry_requests", [])
-                            })
-
-                            final_recheck_results = self.execute_quality_recheck(
-                                data,
-                                report,
-                                memory_report,
-                                all_results,
-                                shared_knowledge,
-                                shared_dictionary,
-                                shared_data_context
-                            )
-                            if final_recheck_results:
-                                all_results.update(final_recheck_results)
-                                phase_results.append({
-                                    "phase": "final_quality_recheck",
-                                    "brains": list(final_recheck_results.keys()),
-                                    "results": final_recheck_results
-                                })
+                        phase_results.extend(final_retry_rounds)
 
                     refreshed_response = self.execute(
                         ["Response_brain"],
@@ -1979,6 +1930,14 @@ class ManagerBrain:
         retry_context["quality_feedback"] = quality_result
         retry_context["retry_target"] = target_brain
         retry_context["retry_request"] = retry_request or {}
+        retry_context["quality_retry_attempt"] = (
+            self._retry_counts.get(target_brain, 0)
+            if target_brain
+            else 0
+        )
+        retry_context["failed_requirements"] = list(
+            (retry_request or {}).get("failed_requirements", [])
+        )
         retry_context["retry_instructions"] = [
             item.get("instruction")
             for item in quality_result.get("retry_requests", [])
@@ -2017,11 +1976,6 @@ class ManagerBrain:
 
         for brain_name in retry_brains:
             if self._retry_counts.get(brain_name, 0) >= MAX_QUALITY_RETRIES_PER_BRAIN:
-                retry_results[brain_name] = {
-                    "skipped": True,
-                    "reason": "quality_retry_limit_reached",
-                    "retry_limit": MAX_QUALITY_RETRIES_PER_BRAIN
-                }
                 continue
             self._retry_counts[brain_name] = self._retry_counts.get(brain_name, 0) + 1
             retry_request = requests_by_brain.get(brain_name, {})
@@ -2086,6 +2040,89 @@ class ManagerBrain:
             memory_report,
             "quality_recheck"
         )
+
+    def resolve_quality_until_stable(
+        self,
+        data,
+        report,
+        memory_report,
+        all_results,
+        quality_result,
+        shared_knowledge,
+        shared_dictionary,
+        shared_data_context,
+        phase_prefix="quality"
+    ):
+        """Retry exactly the failing brains until quality passes or retries end."""
+
+        rounds = []
+        current_quality = quality_result if isinstance(quality_result, dict) else {}
+
+        while current_quality.get("needs_retry"):
+            retry_brains = self.retry_brains_from_quality(current_quality)
+            retry_brains = [
+                brain_name
+                for brain_name in retry_brains
+                if self._retry_counts.get(brain_name, 0) < MAX_QUALITY_RETRIES_PER_BRAIN
+            ]
+            if not retry_brains:
+                break
+
+            retry_results = self.execute_quality_retry(
+                data,
+                report,
+                memory_report,
+                all_results,
+                current_quality,
+                shared_knowledge,
+                shared_dictionary,
+                shared_data_context
+            )
+            retry_results = {
+                brain_name: result
+                for brain_name, result in retry_results.items()
+                if isinstance(result, dict)
+                and not result.get("skipped")
+                and not result.get("error")
+            }
+            if not retry_results:
+                break
+
+            all_results.update(retry_results)
+            recheck_results = self.execute_quality_recheck(
+                data,
+                report,
+                memory_report,
+                all_results,
+                shared_knowledge,
+                shared_dictionary,
+                shared_data_context
+            )
+            if not recheck_results:
+                break
+
+            all_results.update(recheck_results)
+            next_quality = recheck_results.get("Quality_Control_brain", {})
+            round_number = max(
+                (
+                    self._retry_counts.get(brain_name, 0)
+                    for brain_name in retry_results
+                ),
+                default=1
+            )
+            rounds.append({
+                "phase": f"{phase_prefix}_retry_{round_number}",
+                "brains": list(retry_results),
+                "results": retry_results,
+                "quality_feedback": current_quality.get("retry_requests", []),
+                "quality_recheck": next_quality
+            })
+
+            if not isinstance(next_quality, dict):
+                break
+            current_quality = next_quality
+
+        return rounds, current_quality
 
     # ---------- scoring ----------
 
@@ -2156,9 +2193,18 @@ class ManagerBrain:
             if isinstance(data, dict)
             else None
         )
-        local_deadline = self._request_started + REQUEST_TIME_BUDGET_SECONDS
+        local_deadline = (
+            self._request_started + REQUEST_TIME_BUDGET_SECONDS
+            if isinstance(REQUEST_TIME_BUDGET_SECONDS, (int, float))
+            and REQUEST_TIME_BUDGET_SECONDS > 0
+            else None
+        )
         if isinstance(requested_deadline, (int, float)):
-            self._request_deadline = min(local_deadline, float(requested_deadline))
+            self._request_deadline = (
+                min(local_deadline, float(requested_deadline))
+                if local_deadline is not None
+                else float(requested_deadline)
+            )
         else:
             self._request_deadline = local_deadline
         self._retry_counts = {}
@@ -2310,7 +2356,10 @@ class ManagerBrain:
             "performance": {
                 "elapsed_seconds": round(time.perf_counter() - self._request_started, 4),
                 "budget_seconds": REQUEST_TIME_BUDGET_SECONDS,
-                "within_budget": time.perf_counter() <= self._request_deadline,
+                "within_budget": (
+                    self._request_deadline is None
+                    or time.perf_counter() <= self._request_deadline
+                ),
                 "retry_counts": dict(self._retry_counts),
                 "loop_prevention": True,
                 "runtime": brain_runtime.summarize_events(runtime_events)

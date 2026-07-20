@@ -118,6 +118,26 @@ def main() -> int:
     for required in ("amount", "category", "description", "expenses.json"):
         require(required in expense_text, f"Expense tracker is missing {required}")
 
+    library = ask(
+        canri_main,
+        "Build a real runnable Python library management program for the terminal. "
+        "Add books with title, author, and year; list books; search by title or author; "
+        "borrow, return, and delete a book by number; save and load library.json; keep "
+        "older library.json files compatible. Use only the standard library. Only output code.",
+        "smoke_library",
+    )
+    library_text = library["display_text"].lower()
+    for required in (
+        "library.json",
+        "def add_book",
+        "def search_books",
+        "def borrow_book",
+        "def return_book",
+        "def delete_book",
+        "def normalize_book",
+    ):
+        require(required in library_text, f"Library manager is missing {required}")
+
     print(
         "Focused end-to-end smoke tests passed: conversation, science, code analysis, "
         "math, emotion, story continuation, and code generation."

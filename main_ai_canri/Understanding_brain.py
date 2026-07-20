@@ -1942,6 +1942,30 @@ class UnderstandingBrain:
             if any(marker in lowered for marker in markers):
                 forbidden.append(name)
 
+        # A prohibition is often written as one comma-separated list, for
+        # example "Do not output a plan, explanation, modules, or drafts".
+        # Match every listed item instead of recognizing only the first one.
+        forbidden_aliases = {
+            "plan": ("plan", "planning"),
+            "modules": ("module", "modules"),
+            "variants": ("variant", "variants"),
+            "helpers": ("helper", "helpers"),
+            "placeholders": ("placeholder", "placeholders"),
+            "drafts": ("draft", "drafts", "draft structure", "draft structures"),
+            "explanation": ("explanation", "explanations"),
+            "notes": ("note", "notes"),
+        }
+        for match in re.finditer(
+            r"(?:do\s+not|don't|never)\s+(?:output|include|return|show)\s+([^\n.!?]+)",
+            lowered,
+        ):
+            prohibited_text = match.group(1)
+            for name, aliases in forbidden_aliases.items():
+                if any(re.search(rf"\b{re.escape(alias)}\b", prohibited_text) for alias in aliases):
+                    forbidden.append(name)
+
+        forbidden = list(dict.fromkeys(forbidden))
+
         only_output = None
         only_match = re.search(
             r"only\s+output\s+(?:the\s+)?([^\n.!?]{2,100})",
@@ -2036,7 +2060,11 @@ class UnderstandingBrain:
 
             # Preserve every item in explicit comma/semicolon lists. This is
             # especially important for prompts such as "add, list, search...".
-            if "," in cleaned or ";" in cleaned:
+            negative_line = any(
+                marker in lowered
+                for marker in ["do not", "don't", "never", "without", "no external"]
+            )
+            if ("," in cleaned or ";" in cleaned) and not negative_line:
                 pieces = re.split(r"\s*[,;]\s*|\s+and\s+", cleaned)
                 if len(pieces) > 1:
                     for piece in pieces:
@@ -2150,10 +2178,14 @@ class UnderstandingBrain:
             if not normalized or key in seen:
                 continue
             seen.add(key)
+            negative = any(
+                marker in key
+                for marker in ["do not", "don't", "never", "without", "no external"]
+            )
             requirements.append({
                 "id": f"explicit_{len(requirements) + 1}",
                 "text": normalized,
-                "kind": "explicit_constraint",
+                "kind": "negative_constraint" if negative else "explicit_constraint",
                 "source": clause.get("source", "prompt")
             })
 

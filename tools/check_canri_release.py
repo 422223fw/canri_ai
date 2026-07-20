@@ -12,7 +12,7 @@ PACKAGE_DIR = PROJECT_ROOT / "main_ai_canri"
 sys.path.insert(0, str(PACKAGE_DIR))
 
 from Code_brain import CodeBrain  # noqa: E402
-from Brain_runtime import BrainRuntime  # noqa: E402
+from Brain_runtime import BrainRuntime, EMERGENCY_BRAIN_WATCHDOG_SECONDS  # noqa: E402
 from Creative_brain import CreativeBrain  # noqa: E402
 from Data_context import context_view_for_brain  # noqa: E402
 from Fact_Check_brain import FactCheckBrain  # noqa: E402
@@ -558,6 +558,18 @@ def run_runtime_cases(suite):
         critical=True,
         detail=canri_main.manager_brain.registry_health,
     )
+    suite.check(
+        "unlimited_request_thinking",
+        canri_main.END_TO_END_REQUEST_BUDGET_SECONDS is None
+        and REQUEST_TIME_BUDGET_SECONDS is None
+        and EMERGENCY_BRAIN_WATCHDOG_SECONDS is None,
+        critical=True,
+        detail={
+            "application_budget": canri_main.END_TO_END_REQUEST_BUDGET_SECONDS,
+            "manager_budget": REQUEST_TIME_BUDGET_SECONDS,
+            "emergency_brain_watchdog_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS,
+        },
+    )
 
 
 def run_release_metadata_cases(suite, criteria):
@@ -621,7 +633,13 @@ def main():
     run_runtime_cases(suite)
     run_release_metadata_cases(suite, criteria)
 
-    suite.check("performance_budget", REQUEST_TIME_BUDGET_SECONDS <= criteria["maximum_normal_request_seconds"], critical=True)
+    suite.check(
+        "performance_budget",
+        REQUEST_TIME_BUDGET_SECONDS is None
+        or criteria.get("maximum_normal_request_seconds") is None
+        or REQUEST_TIME_BUDGET_SECONDS <= criteria["maximum_normal_request_seconds"],
+        critical=True,
+    )
     suite.check("retry_limit", MAX_QUALITY_RETRIES_PER_BRAIN <= criteria["maximum_quality_retries_per_brain"], critical=True)
     summary = suite.summary()
     release_ready = (

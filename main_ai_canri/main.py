@@ -54,10 +54,12 @@ from Scanner_knowledge import start_background_web_scanners
 
 
 ACTIVE_SESSION_ID = "session_" + uuid4().hex
-END_TO_END_REQUEST_BUDGET_SECONDS = 24.0
+END_TO_END_REQUEST_BUDGET_SECONDS = None
 
 
 def remaining_request_timeout(deadline, cap):
+    if deadline is None:
+        return None
     return max(0.05, min(float(cap), deadline - time.perf_counter()))
 
 
@@ -327,7 +329,11 @@ def process_user_message(message, attached_files=None, progress_callback=None, s
     attached_files = attached_files or []
     session_id = session_id or ACTIVE_SESSION_ID
     request_id = "request_" + uuid4().hex
-    request_deadline = time.perf_counter() + END_TO_END_REQUEST_BUDGET_SECONDS
+    request_deadline = (
+        time.perf_counter() + END_TO_END_REQUEST_BUDGET_SECONDS
+        if END_TO_END_REQUEST_BUDGET_SECONDS is not None
+        else None
+    )
 
     if not manager_brain.brains:
         register_all_brains()
@@ -392,7 +398,8 @@ def process_user_message(message, attached_files=None, progress_callback=None, s
         "spelling": spelling_report,
         "understanding": understanding_report
     }
-    context["_request_deadline_monotonic"] = request_deadline
+    if request_deadline is not None:
+        context["_request_deadline_monotonic"] = request_deadline
 
     emit_progress(progress_callback, "memory", "Searching and storing session memory")
     memory_execution = brain_runtime.invoke(

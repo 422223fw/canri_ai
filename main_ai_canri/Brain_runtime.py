@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import inspect
 import json
+import os
 import threading
 import time
 from dataclasses import dataclass
@@ -27,23 +28,39 @@ DATA_DIR = Path(__file__).parent / "data"
 DEFAULT_STATISTICS_FILE = DATA_DIR / "Brain_runtime_statistics.json"
 
 
+def _configured_watchdog_seconds() -> Optional[float]:
+    """Return an optional emergency watchdog; normal thinking is unlimited."""
+
+    raw_value = os.environ.get("CANRI_BRAIN_WATCHDOG_SECONDS", "").strip()
+    if not raw_value:
+        return None
+    try:
+        value = float(raw_value)
+    except ValueError:
+        return None
+    return value if value > 0 else None
+
+
+EMERGENCY_BRAIN_WATCHDOG_SECONDS = _configured_watchdog_seconds()
+
+
 DEFAULT_PROFILES = {
-    "default": {"timeout_seconds": 8.0, "critical": False},
-    "Spelling_brain": {"timeout_seconds": 3.0, "critical": True},
-    "Understanding_brain": {"timeout_seconds": 7.0, "critical": True},
-    "Memory_brain": {"timeout_seconds": 5.0, "critical": True},
-    "Manager_brain": {"timeout_seconds": 28.0, "critical": True},
-    "Security_brain": {"timeout_seconds": 5.0, "critical": True},
-    "Planner_brain": {"timeout_seconds": 7.0, "critical": False},
-    "Reasoning_brain": {"timeout_seconds": 8.0, "critical": False},
-    "Code_brain": {"timeout_seconds": 14.0, "critical": False},
-    "Creative_brain": {"timeout_seconds": 12.0, "critical": False},
-    "Image_brain": {"timeout_seconds": 14.0, "critical": False},
-    "Vision_brain": {"timeout_seconds": 12.0, "critical": False},
-    "Voice_brain": {"timeout_seconds": 12.0, "critical": False},
-    "Fact_Check_brain": {"timeout_seconds": 10.0, "critical": True},
-    "Quality_Control_brain": {"timeout_seconds": 9.0, "critical": True},
-    "Response_brain": {"timeout_seconds": 7.0, "critical": True},
+    "default": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": False},
+    "Spelling_brain": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": True},
+    "Understanding_brain": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": True},
+    "Memory_brain": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": True},
+    "Manager_brain": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": True},
+    "Security_brain": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": True},
+    "Planner_brain": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": False},
+    "Reasoning_brain": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": False},
+    "Code_brain": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": False},
+    "Creative_brain": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": False},
+    "Image_brain": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": False},
+    "Vision_brain": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": False},
+    "Voice_brain": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": False},
+    "Fact_Check_brain": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": True},
+    "Quality_Control_brain": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": True},
+    "Response_brain": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": True},
 }
 
 
@@ -116,11 +133,21 @@ class BrainRuntime:
         self,
         brain_name: str,
         remaining_seconds: Optional[float] = None,
-    ) -> float:
-        configured = float(self.profile_for(brain_name).get("timeout_seconds", 8.0))
-        configured = min(max(configured, 0.05), 60.0)
+    ) -> Optional[float]:
+        configured_value = self.profile_for(brain_name).get(
+            "timeout_seconds",
+            EMERGENCY_BRAIN_WATCHDOG_SECONDS,
+        )
+        if configured_value is None:
+            configured = EMERGENCY_BRAIN_WATCHDOG_SECONDS
+        else:
+            configured = max(float(configured_value), 0.05)
+            if EMERGENCY_BRAIN_WATCHDOG_SECONDS is not None:
+                configured = min(configured, EMERGENCY_BRAIN_WATCHDOG_SECONDS)
         if remaining_seconds is None:
             return configured
+        if configured is None:
+            return max(float(remaining_seconds), 0.05)
         return min(configured, max(float(remaining_seconds), 0.05))
 
     def validate_registration(self, brain_name: str, brain_object: Any) -> Dict[str, Any]:
@@ -174,7 +201,7 @@ class BrainRuntime:
         request_id: str,
         brain_name: str,
         phase: str,
-        deadline: float,
+        deadline: Optional[float],
         cancel_event: threading.Event,
     ) -> Any:
         if not isinstance(payload, dict):
@@ -313,7 +340,11 @@ class BrainRuntime:
         )
         call_started = time.perf_counter()
         started_utc = self.utc_now()
-        deadline = call_started + timeout_seconds
+        deadline = (
+            call_started + timeout_seconds
+            if timeout_seconds is not None
+            else None
+        )
         callable_process: Optional[Callable[[Any], Any]]
         if callable(processor) and not hasattr(processor, "process"):
             callable_process = processor
@@ -351,6 +382,9 @@ class BrainRuntime:
                 if not active:
                     break
                 active_done = active["done"]
+            if deadline is None:
+                active_done.wait(0.1)
+                continue
             remaining = deadline - time.perf_counter()
             if remaining <= 0 or not active_done.wait(min(remaining, 0.1)):
                 if remaining > 0:
@@ -380,8 +414,12 @@ class BrainRuntime:
                 return BrainExecution(result, telemetry)
 
         queue_seconds = time.perf_counter() - queue_started
-        remaining = deadline - time.perf_counter()
-        if remaining <= 0:
+        remaining = (
+            deadline - time.perf_counter()
+            if deadline is not None
+            else None
+        )
+        if remaining is not None and remaining <= 0:
             result = self._safe_failure(
                 brain_name,
                 "brain_queue_timeout",
@@ -445,7 +483,11 @@ class BrainRuntime:
             daemon=True,
         )
         worker.start()
-        completed = done.wait(max(deadline - time.perf_counter(), 0.0))
+        completed = done.wait(
+            None
+            if deadline is None
+            else max(deadline - time.perf_counter(), 0.0)
+        )
 
         if not completed:
             cancel_event.set()
@@ -528,7 +570,7 @@ class BrainRuntime:
         status: str,
         started_utc: str,
         call_started: float,
-        timeout_seconds: float,
+        timeout_seconds: Optional[float],
         queue_seconds: float,
         attempt: int,
         warnings: list[str],
@@ -546,8 +588,16 @@ class BrainRuntime:
             "finished_utc": self.utc_now(),
             "elapsed_seconds": round(elapsed, 4),
             "queue_seconds": round(max(queue_seconds, 0.0), 4),
-            "timeout_seconds": round(timeout_seconds, 4),
-            "slow": elapsed > timeout_seconds * 0.8,
+            "timeout_seconds": (
+                round(timeout_seconds, 4)
+                if timeout_seconds is not None
+                else None
+            ),
+            "slow": (
+                elapsed > timeout_seconds * 0.8
+                if timeout_seconds is not None
+                else False
+            ),
             "critical": bool(profile.get("critical")),
             "attempt": max(int(attempt), 1),
             "warnings": list(warnings),
