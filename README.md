@@ -101,8 +101,9 @@ python .\tools\validate_canri_project.py --full-jsonl
 - Vision and voice depth depends on available local engines and file formats.
 - Image fallback output is programmatic and is not equivalent to a hosted
   photorealistic image model.
-- The 24-second request budget can return a safe partial/fallback response when
-  a specialist exceeds its deadline.
+- Normal requests have no thinking-time deadline. An optional emergency
+  watchdog can be enabled with `CANRI_BRAIN_WATCHDOG_SECONDS=300` if a local
+  deployment needs protection from a permanently stuck brain.
 
 ## Troubleshooting
 

@@ -10,6 +10,7 @@ so weak or incomplete specialist results can be retried once before response.
 import ast
 import json
 import re
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -248,6 +249,7 @@ class QualityControlBrain:
         contract = report.get("request_contract", {})
         if not isinstance(contract, dict):
             contract = {}
+        expected_program_kind = self.detect_expected_program_kind(lowered)
 
         requirements = {
             "has_request_contract": bool(contract),
@@ -281,8 +283,11 @@ class QualityControlBrain:
             "wants_history": "history" in lowered,
             "wants_steps": "step by step" in lowered or "steps" in lowered,
             "requested_sentence_count": self.extract_requested_sentence_count(lowered),
-            "expected_program_kind": self.detect_expected_program_kind(lowered),
-            "requested_code_features": self.extract_requested_code_features(lowered),
+            "expected_program_kind": expected_program_kind,
+            "requested_code_features": self.extract_requested_code_features(
+                lowered,
+                expected_program_kind,
+            ),
             "advanced_code_capabilities": advanced_capabilities,
             "is_advanced_code_project": advanced_capabilities.get("advanced_project", False),
             "needs_local_data": (
@@ -383,6 +388,46 @@ class QualityControlBrain:
             if requirements.get("code_only") and "quality note:" in lowered:
                 leaked = True
             return not leaked, "final-output leakage check"
+
+        if kind == "negative_constraint":
+            lowered_requirement = requirement.get("text", "").lower()
+            if any(
+                marker in lowered_requirement
+                for marker in ["external librar", "third-party", "third party"]
+            ):
+                try:
+                    tree = ast.parse(code)
+                except (SyntaxError, ValueError):
+                    return False, "code could not be parsed for import checking"
+
+                imported_roots = set()
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.Import):
+                        imported_roots.update(alias.name.split(".", 1)[0] for alias in node.names)
+                    elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                        imported_roots.add(node.module.split(".", 1)[0])
+
+                local_modules = {
+                    Path(name).stem
+                    for name in self.project_files_from_result(code_result)
+                    if str(name).endswith(".py")
+                }
+                allowed = set(getattr(sys, "stdlib_module_names", set())) | local_modules | {"__future__"}
+                external = sorted(imported_roots - allowed)
+                return not external, f"external imports: {', '.join(external) or 'none'}"
+
+            if any(
+                marker in lowered_requirement
+                for marker in ["do not output", "do not return", "do not include"]
+            ):
+                response = self.text_from_result(results.get("Response_brain", {})) or output
+                leaked = self.looks_like_internal_report(response)
+                return not leaked, "prohibited internal-output check"
+
+            # Unknown prohibitions are not converted into positive lexical
+            # requirements. Dedicated domain checks remain responsible for
+            # proving violations without creating false failures.
+            return True, "covered by prohibition-specific checks"
 
         if kind == "explicit_constraint" and requirements.get("is_code_generation"):
             ignored = {
@@ -513,7 +558,7 @@ class QualityControlBrain:
             ("expense_tracker", ["expense tracker", "expenses", "amount spent", "total amount", "search expenses", "category"]),
             ("calendar_app", ["calendar", "appointment", "appointments", "event planner", "schedule event"]),
             ("contact_book", ["contact book", "contacts", "phone book", "address book"]),
-            ("library_manager", ["library manager", "book tracker", "book library", "borrowed books", "reading list"]),
+            ("library_manager", ["library manager", "library management", "book management", "book tracker", "book library", "borrowed books", "reading list"]),
             ("flashcards_app", ["flashcards", "flash cards", "study cards"]),
             ("shop_inventory", ["shop inventory", "store inventory", "inventory tracker", "stock", "products in stock"]),
             ("todo_app", ["to-do", "todo", "task list", "tasks", "mark a task"]),
@@ -529,31 +574,56 @@ class QualityControlBrain:
 
         return None
 
-    def extract_requested_code_features(self, lowered):
+    def extract_requested_code_features(self, lowered, program_kind=None):
 
         features = []
-        checks = [
-            ("calendar_events", ["calendar", "appointment", "appointments", "event", "events by date", "schedule event"]),
-            ("contact_records", ["contacts", "contact book", "phone", "email"]),
-            ("library_books", ["library manager", "book library", "book tracker", "borrowed books", "reading list", "book author"]),
-            ("flashcards", ["flashcards", "flash cards", "question", "answer", "study cards"]),
-            ("shop_inventory", ["shop inventory", "store inventory", "inventory", "stock", "products in stock"]),
-            ("edit_existing_item", ["edit an existing", "edit a note", "edit note", "update an existing", "modify an existing"]),
-            ("tags", ["add tags", "tags to", "by tag", "tags", "tag"]),
-            ("search_title_body_tag", ["search notes by title", "search by title", "search notes by word", "search notes", "search by tag", "title, body, or tag"]),
-            ("export_txt", ["export", "txt file", "readable txt", "notes_export.txt"]),
-            ("old_json_compatibility", ["compatible with old", "old notes", "same notes.json format", "keep the same notes.json"]),
-            ("expense_amount", ["amount", "amount spent"]),
-            ("expense_category", ["category", "search expenses by category"]),
-            ("expense_description", ["description"]),
-            ("search_expense_category", ["search expenses by category", "search by category"]),
-            ("expense_total", ["total amount spent", "show the total", "total spent"]),
-            ("expenses_json", ["expenses.json"]),
-            ("json_persistence", ["json file", "notes.json", "save notes", "load notes", "save tasks", "load tasks"]),
-            ("delete_item", ["delete a note", "delete notes", "delete a task", "delete task", "delete an expense", "delete expense"]),
-            ("list_items", ["list notes", "list tasks", "list all", "list all expenses"]),
-            ("add_item", ["add notes", "add note", "add tasks", "add task", "add expenses", "add an expense", "add expense"])
+        shared_checks = [
+            ("old_json_compatibility", [
+                "compatible with old", "compatible with older", "older library.json",
+                "older notes.json", "old json", "same json format", "keep the same",
+                "backward compatible", "backwards compatible",
+            ]),
+            ("json_persistence", ["json file", "library.json", "notes.json", "save notes", "load notes", "save tasks", "load tasks", "save and load"]),
+            ("delete_item", ["delete a note", "delete notes", "delete a task", "delete task", "delete an expense", "delete expense", "delete a book", "delete book"]),
+            ("list_items", ["list notes", "list tasks", "list books", "list all", "list all expenses"]),
+            ("add_item", ["add notes", "add note", "add tasks", "add task", "add books", "add a book", "add book", "add expenses", "add an expense", "add expense"])
         ]
+
+        kind_checks = {
+            "calendar_app": [
+                ("calendar_events", ["calendar", "appointment", "appointments", "event", "events by date", "schedule event"]),
+            ],
+            "contact_book": [
+                ("contact_records", ["contacts", "contact book", "phone", "email"]),
+            ],
+            "library_manager": [
+                ("library_books", ["library manager", "library management", "book management", "book library", "book tracker", "books with title", "borrowed books", "reading list", "book author"]),
+                ("borrow_book", ["borrow", "borrowed"]),
+                ("return_book", ["return"]),
+            ],
+            "flashcards_app": [
+                ("flashcards", ["flashcards", "flash cards", "question", "answer", "study cards"]),
+            ],
+            "shop_inventory": [
+                ("shop_inventory", ["shop inventory", "store inventory", "inventory", "stock", "products in stock"]),
+            ],
+            "notes_app": [
+                ("edit_existing_item", ["edit an existing", "edit a note", "edit note", "update an existing", "modify an existing"]),
+                ("tags", ["add tags", "tags to", "by tag", "tags", "tag"]),
+                ("search_title_body_tag", ["search notes by title", "search by title", "search notes by word", "search notes", "search by tag", "title, body, or tag"]),
+                ("export_txt", ["export", "txt file", "readable txt", "notes_export.txt"]),
+            ],
+            "expense_tracker": [
+                ("expense_amount", ["amount", "amount spent"]),
+                ("expense_category", ["category", "search expenses by category"]),
+                ("expense_description", ["description"]),
+                ("search_expense_category", ["search expenses by category", "search by category"]),
+                ("expense_total", ["total amount spent", "show the total", "total spent"]),
+                ("expenses_json", ["expenses.json"]),
+            ],
+        }
+
+        checks = [*shared_checks, *kind_checks.get(program_kind, [])]
 
         for feature, signals in checks:
             if any(signal in lowered for signal in signals):
@@ -868,7 +938,11 @@ class QualityControlBrain:
             return "def export_" in lowered and ".txt" in lowered and "write_text" in lowered
 
         if feature == "old_json_compatibility":
-            return ("normalize_" in lowered and '"tags": []' in lowered) or "item.get(\"text\"" in lowered
+            return (
+                "normalize_" in lowered
+                and "isinstance(" in lowered
+                and ".get(" in lowered
+            )
 
         if feature == "calendar_events":
             return "calendar" in lowered and "date" in lowered and "time" in lowered and "events" in lowered
@@ -878,6 +952,12 @@ class QualityControlBrain:
 
         if feature == "library_books":
             return "library" in lowered and "title" in lowered and "author" in lowered
+
+        if feature == "borrow_book":
+            return "def borrow_" in lowered and "borrowed" in lowered
+
+        if feature == "return_book":
+            return "def return_" in lowered and "borrowed" in lowered
 
         if feature == "flashcards":
             return "flashcards.json" in lowered and "question" in lowered and "answer" in lowered
@@ -1359,7 +1439,7 @@ class QualityControlBrain:
             brain_name = issue.get("target_brain")
             if not brain_name or brain_name in non_retry_brains:
                 continue
-            if issue.get("severity") in {"critical", "high", "medium"}:
+            if issue.get("severity") in {"critical", "high"}:
                 grouped.setdefault(brain_name, []).append(issue)
 
         severity_order = {"critical": 3, "high": 2, "medium": 1, "low": 0}
@@ -1509,7 +1589,17 @@ class QualityControlBrain:
         retry_requests = self.build_retry_requests(issues)
         score = self.quality_score(issues)
         requirement_checks = self.build_requirement_checks(results, requirements)
-        passed = score >= 78 and not retry_requests
+        blocking_issues = [
+            issue
+            for issue in issues
+            if issue.get("severity") in {"critical", "high"}
+        ]
+        advisory_issues = [
+            issue
+            for issue in issues
+            if issue.get("severity") in {"medium", "low"}
+        ]
+        passed = not retry_requests and not blocking_issues
 
         self.save_statistics(passed, score)
 
@@ -1520,6 +1610,8 @@ class QualityControlBrain:
             "needs_retry": bool(retry_requests),
             "retry_requests": retry_requests,
             "issues": issues[:20],
+            "blocking_issues": blocking_issues[:20],
+            "advisory_issues": advisory_issues[:20],
             "requirement_checks": requirement_checks[:40],
             "requirements": requirements,
             "checked_brains": sorted(results.keys()),

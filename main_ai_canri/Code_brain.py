@@ -51,6 +51,8 @@ class CodeSelfReviewer:
         "add": (r"\badd\b", ("def add_", ".append(")),
         "list": (r"\blist\b", ("def list_", "enumerate(")),
         "search": (r"\bsearch\b", ("def search",)),
+        "borrow": (r"\bborrow\b", ("def borrow_",)),
+        "return": (r"\breturn\s+(?:a\s+)?book\b", ("def return_",)),
         "view": (r"\bview\b", ("def view_",)),
         "edit": (r"\bedit\b", ("def edit_",)),
         "delete": (r"\bdelete\b", ("def delete_", ".pop(")),
@@ -128,6 +130,7 @@ class CodeSelfReviewer:
             "expense_tracker": ["amount", "category", "description"],
             "notes_app": ["title", "body"],
             "contact_book": ["name", "phone", "email"],
+            "library_manager": ["title", "author", "year"],
             "shop_inventory": ["name", "quantity", "price"],
         }
         for field in program_fields.get(program_kind, []):
@@ -2368,6 +2371,13 @@ class CodeBrain:
             if value:
                 return str(value)
 
+        previous_attempt = data.get("previous_attempt")
+        if isinstance(previous_attempt, dict):
+            for key in ["generated_code", "code", "project_code"]:
+                value = previous_attempt.get(key)
+                if value:
+                    return str(value)
+
         request_text = " ".join(
             str(data.get(key, ""))
             for key in [
@@ -4192,6 +4202,240 @@ if __name__ == "__main__":
     main()
 '''
 
+    def build_library_manager_code(self):
+
+        return '''import json
+from pathlib import Path
+
+
+DATA_FILE = Path("library.json")
+
+
+def normalize_year(value):
+    if value in (None, ""):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def normalize_book(item):
+    """Convert current and older book records to the current format."""
+    if isinstance(item, str):
+        return {
+            "title": item.strip() or "Untitled",
+            "author": "Unknown",
+            "year": None,
+            "borrowed": False,
+        }
+    if not isinstance(item, dict):
+        return None
+
+    title = str(item.get("title", item.get("name", "Untitled"))).strip()
+    author = str(item.get("author", item.get("writer", "Unknown"))).strip()
+    year = normalize_year(item.get("year", item.get("published_year")))
+
+    borrowed = bool(item.get("borrowed", False))
+    old_status = str(item.get("status", "")).strip().lower()
+    if old_status in {"borrowed", "checked out", "unavailable"}:
+        borrowed = True
+    elif old_status in {"available", "returned"}:
+        borrowed = False
+
+    return {
+        "title": title or "Untitled",
+        "author": author or "Unknown",
+        "year": year,
+        "borrowed": borrowed,
+    }
+
+
+def load_books():
+    if not DATA_FILE.exists():
+        return []
+
+    try:
+        data = json.loads(DATA_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        print(f"Could not read {DATA_FILE}: {error}")
+        return []
+
+    # Older files may wrap the list in a books or items object.
+    if isinstance(data, dict):
+        data = data.get("books", data.get("items", []))
+    if not isinstance(data, list):
+        return []
+
+    books = []
+    for item in data:
+        book = normalize_book(item)
+        if book is not None:
+            books.append(book)
+    return books
+
+
+def save_books(books):
+    temporary_file = DATA_FILE.with_suffix(DATA_FILE.suffix + ".tmp")
+    try:
+        temporary_file.write_text(
+            json.dumps(books, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        temporary_file.replace(DATA_FILE)
+    except OSError as error:
+        print(f"Could not save {DATA_FILE}: {error}")
+        return False
+    return True
+
+
+def read_year():
+    raw_year = input("Year: ").strip()
+    year = normalize_year(raw_year)
+    if raw_year and year is None:
+        print("Year must be a whole number.")
+    return year
+
+
+def add_book(books):
+    title = input("Title: ").strip()
+    author = input("Author: ").strip()
+    year = read_year()
+    if not title or not author:
+        print("Title and author are required.")
+        return
+
+    books.append({
+        "title": title,
+        "author": author,
+        "year": year,
+        "borrowed": False,
+    })
+    if save_books(books):
+        print("Book added.")
+
+
+def print_book_rows(indexed_books):
+    if not indexed_books:
+        print("No books found.")
+        return
+
+    for index, book in indexed_books:
+        year = book["year"] if book["year"] is not None else "Unknown year"
+        status = "Borrowed" if book["borrowed"] else "Available"
+        print(f"{index}. {book['title']} | {book['author']} | {year} | {status}")
+
+
+def list_books(books):
+    print_book_rows(list(enumerate(books, start=1)))
+
+
+def search_books(books):
+    keyword = input("Title or author: ").strip().lower()
+    if not keyword:
+        print("Search text cannot be empty.")
+        return
+
+    matches = [
+        (index, book)
+        for index, book in enumerate(books, start=1)
+        if keyword in book["title"].lower() or keyword in book["author"].lower()
+    ]
+    print_book_rows(matches)
+
+
+def get_book_index(books):
+    raw_number = input("Book number: ").strip()
+    try:
+        index = int(raw_number) - 1
+    except ValueError:
+        print("Please enter a valid book number.")
+        return None
+
+    if index < 0 or index >= len(books):
+        print("Book number is out of range.")
+        return None
+    return index
+
+
+def borrow_book(books):
+    index = get_book_index(books)
+    if index is None:
+        return
+    if books[index]["borrowed"]:
+        print("That book is already borrowed.")
+        return
+    books[index]["borrowed"] = True
+    if save_books(books):
+        print("Book borrowed.")
+
+
+def return_book(books):
+    index = get_book_index(books)
+    if index is None:
+        return
+    if not books[index]["borrowed"]:
+        print("That book is already available.")
+        return
+    books[index]["borrowed"] = False
+    if save_books(books):
+        print("Book returned.")
+
+
+def delete_book(books):
+    index = get_book_index(books)
+    if index is None:
+        return
+    removed = books.pop(index)
+    if save_books(books):
+        print(f"Deleted: {removed['title']}")
+
+
+def print_help():
+    print("Commands:")
+    print("  add      Add a book")
+    print("  list     List all books")
+    print("  search   Search by title or author")
+    print("  borrow   Borrow a book by number")
+    print("  return   Return a book by number")
+    print("  delete   Delete a book by number")
+    print("  help     Show commands")
+    print("  quit     Save and exit")
+
+
+def main():
+    books = load_books()
+    print("Library Manager")
+    print_help()
+
+    while True:
+        command = input("> ").strip().lower()
+        if command == "add":
+            add_book(books)
+        elif command == "list":
+            list_books(books)
+        elif command == "search":
+            search_books(books)
+        elif command == "borrow":
+            borrow_book(books)
+        elif command == "return":
+            return_book(books)
+        elif command == "delete":
+            delete_book(books)
+        elif command == "help":
+            print_help()
+        elif command in {"quit", "exit"}:
+            save_books(books)
+            print("Goodbye.")
+            break
+        else:
+            print("Unknown command. Type 'help' for commands.")
+
+
+if __name__ == "__main__":
+    main()
+'''
+
     def build_direct_python_program_code(self, text, task_type):
 
         lowered = str(text).lower()
@@ -4199,6 +4443,12 @@ if __name__ == "__main__":
             text,
             task_type
         )
+
+        if program_kind == "library_manager":
+            return self.apply_requested_file_name(
+                self.build_library_manager_code(),
+                text
+            )
 
         recipe = self.choose_project_recipe(program_kind, text)
         if recipe.get("generator") == "json_record_cli":
@@ -6131,9 +6381,19 @@ if __name__ == "__main__":
             and isinstance(retry_request, dict)
             and retry_instructions
         ):
+            correction_details = [
+                retry_request.get("problem"),
+                *data.get("failed_requirements", []),
+                *retry_instructions,
+            ]
+            correction_details = list(dict.fromkeys(
+                str(item).strip()
+                for item in correction_details
+                if str(item or "").strip()
+            ))
             text = (
                 f"{text}\n\nQuality correction requirements:\n- "
-                + "\n- ".join(str(item) for item in retry_instructions if item)
+                + "\n- ".join(correction_details)
             )
 
         terms = self.collect_terms(
