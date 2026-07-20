@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
 from Code_artifact_catalog import CodeArtifactCatalog
+from Brain_storage import atomic_write_json, load_json_resilient
 
 try:
     from Scanner_knowledge import scanner_evidence
@@ -1819,74 +1820,46 @@ class CodeBrain:
     def load_data(self):
 
         if CODE_FILE.exists():
-
-            with open(
+            self.code_database = load_json_resilient(
                 CODE_FILE,
-                "r",
-                encoding="utf-8"
-            ) as f:
-
-                self.code_database = json.load(f)
+                self.code_database
+            )
 
         if STATS_FILE.exists():
-
-            with open(
+            self.statistics = load_json_resilient(
                 STATS_FILE,
-                "r",
-                encoding="utf-8"
-            ) as f:
-
-                self.statistics = json.load(f)
+                self.statistics
+            )
 
         if DEPENDENCY_GRAPH_FILE.exists():
-
-            with open(
+            self.dependency_graph = load_json_resilient(
                 DEPENDENCY_GRAPH_FILE,
-                "r",
-                encoding="utf-8"
-            ) as f:
-
-                self.dependency_graph = json.load(f)
+                self.dependency_graph
+            )
 
         if COMPOSITION_TABLE_FILE.exists():
-
-            with open(
+            self.composition_tables = load_json_resilient(
                 COMPOSITION_TABLE_FILE,
-                "r",
-                encoding="utf-8"
-            ) as f:
-
-                self.composition_tables = json.load(f)
+                self.composition_tables
+            )
 
         if ASSEMBLY_PATTERNS_FILE.exists():
-
-            with open(
+            self.assembly_patterns = load_json_resilient(
                 ASSEMBLY_PATTERNS_FILE,
-                "r",
-                encoding="utf-8"
-            ) as f:
-
-                self.assembly_patterns = json.load(f)
+                self.assembly_patterns
+            )
 
         if PROJECT_RECIPES_FILE.exists():
-
-            with open(
+            self.project_recipes = load_json_resilient(
                 PROJECT_RECIPES_FILE,
-                "r",
-                encoding="utf-8"
-            ) as f:
-
-                self.project_recipes = json.load(f)
+                self.project_recipes
+            )
 
         if ADVANCED_PROFILES_FILE.exists():
-
-            with open(
+            self.advanced_profiles = load_json_resilient(
                 ADVANCED_PROFILES_FILE,
-                "r",
-                encoding="utf-8"
-            ) as f:
-
-                self.advanced_profiles = json.load(f)
+                self.advanced_profiles
+            )
 
         self.code_by_id = {
             item.get("id"): item
@@ -1925,24 +1898,12 @@ class CodeBrain:
 
     def save_statistics(self):
 
-        DATA_DIR.mkdir(
-            parents=True,
-            exist_ok=True
+        atomic_write_json(
+            STATS_FILE,
+            self.statistics,
+            indent=2,
+            ensure_ascii=False
         )
-
-        with STATS_FILE.open(
-            "w",
-            encoding="utf-8"
-        ) as f:
-
-            json.dump(
-                self.statistics,
-                f,
-                indent=2,
-                ensure_ascii=False
-            )
-
-            f.write("\n")
 
     def extract_existing_project_files(self, data, existing_code=""):
 

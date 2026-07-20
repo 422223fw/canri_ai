@@ -15,6 +15,8 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
+from Brain_storage import atomic_write_json
+
 
 DATA_DIR = Path(__file__).parent / "data"
 PATTERNS_PATH = DATA_DIR / "Emotion_patterns.json"
@@ -124,26 +126,7 @@ class EmotionBrain:
 
     def _save_statistics(self):
 
-        DATA_DIR.mkdir(
-            parents=True,
-            exist_ok=True
-        )
-
-        with STATISTICS_PATH.open(
-            "w",
-            encoding="utf-8"
-        ) as file:
-
-            json.dump(
-                self.statistics,
-                file,
-                ensure_ascii=False,
-                indent=2
-            )
-
-            file.write(
-                "\n"
-            )
+        atomic_write_json(STATISTICS_PATH, self.statistics)
 
     # ---------- report handling ----------
 

@@ -13,6 +13,8 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
+from Brain_storage import atomic_write_json, load_json_resilient
+
 
 DATA_DIR = Path(__file__).parent / "data"
 LEARNING_HISTORY_FILE = DATA_DIR / "Learning_history.json"
@@ -84,19 +86,11 @@ class LearningBrain:
         if not path.exists():
             return default
 
-        try:
-            with path.open("r", encoding="utf-8") as file:
-                return json.load(file)
-        except (OSError, json.JSONDecodeError):
-            return default
+        return load_json_resilient(path, default)
 
     def write_json(self, path, data):
 
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-        with path.open("w", encoding="utf-8") as file:
-            json.dump(data, file, ensure_ascii=False, indent=2)
-            file.write("\n")
+        atomic_write_json(path, data)
 
     def save_all(self):
 

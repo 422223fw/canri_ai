@@ -18,6 +18,9 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
+from Brain_runtime import invoke_brain_safely
+from Brain_storage import atomic_write_json
+
 from Scanner_knowledge import scanner_evidence
 
 
@@ -91,26 +94,7 @@ class TechnologyBrain:
 
     def _save_statistics(self):
 
-        DATA_DIR.mkdir(
-            parents=True,
-            exist_ok=True
-        )
-
-        with STATISTICS_PATH.open(
-            "w",
-            encoding="utf-8"
-        ) as file:
-
-            json.dump(
-                self.statistics,
-                file,
-                ensure_ascii=False,
-                indent=2
-            )
-
-            file.write(
-                "\n"
-            )
+        atomic_write_json(STATISTICS_PATH, self.statistics)
 
     # ---------- understanding report ----------
 
@@ -991,15 +975,20 @@ class TechnologyBrain:
 
             research_brain = ResearchBrain()
 
-            return research_brain.process(
-                payload
+            return invoke_brain_safely(
+                "Research_brain",
+                research_brain,
+                payload,
+                phase="technology_research_fallback",
+                request_id=payload.get("_request_id") if isinstance(payload, dict) else None
             )
 
-        except Exception as error:
+        except Exception:
 
             return {
                 "brain": "Research_brain",
-                "error": str(error),
+                "error": "research_fallback_unavailable",
+                "user_safe_error": "Technology research support is currently unavailable.",
                 "verified": False,
                 "confidence": 0
             }

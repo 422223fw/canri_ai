@@ -12,6 +12,8 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
+from Brain_storage import atomic_write_json
+
 
 DATA_DIR = Path(__file__).parent / "data"
 STATS_FILE = DATA_DIR / "Response_statistics.json"
@@ -64,11 +66,7 @@ class ResponseBrain:
 
     def save_statistics(self):
 
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-        with STATS_FILE.open("w", encoding="utf-8") as file:
-            json.dump(self.statistics, file, ensure_ascii=False, indent=2)
-            file.write("\n")
+        atomic_write_json(STATS_FILE, self.statistics)
 
     # ---------- input ----------
 
@@ -131,20 +129,22 @@ class ResponseBrain:
         if isinstance(data, str):
             return data
 
-        parts = []
-
+        candidates = []
         if isinstance(data, dict):
-            for key in ["original_text", "corrected_text", "user_message", "question", "text", "goal"]:
+            for key in ["original_text", "user_message", "question", "text", "goal", "corrected_text"]:
                 value = data.get(key)
                 if value:
-                    parts.append(str(value))
+                    candidates.append(str(value).strip())
 
-        for key in ["original_text", "corrected_text"]:
+        for key in ["original_text", "corrected_text", "text"]:
             value = report.get(key)
             if value:
-                parts.append(str(value))
+                candidates.append(str(value).strip())
 
-        return " ".join(parts).strip()
+        # The same request is present in several shared-context fields. Joining
+        # them made short greetings look like long research prompts and inflated
+        # keyword scores. Preserve one complete user message instead.
+        return next((value for value in candidates if value), "")
 
     def user_focus_terms(self, text):
 
@@ -371,18 +371,28 @@ class ResponseBrain:
         cleaned = re.sub(r"[^\w\u0590-\u05FF\s]", "", lowered).strip()
         words = cleaned.split()
 
-        return cleaned in greetings or (
-            len(words) <= 3
-            and any(word in greetings for word in words)
-        )
+        if cleaned in greetings:
+            return True
 
-    def greeting_answer(self):
-
-        return (
-            "שלום, אני Canri. אני מוכן לעזור.\n\n"
-            "אפשר לבקש ממני לתכנן פרויקט, לבנות קוד, להסביר נושא, "
-            "לבדוק מידע, או לעבוד עם אחד מהמוחות המומחים."
+        greeting_position = next(
+            (index for index, word in enumerate(words[:3]) if word in greetings),
+            None
         )
+        if greeting_position is None:
+            return False
+
+        technical_markers = {
+            "code", "program", "solve", "equation", "story", "image",
+            "analyze", "explain", "calculate", "python", "science"
+        }
+        return len(words) <= 12 and not technical_markers.intersection(words)
+
+    def greeting_answer(self, text=""):
+
+        if re.search(r"[\u0590-\u05FF]", str(text or "")):
+            return "שלום, אני Canri. כן, אשמח לעזור. מה תרצה לעשות?"
+
+        return "Hello, I am Canri. Yes, I would be glad to help. What would you like to do?"
 
     # ---------- safety ----------
 
@@ -1509,7 +1519,7 @@ class ResponseBrain:
             primary_brain = "Security_brain"
             confidence = 100
         elif self.is_greeting(user_text):
-            display_text = self.greeting_answer()
+            display_text = self.greeting_answer(user_text)
             primary_brain = "Response_brain"
             confidence = 95
         elif self.is_capability_question(user_text):

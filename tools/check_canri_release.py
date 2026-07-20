@@ -2,6 +2,7 @@
 
 import json
 import sys
+import time
 import wave
 from pathlib import Path
 
@@ -11,12 +12,14 @@ PACKAGE_DIR = PROJECT_ROOT / "main_ai_canri"
 sys.path.insert(0, str(PACKAGE_DIR))
 
 from Code_brain import CodeBrain  # noqa: E402
+from Brain_runtime import BrainRuntime  # noqa: E402
 from Creative_brain import CreativeBrain  # noqa: E402
 from Data_context import context_view_for_brain  # noqa: E402
 from Fact_Check_brain import FactCheckBrain  # noqa: E402
 from Knowledge_collector import load_knowledge_index_cached, search_knowledge  # noqa: E402
 from Learning_brain import LearningBrain  # noqa: E402
-from Manager_brain import MAX_QUALITY_RETRIES_PER_BRAIN, REQUEST_TIME_BUDGET_SECONDS  # noqa: E402
+from Main_brain import MainBrain  # noqa: E402
+from Manager_brain import ManagerBrain, MAX_QUALITY_RETRIES_PER_BRAIN, REQUEST_TIME_BUDGET_SECONDS  # noqa: E402
 from Math_brain import MathBrain  # noqa: E402
 from Memory_brain import MemoryBrain  # noqa: E402
 from Response_brain import ResponseBrain  # noqa: E402
@@ -29,6 +32,8 @@ from Graphics import CanriGraphics  # noqa: E402
 
 
 CRITERIA_FILE = PACKAGE_DIR / "data" / "Release_criteria.json"
+MANIFEST_FILE = PACKAGE_DIR / "data" / "Release_manifest.json"
+README_FILE = PROJECT_ROOT / "README.md"
 RELEASE_TMP_DIR = PROJECT_ROOT / "tmp" / "release_checks"
 
 
@@ -455,6 +460,135 @@ def run_learning_cases(suite, learning):
         )
 
 
+def run_runtime_cases(suite):
+    class HealthyBrain:
+        def process(self, data):
+            control = data.get("_runtime_control", {})
+            return {
+                "brain": "Healthy_brain",
+                "answer": "ok",
+                "request_id": data.get("_request_id"),
+                "contract": control.get("contract_version"),
+            }
+
+    class BrokenBrain:
+        def process(self, data):
+            raise RuntimeError("private release diagnostic")
+
+    class SlowBrain:
+        def process(self, data):
+            time.sleep(0.12)
+            return {"brain": "Slow_brain", "answer": "late"}
+
+    stats_path = RELEASE_TMP_DIR / "brain_runtime_statistics.json"
+    RELEASE_TMP_DIR.mkdir(parents=True, exist_ok=True)
+    if stats_path.exists():
+        stats_path.unlink()
+    runtime = BrainRuntime(statistics_path=stats_path)
+
+    registration = runtime.validate_registration("Healthy_brain", HealthyBrain())
+    suite.check("brain_runtime_contract_registration", registration["valid"], critical=True, detail=registration)
+
+    healthy = runtime.invoke(
+        "Healthy_brain",
+        HealthyBrain(),
+        {"_request_id": "release_runtime_request"},
+        phase="release_gate",
+        timeout_seconds=1.0,
+    )
+    suite.check("brain_runtime_contract_result", healthy.ok and healthy.result.get("brain") == "Healthy_brain", critical=True, detail=healthy.result)
+    suite.check("brain_runtime_request_propagation", healthy.result.get("request_id") == "release_runtime_request", critical=True, detail=healthy.result)
+    suite.check("brain_runtime_control_propagation", healthy.result.get("contract") == "1.0", critical=True, detail=healthy.result)
+
+    broken = runtime.invoke("Broken_brain", BrokenBrain(), {}, timeout_seconds=1.0)
+    broken_payload = json.dumps({"result": broken.result, "telemetry": broken.telemetry})
+    suite.check("brain_runtime_safe_exception_boundary", broken.telemetry.get("status") == "error", critical=True, detail=broken.telemetry)
+    suite.check("brain_runtime_private_error_details", "private release diagnostic" not in broken_payload, critical=True)
+
+    started = time.perf_counter()
+    slow = runtime.invoke("Slow_brain", SlowBrain(), {}, timeout_seconds=0.03)
+    elapsed = time.perf_counter() - started
+    suite.check("brain_runtime_bounded_timeout", slow.result.get("timeout") is True and elapsed < 0.1, critical=True, detail=elapsed)
+
+    runtime.flush_statistics()
+    saved = json.loads(stats_path.read_text(encoding="utf-8"))
+    suite.check("brain_runtime_health_metrics", saved.get("totals", {}).get("calls", 0) >= 3, critical=True, detail=saved.get("totals"))
+
+    manager = ManagerBrain()
+    manager.register_brain("Healthy_brain", HealthyBrain())
+    manager._request_started = time.perf_counter()
+    manager._request_deadline = manager._request_started + 2.0
+    manager._request_id = "release_manager_runtime"
+    result = manager.execute(
+        ["Healthy_brain"],
+        {
+            "_request_id": manager._request_id,
+            "original_text": "health",
+            "dictionary": {"available": False},
+            "data_context": {"available": False},
+            "full_data_context": {"available": False},
+            "knowledge": {"available": False, "matches": []},
+            "shared_context": {"available": False},
+        },
+        {"original_text": "health", "main_topic": "general", "intent": "request"},
+        {},
+        "release_runtime",
+    )
+    suite.check(
+        "manager_runtime_integration",
+        result.get("Healthy_brain", {}).get("performance", {}).get("runtime_contract") == "1.0",
+        critical=True,
+        detail=result,
+    )
+
+    import main as canri_main
+
+    canri_main.register_all_brains()
+    required_media = {"Vision_brain", "Voice_brain", "Image_brain"}
+    suite.check(
+        "all_application_brains_registered",
+        len(canri_main.manager_brain.brains) >= 28
+        and required_media.issubset(canri_main.manager_brain.brains),
+        critical=True,
+        detail=sorted(canri_main.manager_brain.brains),
+    )
+    suite.check(
+        "all_application_brain_contracts_valid",
+        all(item.get("valid") for item in canri_main.manager_brain.registry_health.values()),
+        critical=True,
+        detail=canri_main.manager_brain.registry_health,
+    )
+
+
+def run_release_metadata_cases(suite, criteria):
+    manifest = json.loads(MANIFEST_FILE.read_text(encoding="utf-8"))
+    status = MainBrain().process({"command": "release_check"})
+    target_version = str(criteria.get("target_version", ""))
+    suite.check(
+        "release_version_consistency",
+        target_version == "1.0.0"
+        and status.get("version") == target_version
+        and manifest.get("version") == target_version
+        and manifest.get("status") == "stable",
+        critical=True,
+        detail={
+            "criteria": target_version,
+            "runtime": status.get("version"),
+            "manifest": manifest.get("version"),
+            "status": manifest.get("status"),
+        },
+    )
+    commands = manifest.get("commands", {})
+    suite.check(
+        "release_documentation_and_commands",
+        README_FILE.exists()
+        and README_FILE.stat().st_size > 1000
+        and all(commands.get(name) for name in ("validate", "runtime", "regression", "release", "smoke")),
+        critical=True,
+        detail={"readme": README_FILE.exists(), "commands": sorted(commands)},
+    )
+
+
 def main():
     criteria = json.loads(CRITERIA_FILE.read_text(encoding="utf-8"))
     suite = ReleaseSuite()
@@ -484,6 +618,8 @@ def main():
     run_response_cases(suite, response)
     run_creative_policy_cases(suite, creative)
     run_learning_cases(suite, learning)
+    run_runtime_cases(suite)
+    run_release_metadata_cases(suite, criteria)
 
     suite.check("performance_budget", REQUEST_TIME_BUDGET_SECONDS <= criteria["maximum_normal_request_seconds"], critical=True)
     suite.check("retry_limit", MAX_QUALITY_RETRIES_PER_BRAIN <= criteria["maximum_quality_retries_per_brain"], critical=True)

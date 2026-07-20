@@ -16,6 +16,8 @@ import operator
 import re
 from collections import Counter
 from fractions import Fraction
+
+from Brain_storage import atomic_write_json
 from pathlib import Path
 
 
@@ -122,9 +124,7 @@ class MathBrain:
         stats["last_type"] = result_type
         stats["last_success"] = bool(success)
         self.statistics["Math_brain"] = stats
-        with STATS_FILE.open("w", encoding="utf-8") as file:
-            json.dump(self.statistics, file, ensure_ascii=False, indent=2)
-            file.write("\n")
+        atomic_write_json(STATS_FILE, self.statistics)
 
     def extract_text(self, data):
         if isinstance(data, str):

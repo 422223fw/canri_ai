@@ -16,6 +16,8 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
+from Brain_storage import atomic_write_json, load_json_resilient
+
 try:
     from Data_context import build_shared_data_context, context_view_for_brain
 except (ImportError, ModuleNotFoundError):
@@ -1324,27 +1326,15 @@ class CreativeBrain:
         if not path.exists():
             return default
 
-        try:
-            with path.open("r", encoding="utf-8") as file:
-                return json.load(file)
-        except (OSError, json.JSONDecodeError):
-            return default
+        return load_json_resilient(path, default)
 
     def save_statistics(self):
 
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-        with STATS_FILE.open("w", encoding="utf-8") as file:
-            json.dump(self.statistics, file, ensure_ascii=False, indent=2)
-            file.write("\n")
+        atomic_write_json(STATS_FILE, self.statistics)
 
     def save_creative_memory(self):
 
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-        with MEMORY_FILE.open("w", encoding="utf-8") as file:
-            json.dump(self.creative_memory, file, ensure_ascii=False, indent=2)
-            file.write("\n")
+        atomic_write_json(MEMORY_FILE, self.creative_memory)
 
     def index_graphs_by_seed(self):
 
@@ -2863,8 +2853,25 @@ class CreativeBrain:
     ):
 
         context = context or {}
+        rescue_depth = int(context.get("_creative_rescue_depth", 0) or 0)
+        if rescue_depth >= 1:
+            return {
+                "brain": "Creative_brain",
+                "purpose": "brain_rescue",
+                "rescued_brain": brain_name,
+                "failure_reason": failure_reason,
+                "needed_output": needed_output,
+                "best_idea": {},
+                "quality": {"good_enough": False},
+                "rescue_plan": [],
+                "confidence": 0,
+                "stopped": True,
+                "stop_reason": "creative_rescue_depth_limit"
+            }
 
         rescue_request = {
+            "_request_id": context.get("_request_id"),
+            "_creative_rescue_depth": rescue_depth + 1,
             "understanding": context.get("understanding", context),
             "memory": context.get("memory", {}),
             "problem": failure_reason,

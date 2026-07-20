@@ -4,11 +4,13 @@ Canri AI
 """
 
 import re
+import time
 from uuid import uuid4
 
+from Brain_runtime import brain_runtime
 from Graphics import start_graphics
 
-from Main_brain import MainBrain
+from Main_brain import brain as main_brain
 from Manager_brain import brain as manager_brain
 
 # מוחות
@@ -36,6 +38,8 @@ from Story_brain import brain as story_brain
 from Character_brain import brain as character_brain
 from World_brain import brain as world_brain
 from Image_brain import brain as image_brain
+from Vision_brain import brain as vision_brain
+from Voice_brain import brain as voice_brain
 
 from Learning_brain import brain as learning_brain
 from Fact_Check_brain import brain as fact_check_brain
@@ -50,6 +54,11 @@ from Scanner_knowledge import start_background_web_scanners
 
 
 ACTIVE_SESSION_ID = "session_" + uuid4().hex
+END_TO_END_REQUEST_BUDGET_SECONDS = 24.0
+
+
+def remaining_request_timeout(deadline, cap):
+    return max(0.05, min(float(cap), deadline - time.perf_counter()))
 
 
 def register_all_brains():
@@ -147,6 +156,16 @@ def register_all_brains():
     manager_brain.register_brain(
         "Image_brain",
         image_brain
+    )
+
+    manager_brain.register_brain(
+        "Vision_brain",
+        vision_brain
+    )
+
+    manager_brain.register_brain(
+        "Voice_brain",
+        voice_brain
     )
 
     manager_brain.register_brain(
@@ -292,13 +311,45 @@ def emit_progress(progress_callback, stage, detail=None, data=None):
         pass
 
 
+def safe_processing_fallback(message):
+
+    if re.search(r"[\u0590-\u05FF]", str(message or "")):
+        return "לא הצלחתי להשלים את הבקשה בצורה אמינה. אפשר לנסות שוב או לנסח אותה מעט אחרת."
+
+    return (
+        "I could not complete the request reliably. "
+        "Please try again or rephrase it slightly."
+    )
+
+
 def process_user_message(message, attached_files=None, progress_callback=None, session_id=None):
 
     attached_files = attached_files or []
     session_id = session_id or ACTIVE_SESSION_ID
+    request_id = "request_" + uuid4().hex
+    request_deadline = time.perf_counter() + END_TO_END_REQUEST_BUDGET_SECONDS
+
+    if not manager_brain.brains:
+        register_all_brains()
 
     emit_progress(progress_callback, "spelling", "Checking spelling and cleanup")
-    spelling_report = spelling_brain.process(message)
+    spelling_execution = brain_runtime.invoke(
+        "Spelling_brain",
+        spelling_brain,
+        message,
+        phase="input_spelling",
+        timeout_seconds=remaining_request_timeout(request_deadline, 2.5),
+        request_id=request_id
+    )
+    spelling_report = spelling_execution.result
+    if not spelling_execution.ok:
+        spelling_report = {
+            "brain": "Spelling_brain",
+            "original_text": message,
+            "corrected_text": message,
+            "corrections": [],
+            "error": spelling_execution.result.get("error")
+        }
     corrected_text = spelling_report.get("corrected_text", message)
 
     emit_progress(
@@ -307,21 +358,32 @@ def process_user_message(message, attached_files=None, progress_callback=None, s
         "Building Understanding_brain report"
     )
 
-    try:
-        understanding_report = understanding_brain.process({
+    understanding_execution = brain_runtime.invoke(
+        "Understanding_brain",
+        understanding_brain,
+        {
+            "_request_id": request_id,
             "original_text": message,
             "corrected_text": corrected_text,
             "attached_files": attached_files,
             "spelling": spelling_report
-        })
-    except Exception as error:
+        },
+        phase="input_understanding",
+        timeout_seconds=remaining_request_timeout(request_deadline, 5.0),
+        request_id=request_id
+    )
+    understanding_report = understanding_execution.result
+    if not understanding_execution.ok:
         understanding_report = build_basic_understanding(
             message,
             corrected_text
         )
-        understanding_report["understanding_error"] = str(error)
+        understanding_report["understanding_error"] = (
+            understanding_execution.result.get("error", "understanding_failed")
+        )
 
     context = {
+        "_request_id": request_id,
         "session_id": session_id,
         "_progress_callback": progress_callback,
         "original_text": message,
@@ -330,15 +392,42 @@ def process_user_message(message, attached_files=None, progress_callback=None, s
         "spelling": spelling_report,
         "understanding": understanding_report
     }
+    context["_request_deadline_monotonic"] = request_deadline
 
     emit_progress(progress_callback, "memory", "Searching and storing session memory")
-    memory_result = memory_brain.process(context)
+    memory_execution = brain_runtime.invoke(
+        "Memory_brain",
+        memory_brain,
+        context,
+        phase="input_memory",
+        timeout_seconds=remaining_request_timeout(request_deadline, 3.5),
+        request_id=request_id
+    )
+    memory_result = memory_execution.result
 
-    if isinstance(memory_result, dict):
+    if memory_execution.ok and isinstance(memory_result, dict):
         context["memory"] = memory_result.get("memory", {})
+    else:
+        context["memory"] = {
+            "session_id": session_id,
+            "memory_found": 0,
+            "conversation": {},
+            "error": memory_result.get("error", "memory_unavailable")
+        }
 
     emit_progress(progress_callback, "manager", "Routing request through specialist brains")
-    manager_result = manager_brain.process(context)
+    manager_execution = brain_runtime.invoke(
+        "Manager_brain",
+        manager_brain,
+        context,
+        phase="request_orchestration",
+        timeout_seconds=remaining_request_timeout(
+            request_deadline,
+            END_TO_END_REQUEST_BUDGET_SECONDS
+        ),
+        request_id=request_id
+    )
+    manager_result = manager_execution.result
     response_result = manager_result.get("results", {}).get("Response_brain")
 
     if isinstance(response_result, dict):
@@ -358,11 +447,12 @@ def process_user_message(message, attached_files=None, progress_callback=None, s
             )
         except Exception:
             pass
+        brain_runtime.flush_statistics()
         emit_progress(progress_callback, "complete", "Response ready")
         return response_result
 
     emit_progress(progress_callback, "complete", "Fallback response ready")
-    fallback_text = str(manager_result)
+    fallback_text = safe_processing_fallback(message)
     try:
         memory_brain.store_response(
             session_id,
@@ -373,6 +463,7 @@ def process_user_message(message, attached_files=None, progress_callback=None, s
         )
     except Exception:
         pass
+    brain_runtime.flush_statistics()
     return {
         "display_text": fallback_text,
         "answer": fallback_text,
@@ -538,7 +629,8 @@ def main():
     except Exception as error:
         print(f"Web scanners skipped: {error}")
 
-    brain = MainBrain()
+    startup_status = main_brain.process({"command": "startup"})
+    print(f"Canri AI {startup_status['version']} ready")
 
     start_graphics(
         message_handler=process_user_message

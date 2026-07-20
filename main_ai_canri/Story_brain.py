@@ -14,6 +14,9 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
+from Brain_runtime import invoke_brain_safely
+from Brain_storage import atomic_write_json, load_json_resilient
+
 
 DATA_DIR = Path(__file__).parent / "data"
 GENRES_FILE = DATA_DIR / "Story_genres.json"
@@ -32,18 +35,10 @@ class StoryBrain:
         print("Story Brain Loaded")
 
     def load_json(self, path, default):
-        if not path.exists():
-            return default
-        try:
-            with path.open("r", encoding="utf-8") as file:
-                return json.load(file)
-        except (OSError, json.JSONDecodeError):
-            return default
+        return load_json_resilient(path, default=default)
 
     def save_statistics(self):
-        with STATS_FILE.open("w", encoding="utf-8") as file:
-            json.dump(self.statistics, file, ensure_ascii=False, indent=2)
-            file.write("\n")
+        atomic_write_json(STATS_FILE, self.statistics)
 
     def get_understanding_report(self, data):
         if isinstance(data, dict):
@@ -58,6 +53,19 @@ class StoryBrain:
         if isinstance(data, dict) and isinstance(data.get("memory"), dict):
             return data["memory"]
         return {}
+
+    def continuation_source_text(self, memory_report):
+        if not isinstance(memory_report, dict):
+            return ""
+        conversation = memory_report.get("conversation", {})
+        if not isinstance(conversation, dict) or not conversation.get("continuation_request"):
+            return ""
+        source = conversation.get("continuation_source")
+        if not isinstance(source, dict):
+            return ""
+        previous_user = str(source.get("user", "")).strip()
+        previous_canri = str(source.get("canri", "")).strip()
+        return " ".join(part for part in [previous_user, previous_canri] if part)[:5000]
 
     def extract_text(self, data, report):
         parts = []
@@ -115,25 +123,65 @@ class StoryBrain:
         return best or {}
 
     def run_creative(self, data):
+        existing = self.existing_brain_result(data, "Creative_brain")
+        if existing:
+            return existing
         try:
             from Creative_brain import CreativeBrain
-            return CreativeBrain().process(data)
-        except Exception as error:
-            return {"brain": "Creative_brain", "error": str(error), "best_idea": {}}
+            return invoke_brain_safely(
+                "Creative_brain",
+                CreativeBrain(),
+                data,
+                phase="story_creative_fallback",
+                request_id=data.get("_request_id") if isinstance(data, dict) else None
+            )
+        except Exception:
+            return {"brain": "Creative_brain", "error": "creative_fallback_unavailable", "best_idea": {}}
 
     def run_character(self, data):
+        existing = self.existing_brain_result(data, "Character_brain")
+        if existing:
+            return existing
         try:
             from Character_brain import CharacterBrain
-            return CharacterBrain().process(data)
-        except Exception as error:
-            return {"brain": "Character_brain", "error": str(error), "character": {}}
+            return invoke_brain_safely(
+                "Character_brain",
+                CharacterBrain(),
+                data,
+                phase="story_character_fallback",
+                request_id=data.get("_request_id") if isinstance(data, dict) else None
+            )
+        except Exception:
+            return {"brain": "Character_brain", "error": "character_fallback_unavailable", "character": {}}
 
     def run_world(self, data):
+        existing = self.existing_brain_result(data, "World_brain")
+        if existing:
+            return existing
         try:
             from World_brain import WorldBrain
-            return WorldBrain().process(data)
-        except Exception as error:
-            return {"brain": "World_brain", "error": str(error), "world": {}}
+            return invoke_brain_safely(
+                "World_brain",
+                WorldBrain(),
+                data,
+                phase="story_world_fallback",
+                request_id=data.get("_request_id") if isinstance(data, dict) else None
+            )
+        except Exception:
+            return {"brain": "World_brain", "error": "world_fallback_unavailable", "world": {}}
+
+    def existing_brain_result(self, data, brain_name):
+        if not isinstance(data, dict):
+            return None
+        results = data.get("results", {})
+        if not isinstance(results, dict):
+            return None
+        result = results.get(brain_name)
+        if not isinstance(result, dict):
+            return None
+        if result.get("error") or result.get("skipped"):
+            return None
+        return result
 
     def build_outline(self, template, creative, character, world):
         default_outline = template.get("default_outline", ["opening", "conflict", "climax", "resolution"])
@@ -207,11 +255,41 @@ class StoryBrain:
 
         return " ".join(clean[:count])
 
-    def extract_story_requirements(self, text):
+    def extract_story_requirements(self, text, report=None):
         lowered = text.lower()
 
         name_match = re.search(r"\b(?:named|called)\s+([A-Z][a-zA-Z]+)\b", text)
         name = name_match.group(1) if name_match else None
+
+        if not name and isinstance(report, dict):
+            contract = report.get("request_contract", {})
+            inventory = contract.get("detail_inventory", {}) if isinstance(contract, dict) else {}
+            if not isinstance(inventory, dict) or not inventory:
+                inventory = report.get("detail_inventory", {})
+            named_entities = inventory.get("named_entities", []) if isinstance(inventory, dict) else []
+            ignored_entities = {
+                "Canri", "Write", "Create", "Continue", "Only", "Story", "Python"
+            }
+            name = next(
+                (
+                    str(entity).strip()
+                    for entity in named_entities
+                    if str(entity).strip()
+                    and str(entity).strip() not in ignored_entities
+                ),
+                None
+            )
+
+        if not name:
+            contextual_name = re.search(
+                r"\b(?:about|with|follows?)\s+(?:a\s+)?(?:quiet\s+|shy\s+|brave\s+)?"
+                r"(?:boy\s+|girl\s+|child\s+|patient\s+|hero\s+)?([A-Z][a-zA-Z]+)\b",
+                text
+            )
+            if contextual_name:
+                candidate = contextual_name.group(1)
+                if candidate not in {"The", "A", "An", "Only", "Story"}:
+                    name = candidate
 
         role = "character"
         for role_name in ["patient", "boy", "girl", "hero", "doctor", "student", "detective", "inventor", "child"]:
@@ -366,7 +444,7 @@ class StoryBrain:
         return "a detail that did not belong there"
 
     def dynamic_story_components(self, text, report, creative):
-        requirements = self.extract_story_requirements(text)
+        requirements = self.extract_story_requirements(text, report)
         role = requirements.get("role") or "character"
         name = requirements.get("name") or {
             "patient": "Daniel",
@@ -554,11 +632,62 @@ class StoryBrain:
             "template_used": False
         }
 
-    def build_final_story(self, text, length, outline, character, world, creative):
+    def build_continuation_story(self, current_text, requirements, count):
+        name = requirements.get("name") or (
+            "Leo" if requirements.get("role") == "boy" else
+            "Maya" if requirements.get("role") == "girl" else
+            "Ari"
+        )
+        lowered = current_text.lower()
+
+        if "open" in lowered and "door" in lowered:
+            opening = (
+                f"{name} slid the key into the lock and opened the door, "
+                "keeping one hand on the frame as warm light spilled through"
+            )
+        else:
+            action_match = re.search(
+                r"(?:continue[^:]*:\s*)?(?:she|he|they|%s)\s+([^.!?]+)" % re.escape(name),
+                current_text,
+                re.IGNORECASE
+            )
+            action = action_match.group(1).strip() if action_match else "followed the next clue"
+            opening = f"{name} continued by choosing to {action}"
+
+        key_detail = (
+            "The key grew brighter in the lock, as if it recognized the place beyond the doorway"
+            if "key" in lowered
+            else
+            "The clue from before changed as soon as the next step began"
+        )
+        setting = requirements.get("setting") or "the place beyond the doorway"
+        sentences = [
+            opening,
+            f"Beyond it, {setting} opened into a passage filled with moving points of light",
+            key_detail,
+            f"{name} felt fear return, but this time curiosity did not make the decision alone",
+            f"After listening for danger, {name} marked the doorway so the way back would not be lost",
+            "Then a quiet voice from deeper inside spoke the answer to a question no one had asked yet",
+            f"{name} stepped forward carefully, knowing the discovery had become a choice"
+        ]
+        return self.clean_sentence_list(sentences, count)
+
+    def build_final_story(
+        self,
+        text,
+        length,
+        outline,
+        character,
+        world,
+        creative,
+        report=None,
+        current_text=None
+    ):
 
         lowered = text.lower()
-        count = self.requested_sentence_count(text)
-        requirements = self.extract_story_requirements(text)
+        current_text = current_text or text
+        count = self.requested_sentence_count(current_text)
+        requirements = self.extract_story_requirements(text, report)
 
         is_park_story = "park" in lowered or "walk" in lowered
         is_leo_tiny_door_story = (
@@ -603,6 +732,9 @@ class StoryBrain:
             ("arcade" in lowered or "\u05e4\u05d0\u05e8\u05e7 \u05d4\u05de\u05e9\u05d7\u05e7\u05d9\u05dd" in lowered or "\u05e4\u05e8\u05e7 \u05d4\u05de\u05e9\u05d7\u05e7\u05d9\u05dd" in lowered)
             and ("lost" in lowered or "\u05e0\u05d0\u05d1\u05d3" in lowered)
         )
+
+        if is_story_continuation and not is_leo_tiny_door_story:
+            return self.build_continuation_story(current_text, requirements, count)
 
         if arcade_lost_story:
             hebrew = bool(re.search(r"[\u0590-\u05ff]", text))
@@ -733,22 +865,51 @@ class StoryBrain:
         report = self.get_understanding_report(data)
         memory_report = self.get_memory_report(data)
         text = self.extract_text(data, report)
-        terms = self.collect_terms(report, memory_report, text)
+        continuation_source = self.continuation_source_text(memory_report)
+        generation_text = (
+            f"{continuation_source} {text}".strip()
+            if continuation_source
+            else text
+        )
+        terms = self.collect_terms(report, memory_report, generation_text)
         length = self.detect_length(text, terms)
         template = self.choose_template(terms)
 
-        creative = self.run_creative(data)
-        character = self.run_character(data)
-        world = self.run_world(data)
-        outline = self.build_outline(template, creative, character, world)
-        draft = self.build_draft(length, outline, character, world, creative)
-        dynamic_generation = self.build_dynamic_story(
-            text,
-            report,
-            creative,
-            self.requested_sentence_count(text)
-        )
+        if continuation_source:
+            creative = self.existing_brain_result(data, "Creative_brain") or {
+                "brain": "Creative_brain",
+                "derived_from_conversation": True,
+                "confidence": 80,
+                "best_idea": {}
+            }
+        else:
+            creative = self.run_creative(data)
+        dynamic_generation = None
+        if not continuation_source:
+            dynamic_generation = self.build_dynamic_story(
+                generation_text,
+                report,
+                creative,
+                self.requested_sentence_count(text)
+            )
         if isinstance(dynamic_generation, dict) and dynamic_generation.get("story"):
+            components = dynamic_generation.get("components", {})
+            character = self.existing_brain_result(data, "Character_brain") or {
+                "brain": "Character_brain",
+                "derived_from_request": True,
+                "character": {
+                    "name": components.get("name"),
+                    "role": components.get("role"),
+                    "trait": components.get("trait")
+                }
+            }
+            world = self.existing_brain_result(data, "World_brain") or {
+                "brain": "World_brain",
+                "derived_from_request": True,
+                "world": {"name": components.get("setting")}
+            }
+            outline = self.build_outline(template, creative, character, world)
+            draft = self.build_draft(length, outline, character, world, creative)
             story = dynamic_generation["story"]
             generation_mode = dynamic_generation.get("generation_mode")
             template_used = False
@@ -758,7 +919,37 @@ class StoryBrain:
                 + creative.get("confidence", 60) * 0.2
             )
         else:
-            story = self.build_final_story(text, length, outline, character, world, creative)
+            if continuation_source:
+                requirements = self.extract_story_requirements(generation_text, report)
+                character = {
+                    "brain": "Character_brain",
+                    "derived_from_conversation": True,
+                    "character": {
+                        "name": requirements.get("name"),
+                        "role": requirements.get("role"),
+                        "trait": requirements.get("trait")
+                    }
+                }
+                world = {
+                    "brain": "World_brain",
+                    "derived_from_conversation": True,
+                    "world": {"name": requirements.get("setting")}
+                }
+            else:
+                character = self.run_character(data)
+                world = self.run_world(data)
+            outline = self.build_outline(template, creative, character, world)
+            draft = self.build_draft(length, outline, character, world, creative)
+            story = self.build_final_story(
+                generation_text,
+                length,
+                outline,
+                character,
+                world,
+                creative,
+                report=report,
+                current_text=text
+            )
             generation_mode = "legacy_template_fallback"
             template_used = True
             confidence = min(100, template.get("confidence", 70) + creative.get("confidence", 60) * 0.15)

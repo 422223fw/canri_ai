@@ -367,6 +367,17 @@ class SpellingBrain:
         spans = [(match.start(1), match.end(1)) for match in FUNCTION_CALL_RE.finditer(sentence)]
         spans.extend((match.start(), match.end()) for match in re.finditer(r"`[^`\n]+`", sentence))
         spans.extend((match.start(), match.end()) for match in re.finditer(r"```.*?```", sentence, re.DOTALL))
+        spans.extend(
+            (match.start(), match.end())
+            for match in re.finditer(
+                r"(?<![A-Za-z0-9_])(?:[A-Za-z]:[\\/])?"
+                r"[A-Za-z0-9_.-]+(?:[\\/][A-Za-z0-9_.-]+)*"
+                r"\.(?:jsonl?|py|pyw|js|jsx|ts|tsx|html?|css|md|txt|csv|xml|ya?ml|toml|ini|sql|db|sqlite3?|png|jpe?g|gif|svg|wav|mp3|mp4|zip)"
+                r"(?![A-Za-z0-9_])",
+                sentence,
+                re.IGNORECASE
+            )
+        )
         return spans
 
     def token_offsets(self, tokens):
@@ -548,6 +559,15 @@ class SpellingBrain:
                 "candidates": []
             }
 
+        if self.is_valid_inflected_form(lowered):
+            return {
+                "word": word,
+                "changed": False,
+                "reason": "valid_inflected_form",
+                "score": 98,
+                "candidates": []
+            }
+
         candidates = self.candidate_words(lowered)
 
         if not candidates:
@@ -597,6 +617,41 @@ class SpellingBrain:
             "score": best["score"],
             "candidates": scored[:5]
         }
+
+    def is_probable_proper_name(self, word, word_index):
+
+        lowered = self.normalize(word)
+        return (
+            word_index > 0
+            and len(word) >= 2
+            and word[:1].isupper()
+            and word[1:].islower()
+            and lowered not in COMMON_CORRECTIONS
+            and not self.word_exists(lowered)
+        )
+
+    def is_valid_inflected_form(self, word):
+
+        lowered = self.normalize(word)
+        candidates = []
+
+        if lowered.endswith("ies") and len(lowered) > 4:
+            candidates.append(lowered[:-3] + "y")
+        if lowered.endswith("es") and len(lowered) > 4:
+            candidates.extend([lowered[:-2], lowered[:-1]])
+        elif lowered.endswith("s") and len(lowered) > 3:
+            candidates.append(lowered[:-1])
+
+        for suffix in ["ing", "ed", "er", "ers", "ly", "ness", "ment", "able"]:
+            if not lowered.endswith(suffix) or len(lowered) <= len(suffix) + 2:
+                continue
+            stem = lowered[:-len(suffix)]
+            candidates.extend([stem, stem + "e"])
+
+        return any(
+            self.word_exists(candidate)
+            for candidate in dict.fromkeys(candidates)
+        )
 
     def ask_creative_for_hint(self, word, word_tokens, candidates=None):
 
@@ -658,6 +713,17 @@ class SpellingBrain:
                     "reason": "protected_code_identifier",
                     "score": 100,
                     "kind": "code_identifier",
+                    "top_candidates": []
+                })
+                continue
+            if self.is_probable_proper_name(word, word_index):
+                corrections.append({
+                    "original": word,
+                    "corrected": word,
+                    "changed": False,
+                    "reason": "protected_probable_proper_name",
+                    "score": 100,
+                    "kind": "proper_name",
                     "top_candidates": []
                 })
                 continue

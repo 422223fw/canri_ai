@@ -6,6 +6,8 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
+from Brain_storage import atomic_write_json, load_json_resilient
+
 
 DATA_DIR = Path(__file__).parent / "data"
 RULES_FILE = DATA_DIR / "Brain_collaboration_rules.json"
@@ -47,12 +49,8 @@ class CollaborationBrain:
         print("Collaboration Brain Loaded")
 
     def _load_json(self, path, default):
-        try:
-            with path.open("r", encoding="utf-8") as file:
-                value = json.load(file)
-                return value if isinstance(value, type(default)) else default
-        except (OSError, json.JSONDecodeError, TypeError, ValueError):
-            return default
+        value = load_json_resilient(path, default)
+        return value if isinstance(value, type(default)) else default
 
     def _save_statistics(self, result):
         stats = self._load_json(STATISTICS_FILE, {})
@@ -60,12 +58,7 @@ class CollaborationBrain:
         stats["last_round"] = result.get("round")
         stats["last_participants"] = result.get("participants", [])
         stats["last_updated_utc"] = datetime.now(timezone.utc).isoformat()
-        try:
-            temporary = STATISTICS_FILE.with_suffix(".tmp")
-            temporary.write_text(json.dumps(stats, indent=2), encoding="utf-8")
-            temporary.replace(STATISTICS_FILE)
-        except OSError:
-            pass
+        atomic_write_json(STATISTICS_FILE, stats)
 
     def _domain(self, data):
         routing = data.get("routing_decision", {})
