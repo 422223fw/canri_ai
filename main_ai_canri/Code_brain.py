@@ -110,10 +110,19 @@ class CodeSelfReviewer:
                 [file_name.lower()]
             )
 
+        structured_programs = {
+            "expense_tracker", "notes_app", "contact_book", "library_manager",
+            "shop_inventory", "calendar_app", "todo_app", "flashcards_app",
+        }
+        asks_for_record_fields = bool(
+            program_kind in structured_programs
+            or re.search(r"\b(?:each|every)\s+(?:item|record|book|note|expense|task)\b", lowered)
+            or any(marker in lowered for marker in ["fields:", "data fields", "must have:"])
+        )
         requested_fields = [
             field
             for field in sorted(self.FIELD_MARKERS)
-            if re.search(rf"\b{re.escape(field)}\b", lowered)
+            if asks_for_record_fields and re.search(rf"\b{re.escape(field)}\b", lowered)
         ]
         for field in requested_fields:
             add(f"field_{field}", "data_field", [f'"{field}"'], [(f"'{field}'",)])
@@ -3691,6 +3700,10 @@ if __name__ == "__main__":
             return recipe_matches[0][1]
 
         checks = [
+            ("name_greeter", [
+                "asks for the user's name", "ask for the user's name",
+                "asks for names", "hello, <name>", "hello <name>",
+            ]),
             ("weather_app", ["weather", "temperature", "humidity", "forecast"]),
             ("expense_tracker", ["expense tracker", "expenses", "amount spent", "total amount", "search expenses", "category"]),
             ("calendar_app", ["calendar", "appointment", "appointments", "event planner", "events by date", "schedule event"]),
@@ -4443,6 +4456,26 @@ if __name__ == "__main__":
             text,
             task_type
         )
+
+        if program_kind == "name_greeter":
+            return '''def main():
+    while True:
+        name = input("Enter your name (or type 'exit'): ").strip()
+
+        if name.lower() == "exit":
+            print("Goodbye!")
+            break
+
+        if not name:
+            print("Please enter a name or type exit.")
+            continue
+
+        print(f"Hello, {name}!")
+
+
+if __name__ == "__main__":
+    main()
+'''
 
         if program_kind == "library_manager":
             return self.apply_requested_file_name(

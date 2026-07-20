@@ -4,8 +4,9 @@ Canri AI is a local, multi-brain Python assistant. It routes each request to
 specialist components for understanding, code, mathematics, stories, facts,
 memory, media, security, quality control, and final response formatting.
 
-The project uses a bounded runtime contract, isolated chat memory, indexed
-local knowledge, targeted quality retries, and atomic JSON storage. The
+The project uses a shared runtime contract, isolated chat memory, indexed
+local knowledge, targeted quality retries, cross-brain neural integration,
+and atomic JSON storage. Normal requests have no thinking deadline. The
 release version is reported by `main_ai_canri/Main_brain.py`.
 
 ## Requirements
@@ -29,9 +30,10 @@ From the project root:
 python .\main_ai_canri\main.py
 ```
 
-The application starts the desktop chat interface and bounded background
-knowledge collectors. Chats are stored separately by session and restored on
-the next launch.
+The application starts the desktop chat interface and background knowledge
+collectors. Chats are stored separately by session and restored on the next
+launch. The sidebar can create, rename, delete, or clear chats; deleting a
+chat also removes its isolated conversation memory.
 
 To push committed project changes with the included helper:
 
@@ -43,6 +45,9 @@ powershell -ExecutionPolicy Bypass -File .\push_canri.ps1
 
 - `main.py`: application startup, request budget, brain registration, and GUI.
 - `Manager_brain.py`: domain routing, execution phases, and targeted retries.
+- `Nervous_system_brain.py`: internal requirement state, candidate ranking,
+  and correction routing across specialist brains. It never writes the final
+  user-facing answer.
 - `Understanding_brain.py`: whole-request intent, entities, requirements, and
   sentence graph.
 - `Data_context.py`: bounded retrieval from dictionaries, memory, scanners,
@@ -55,6 +60,11 @@ powershell -ExecutionPolicy Bypass -File .\push_canri.ps1
 - `Quality_Control_brain.py`: requirement-by-requirement acceptance checks.
 - `Response_brain.py`: clean final user output without internal reports.
 
+Quality failures are sent back to the responsible specialist with the exact
+missing requirement. Canri can retry a specialist up to 20 times. If no
+candidate reaches every advisory quality check, `Response_brain` still returns
+the strongest usable result while keeping diagnostics in Thinking details.
+
 ## Data
 
 - `main_ai_canri/data/`: brain-specific data, scanner queues, indexes,
@@ -63,6 +73,8 @@ powershell -ExecutionPolicy Bypass -File .\push_canri.ps1
   data used by understanding and spelling.
 - Large append-only knowledge databases use JSONL. Search code retrieves
   bounded relevant records instead of loading an entire database per request.
+- `Nervous_system_profiles.json` configures domain owners, internal-only
+  brains, candidate fields, and the correction-cycle limit.
 - Runtime-created data is written atomically where replacement is supported.
 
 Do not edit a large JSON file while Canri or a scanner is writing to it.
@@ -112,7 +124,8 @@ python .\tools\validate_canri_project.py --full-jsonl
   `python .\tools\validate_canri_project.py`, then restore the affected file
   from its backup if the failure persists.
 - **Slow request:** inspect `main_ai_canri/data/Brain_runtime_statistics.json`
-  for timeouts and per-brain latency.
+  for per-brain latency. Normal thinking is unlimited unless the optional
+  watchdog environment variable is set.
 - **Knowledge is not updating:** inspect the matching `*_scan_statistics.json`
   and `*_scan_queue.json` files and confirm network access.
 - **Git LFS filter failed:** reinstall Git LFS, run `git lfs install`, restart

@@ -23,8 +23,10 @@ MEMORY_FILE = DATA_DIR / "Memory_database.json"
 MEMORY_STATS_FILE = DATA_DIR / "Memory_statistics.json"
 LEGACY_MEMORY_FILE = Path("memory.json")
 
-MAX_EPISODES = 5000
+MAX_EPISODES = 20000
 MAX_MATCHES = 12
+MAX_TURNS_PER_SESSION = 2000
+RECENT_CONTEXT_TURNS = 16
 DEFAULT_SESSION_ID = "default_session"
 
 STOP_WORDS = {
@@ -39,6 +41,8 @@ STOP_WORDS = {
 class MemoryBrain:
 
     def __init__(self):
+
+        self.deleted_sessions = set()
 
         self.database = {
             "episodes": [],
@@ -402,6 +406,10 @@ class MemoryBrain:
             "raw_report": understanding_report
         }
 
+        if session_id in self.deleted_sessions:
+            episode["not_stored"] = "session_deleted"
+            return episode
+
         existing_ids = {
             item.get("id")
             for item in self.database["episodes"]
@@ -421,6 +429,19 @@ class MemoryBrain:
     # ---------- conversation memory ----------
 
     def conversation_bucket(self, session_id, title=None):
+
+        if session_id in self.deleted_sessions:
+            return {
+                "session_id": session_id,
+                "title": title or "Deleted chat",
+                "created_utc": None,
+                "updated_utc": None,
+                "turns": [],
+                "summary": "",
+                "keywords": [],
+                "open_threads": [],
+                "deleted": True
+            }
 
         conversations = self.database.setdefault("conversations", {})
         bucket = conversations.get(session_id)
@@ -444,9 +465,79 @@ class MemoryBrain:
 
         return bucket
 
+    def rename_session(self, session_id, title):
+
+        session_id = str(session_id or "").strip()
+        title = str(title or "").strip()[:80]
+        if not session_id or not title:
+            return False
+
+        bucket = self.database.setdefault("conversations", {}).get(session_id)
+        if not isinstance(bucket, dict):
+            return False
+
+        bucket["title"] = title
+        bucket["updated_utc"] = datetime.now(timezone.utc).isoformat()
+        self.save_memory()
+        return True
+
+    def create_session(self, session_id, title=None):
+
+        session_id = str(session_id or "").strip()
+        if not session_id:
+            return False
+        self.deleted_sessions.discard(session_id)
+        self.conversation_bucket(session_id, str(title or "Canri chat")[:80])
+        self.save_memory()
+        return True
+
+    def delete_session(self, session_id):
+
+        session_id = str(session_id or "").strip()
+        if not session_id:
+            return False
+
+        self.deleted_sessions.add(session_id)
+
+        conversations = self.database.setdefault("conversations", {})
+        existed = conversations.pop(session_id, None) is not None
+        episodes = self.database.setdefault("episodes", [])
+        remaining = [
+            episode
+            for episode in episodes
+            if str(episode.get("session_id", "")) != session_id
+        ]
+        removed_episodes = len(episodes) - len(remaining)
+        if removed_episodes:
+            self.database["episodes"] = remaining
+            self.rebuild_semantic_memory()
+
+        if existed or removed_episodes:
+            self.save_memory()
+            return True
+        return False
+
+    def clear_conversation_memory(self):
+
+        self.deleted_sessions.update(
+            str(session_id)
+            for session_id in self.database.get("conversations", {})
+        )
+        removed_sessions = len(self.database.get("conversations", {}))
+        removed_episodes = len(self.database.get("episodes", []))
+        self.database["conversations"] = {}
+        self.database["episodes"] = []
+        self.rebuild_semantic_memory()
+        self.save_memory()
+        return {
+            "cleared": True,
+            "removed_sessions": removed_sessions,
+            "removed_episodes": removed_episodes
+        }
+
     def summarize_conversation(self, turns):
 
-        recent = turns[-6:]
+        recent = turns[-12:]
         parts = []
 
         for turn in recent:
@@ -463,7 +554,7 @@ class MemoryBrain:
 
         counter = Counter()
 
-        for turn in turns[-20:]:
+        for turn in turns[-80:]:
             text = f"{turn.get('user', '')} {turn.get('canri', '')}"
             for word in re.findall(r"[a-zA-Z\u0590-\u05FF][a-zA-Z0-9_\-\u0590-\u05FF]{2,}", text.lower()):
                 if word not in STOP_WORDS:
@@ -472,6 +563,13 @@ class MemoryBrain:
         return [word for word, _ in counter.most_common(30)]
 
     def add_user_turn(self, session_id, user_text, understanding_report, episode_id=None, data=None):
+
+        if session_id in self.deleted_sessions:
+            return {
+                "id": None,
+                "session_id": session_id,
+                "not_stored": "session_deleted"
+            }
 
         title = self.get_chat_title(data, user_text)
         bucket = self.conversation_bucket(session_id, title)
@@ -496,13 +594,16 @@ class MemoryBrain:
         }
 
         bucket.setdefault("turns", []).append(turn)
-        bucket["turns"] = bucket["turns"][-300:]
+        bucket["turns"] = bucket["turns"][-MAX_TURNS_PER_SESSION:]
         bucket["updated_utc"] = now
         bucket["summary"] = self.summarize_conversation(bucket["turns"])
         bucket["keywords"] = self.conversation_keywords(bucket["turns"])
         return turn
 
     def store_response(self, session_id, user_text, canri_text, response_result=None, manager_result=None):
+
+        if session_id in self.deleted_sessions:
+            return None
 
         bucket = self.conversation_bucket(session_id)
         turns = bucket.setdefault("turns", [])
@@ -546,7 +647,7 @@ class MemoryBrain:
                     "needs_retry": quality.get("needs_retry")
                 }
 
-        bucket["turns"] = turns[-300:]
+        bucket["turns"] = turns[-MAX_TURNS_PER_SESSION:]
         bucket["updated_utc"] = now
         bucket["summary"] = self.summarize_conversation(bucket["turns"])
         bucket["keywords"] = self.conversation_keywords(bucket["turns"])
@@ -585,7 +686,7 @@ class MemoryBrain:
         current_intent,
         current_keywords,
         continuation=False,
-        limit=6
+        limit=12
     ):
 
         ranked = []
@@ -641,7 +742,7 @@ class MemoryBrain:
             else []
         )
 
-        for turn in turns[-12:]:
+        for turn in turns[-40:]:
             canri_text = str(turn.get("canri", ""))
             for match in re.finditer(
                 r"```([a-zA-Z0-9_+\-.#]*)\s*(.*?)```",
@@ -653,7 +754,7 @@ class MemoryBrain:
                     continue
                 code_blocks.append({
                     "language": (match.group(1) or "text").strip().lower(),
-                    "code": code[:12000],
+                    "code": code[:30000],
                     "turn_user": str(turn.get("user", ""))[:300],
                     "created_utc": turn.get("created_utc")
                 })
@@ -699,9 +800,9 @@ class MemoryBrain:
                     "intent": turn.get("intent"),
                     "quality": turn.get("quality", {})
                 }
-                for turn in turns[-8:]
+                for turn in turns[-RECENT_CONTEXT_TURNS:]
             ],
-            "recent_code_blocks": code_blocks[-4:],
+            "recent_code_blocks": code_blocks[-8:],
             "last_completed_turn": {
                 "user": str(last_turn.get("user", ""))[:500],
                 "canri": str(last_turn.get("canri", ""))[:900],

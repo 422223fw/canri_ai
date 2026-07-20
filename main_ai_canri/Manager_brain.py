@@ -77,7 +77,7 @@ ALWAYS_AVAILABLE_SAFETY_BRAINS = [
 
 REQUEST_TIME_BUDGET_SECONDS = None
 DEFAULT_BRAIN_SOFT_TIMEOUT_SECONDS = None
-MAX_QUALITY_RETRIES_PER_BRAIN = 4
+MAX_QUALITY_RETRIES_PER_BRAIN = 20
 MAX_COLLABORATION_PARTICIPANTS = 5
 MAX_CENTRAL_DOMAINS = 4
 
@@ -1043,6 +1043,10 @@ class ManagerBrain:
                 "brains": []
             },
             {
+                "phase": "neural_integration",
+                "brains": ["Nervous_system_brain"]
+            },
+            {
                 "phase": "brain_collaboration",
                 "brains": ["Collaboration_brain"] if needs_collaboration else []
             },
@@ -1895,7 +1899,8 @@ class ManagerBrain:
                     "Quality_Control_brain",
                     "Response_brain",
                     "Security_brain",
-                    "Learning_brain"
+                    "Learning_brain",
+                    "Nervous_system_brain"
                 }
                 and brain_name not in retry_brains
             ):
@@ -1928,6 +1933,10 @@ class ManagerBrain:
         retry_context["data_context"] = shared_data_context
         retry_context["full_data_context"] = shared_data_context
         retry_context["quality_feedback"] = quality_result
+        retry_context["nervous_system"] = all_results.get(
+            "Nervous_system_brain",
+            {}
+        )
         retry_context["retry_target"] = target_brain
         retry_context["retry_request"] = retry_request or {}
         retry_context["quality_retry_attempt"] = (
@@ -2089,6 +2098,25 @@ class ManagerBrain:
                 break
 
             all_results.update(retry_results)
+            if "Nervous_system_brain" in self.brains:
+                neural_context = self.build_retry_context(
+                    data,
+                    all_results,
+                    shared_knowledge,
+                    shared_dictionary,
+                    shared_data_context,
+                    current_quality
+                )
+                neural_results = self.execute(
+                    ["Nervous_system_brain"],
+                    neural_context,
+                    report,
+                    memory_report,
+                    "quality_neural_integration"
+                )
+                if neural_results:
+                    all_results.update(neural_results)
+
             recheck_results = self.execute_quality_recheck(
                 data,
                 report,
@@ -2390,7 +2418,8 @@ class ManagerBrain:
                     if name not in {
                         "Memory_brain", "Emotion_brain", "Security_brain",
                         "Manager_brain", "Quality_Control_brain", "Response_brain",
-                        "Learning_brain", "Collaboration_brain"
+                        "Learning_brain", "Collaboration_brain",
+                        "Nervous_system_brain"
                     }
                 ],
                 "collaboration_used": "Collaboration_brain" in plan,

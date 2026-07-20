@@ -40,6 +40,7 @@ INTERNAL_ONLY_BRAINS = {
     "Learning_brain",
     "Memory_brain",
     "Collaboration_brain",
+    "Nervous_system_brain",
 }
 
 
@@ -1590,14 +1591,10 @@ class ResponseBrain:
                         display_text = alt_text
                     else:
                         display_text = self.user_facing_fallback(report)
+                # Quality feedback is internal coordination data. After all
+                # correction rounds, always return the strongest usable result
+                # instead of exposing a quality-control report to the user.
                 blocking_issue = self.blocking_quality_issue(results, primary_brain)
-                if blocking_issue:
-                    display_text = (
-                        "The current draft did not pass Canri's quality check yet.\n\n"
-                        f"Problem: {blocking_issue.get('problem')}\n"
-                        f"Fix needed: {blocking_issue.get('instruction')}"
-                    )
-                    primary_brain = "Quality_Control_brain"
             elif user_text:
                 display_text = "קיבלתי את ההודעה, אבל עדיין אין לי פלט מומחה מספיק טוב להציג."
             else:

@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog
 from tkinter import messagebox
+from tkinter import simpledialog
 from tkinter.scrolledtext import ScrolledText
 
 import tkinter as tk
@@ -23,7 +24,7 @@ CHAT_TEMP_FILE = DATA_DIR / "Canri_chats.tmp.json"
 
 class CanriGraphics:
 
-    def __init__(self, message_handler=None):
+    def __init__(self, message_handler=None, memory_handler=None):
 
         self.root = tk.Tk()
         self.root.title("Canri AI")
@@ -48,6 +49,7 @@ class CanriGraphics:
 
         self.attached_files = []
         self.message_handler = message_handler
+        self.memory_handler = memory_handler
         self.is_recording = False
         self.recording_thread = None
         self.recording_frames = []
@@ -144,6 +146,54 @@ class CanriGraphics:
             ipady=8
         )
 
+        chat_actions = tk.Frame(
+            self.sidebar,
+            bg=self.colors["sidebar"]
+        )
+        chat_actions.pack(
+            fill="x",
+            padx=14,
+            pady=(0, 8)
+        )
+
+        self.rename_chat_button = self.create_button(
+            chat_actions,
+            text="Rename",
+            command=self.rename_current_chat,
+            bg=self.colors["panel_2"]
+        )
+        self.rename_chat_button.pack(
+            side="left",
+            fill="x",
+            expand=True,
+            padx=(0, 4)
+        )
+
+        self.delete_chat_button = self.create_button(
+            chat_actions,
+            text="Delete",
+            command=self.delete_current_chat,
+            bg=self.colors["danger"]
+        )
+        self.delete_chat_button.pack(
+            side="left",
+            fill="x",
+            expand=True,
+            padx=(4, 0)
+        )
+
+        self.clear_chats_button = self.create_button(
+            self.sidebar,
+            text="Clear all chats",
+            command=self.clear_all_chats,
+            bg=self.colors["panel_2"]
+        )
+        self.clear_chats_button.pack(
+            fill="x",
+            padx=14,
+            pady=(0, 4)
+        )
+
         history_label = tk.Label(
             self.sidebar,
             text="Chats",
@@ -180,6 +230,8 @@ class CanriGraphics:
             "<<ListboxSelect>>",
             self.on_chat_selected
         )
+        self.chat_list.bind("<Double-Button-1>", self.rename_current_chat)
+        self.chat_list.bind("<Delete>", self.delete_current_chat)
 
         self.empty_history = tk.Label(
             self.sidebar,
@@ -191,7 +243,7 @@ class CanriGraphics:
         )
         self.empty_history.place(
             x=20,
-            y=164
+            y=250
         )
 
         status_frame = tk.Frame(
@@ -734,7 +786,7 @@ class CanriGraphics:
             chat["title"] = str(chat.get("title") or "Untitled chat")[:80]
             chat["messages"] = [item for item in chat.get("messages", []) if isinstance(item, dict)]
             valid_chats.append(chat)
-        self.chats["chats"] = valid_chats[-500:]
+        self.chats["chats"] = valid_chats[-2000:]
 
         self.chat_list.delete(0, "end")
 
@@ -823,6 +875,7 @@ class CanriGraphics:
         self.chat_list.selection_clear(0, "end")
         self.chat_list.selection_set(self.chat_list.size() - 1)
         self.empty_history.place_forget()
+        self.notify_memory_handler("create", chat.get("id"), title)
         self.save_chats()
 
         return chat
@@ -838,6 +891,8 @@ class CanriGraphics:
     def append_chat_record(self, role, text, trace_id=None, chat_id=None, attachments=None):
 
         chat = self.chat_by_id(chat_id) if chat_id else None
+        if chat_id and chat is None:
+            return None
         if chat is None:
             chat = self.ensure_current_chat(text if role == "USER" else None)
 
@@ -862,6 +917,8 @@ class CanriGraphics:
         chat.setdefault("messages", []).append(record)
         chat["updated_utc"] = datetime.now().isoformat()
         self.save_chats()
+
+        return record
 
     def refresh_chat_list_titles(self):
 
@@ -944,7 +1001,120 @@ class CanriGraphics:
         self.current_chat_id = chat["id"]
         self.refresh_chat_list_titles()
         self.empty_history.place_forget()
+        self.notify_memory_handler("create", chat.get("id"), chat.get("title"))
         self.save_chats()
+
+    def notify_memory_handler(self, action, chat_id=None, title=None):
+
+        if not self.memory_handler:
+            return None
+
+        try:
+            return self.memory_handler(
+                action=action,
+                chat_id=chat_id,
+                title=title
+            )
+        except TypeError:
+            return self.memory_handler(action, chat_id, title)
+        except Exception as error:
+            messagebox.showwarning(
+                "Canri memory",
+                f"The chat list was updated, but memory synchronization failed: {error}",
+                parent=self.root
+            )
+            return None
+
+    def rename_current_chat(self, event=None):
+
+        chat = self.current_chat()
+        if not chat:
+            return
+
+        title = simpledialog.askstring(
+            "Rename chat",
+            "Chat name:",
+            initialvalue=chat.get("title", "Untitled chat"),
+            parent=self.root
+        )
+        if title is None:
+            return
+
+        title = title.strip()[:80]
+        if not title:
+            messagebox.showinfo(
+                "Rename chat",
+                "The chat name cannot be empty.",
+                parent=self.root
+            )
+            return
+
+        chat["title"] = title
+        chat["updated_utc"] = datetime.now().isoformat()
+        self.notify_memory_handler("rename", chat.get("id"), title)
+        self.refresh_chat_list_titles()
+        self.save_chats()
+        self.header_status.configure(text="Chat renamed")
+
+    def delete_current_chat(self, event=None):
+
+        chat = self.current_chat()
+        if not chat:
+            return
+
+        if not messagebox.askyesno(
+            "Delete chat",
+            f"Delete '{chat.get('title', 'Untitled chat')}' and its conversation memory?",
+            parent=self.root
+        ):
+            return
+
+        chat_id = chat.get("id")
+        chats = self.chats.get("chats", [])
+        old_index = next(
+            (index for index, item in enumerate(chats) if item.get("id") == chat_id),
+            0
+        )
+        self.chats["chats"] = [
+            item for item in chats if item.get("id") != chat_id
+        ]
+        self.notify_memory_handler("delete", chat_id)
+
+        remaining = self.chats.get("chats", [])
+        if remaining:
+            new_index = min(old_index, len(remaining) - 1)
+            self.current_chat_id = remaining[new_index].get("id")
+            self.empty_history.place_forget()
+        else:
+            self.current_chat_id = None
+            self.empty_history.place(x=20, y=250)
+
+        self.refresh_chat_list_titles()
+        self.render_current_chat()
+        self.save_chats()
+        self.header_status.configure(text="Chat deleted")
+
+    def clear_all_chats(self):
+
+        if not self.chats.get("chats"):
+            return
+        if not messagebox.askyesno(
+            "Clear all chats",
+            "Delete every chat and all conversation memory?",
+            parent=self.root
+        ):
+            return
+
+        self.chats = {"chats": []}
+        self.current_chat_id = None
+        self.thinking_traces.clear()
+        self.latest_trace_id = None
+        self.notify_memory_handler("clear_all")
+        self.refresh_chat_list_titles()
+        self.render_current_chat()
+        self.empty_history.place(x=20, y=250)
+        self.save_chats()
+        self.header_status.configure(text="All chats cleared")
 
     def insert_chat_message(self, sender, text):
 
@@ -1675,7 +1845,10 @@ class CanriGraphics:
         self.root.mainloop()
 
 
-def start_graphics(message_handler=None):
+def start_graphics(message_handler=None, memory_handler=None):
 
-    app = CanriGraphics(message_handler=message_handler)
+    app = CanriGraphics(
+        message_handler=message_handler,
+        memory_handler=memory_handler
+    )
     app.run()

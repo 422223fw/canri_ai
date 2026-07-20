@@ -421,6 +421,8 @@ class LearningBrain:
         failure_patterns = []
 
         for brain_name, result in results.items():
+            if isinstance(result, dict) and result.get("internal_only"):
+                continue
             rating = self.local_reliability_score(brain_name, result, report)
             eligibility = self.learning_eligibility(
                 brain_name,

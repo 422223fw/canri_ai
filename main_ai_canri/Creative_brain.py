@@ -968,7 +968,7 @@ class EvolutionaryTextComposer:
     INTERNAL_BRAINS = {
         "Manager_brain", "Planner_brain", "Quality_Control_brain",
         "Memory_brain", "Learning_brain", "Collaboration_brain",
-        "Reasoning_brain", "Fact_Check_brain"
+        "Reasoning_brain", "Fact_Check_brain", "Nervous_system_brain"
     }
     INTERNAL_MARKERS = {
         "goal:", "core idea:", "novel twist:", "constraint:",

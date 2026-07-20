@@ -348,6 +348,38 @@ class QualityControlBrain:
                 return text
         return ""
 
+    def semantic_explicit_code_check(self, requirement_text, code):
+
+        requested = str(requirement_text or "").lower()
+        lowered = str(code or "").lower()
+
+        repeats_for_names = (
+            "name" in requested
+            and "exit" in requested
+            and any(marker in requested for marker in ["keep asking", "until", "repeat", "loop"])
+        )
+        if repeats_for_names:
+            passed = all(marker in lowered for marker in ["while", "input(", "exit", "break"])
+            return passed, "semantic:name input loop exits with break"
+
+        asks_for_name = "name" in requested and any(
+            marker in requested for marker in ["ask for", "asks for", "enter your name", "user's name"]
+        )
+        if asks_for_name:
+            passed = "input(" in lowered and re.search(r"\bname\b", lowered) is not None
+            return passed, "semantic:name is read from input"
+
+        greets_name = "hello" in requested and "name" in requested and any(
+            marker in requested for marker in ["print", "prints", "display", "show"]
+        )
+        if greets_name:
+            passed = all(marker in lowered for marker in ["print(", "hello"]) and bool(
+                re.search(r"\bname\b", lowered)
+            )
+            return passed, "semantic:personalized greeting is printed"
+
+        return None
+
     def atomic_requirement_check(self, requirement, output, results, requirements):
 
         requirement = requirement if isinstance(requirement, dict) else {"text": str(requirement)}
@@ -430,6 +462,13 @@ class QualityControlBrain:
             return True, "covered by prohibition-specific checks"
 
         if kind == "explicit_constraint" and requirements.get("is_code_generation"):
+            semantic_check = self.semantic_explicit_code_check(
+                requirement.get("text", ""),
+                code,
+            )
+            if semantic_check is not None:
+                return semantic_check
+
             ignored = {
                 "program", "must", "include", "support", "user", "users", "with",
                 "from", "into", "only", "output", "final", "full", "working",
@@ -447,7 +486,7 @@ class QualityControlBrain:
             lowered_code = code.lower()
             found = [term for term in unique_terms if term in lowered_code]
             threshold = max(1, min(3, (len(unique_terms) + 2) // 3))
-            return len(found) >= threshold, f"matched terms: {', '.join(found)}"
+            return len(found) >= threshold, f"lexical evidence: {', '.join(found)}"
 
         return True, "covered by specialist and domain checks"
 
@@ -464,10 +503,11 @@ class QualityControlBrain:
             if passed:
                 continue
             target = "Code_brain" if requirements.get("is_code_request") else "Manager_brain"
+            severity = "medium" if str(evidence).startswith("lexical evidence:") else "high"
             self.add_issue(
                 issues,
                 target,
-                "high",
+                severity,
                 f"Request requirement failed: {requirement.get('text', requirement.get('id', 'unknown'))}",
                 "Implement this exact requirement and preserve every requirement that already passed.",
                 evidence
@@ -555,6 +595,10 @@ class QualityControlBrain:
     def detect_expected_program_kind(self, lowered):
 
         checks = [
+            ("name_greeter", [
+                "asks for the user's name", "ask for the user's name",
+                "asks for names", "hello, <name>", "hello <name>",
+            ]),
             ("expense_tracker", ["expense tracker", "expenses", "amount spent", "total amount", "search expenses", "category"]),
             ("calendar_app", ["calendar", "appointment", "appointments", "event planner", "schedule event"]),
             ("contact_book", ["contact book", "contacts", "phone book", "address book"]),
@@ -590,6 +634,11 @@ class QualityControlBrain:
         ]
 
         kind_checks = {
+            "name_greeter": [
+                ("prompt_for_name", ["name"]),
+                ("personalized_greeting", ["hello"]),
+                ("repeat_until_exit", ["exit", "keep asking", "until the user types exit"]),
+            ],
             "calendar_app": [
                 ("calendar_events", ["calendar", "appointment", "appointments", "event", "events by date", "schedule event"]),
             ],
@@ -943,6 +992,15 @@ class QualityControlBrain:
                 and "isinstance(" in lowered
                 and ".get(" in lowered
             )
+
+        if feature == "prompt_for_name":
+            return "input(" in lowered and re.search(r"\bname\b", lowered) is not None
+
+        if feature == "personalized_greeting":
+            return "print(" in lowered and "hello" in lowered and re.search(r"\bname\b", lowered) is not None
+
+        if feature == "repeat_until_exit":
+            return all(marker in lowered for marker in ["while", "input(", "exit", "break"])
 
         if feature == "calendar_events":
             return "calendar" in lowered and "date" in lowered and "time" in lowered and "events" in lowered
