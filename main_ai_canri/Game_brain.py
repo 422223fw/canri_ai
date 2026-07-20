@@ -12,6 +12,8 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
+from Brain_storage import atomic_write_json
+
 
 DATA_DIR = Path(__file__).parent / "data"
 TYPES_FILE = DATA_DIR / "Game_types.json"
@@ -57,11 +59,7 @@ class GameBrain:
 
     def save_statistics(self):
 
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-        with STATS_FILE.open("w", encoding="utf-8") as file:
-            json.dump(self.statistics, file, ensure_ascii=False, indent=2)
-            file.write("\n")
+        atomic_write_json(STATS_FILE, self.statistics)
 
     # ---------- input ----------
 

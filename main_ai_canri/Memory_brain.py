@@ -15,6 +15,8 @@ from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
+from Brain_storage import atomic_write_json, load_json_resilient
+
 
 DATA_DIR = Path(__file__).parent / "data"
 MEMORY_FILE = DATA_DIR / "Memory_database.json"
@@ -72,10 +74,8 @@ class MemoryBrain:
         if not source_file.exists():
             return
 
-        try:
-            with source_file.open("r", encoding="utf-8") as file:
-                loaded = json.load(file)
-        except (OSError, json.JSONDecodeError):
+        loaded = load_json_resilient(source_file, None)
+        if loaded is None:
             return
 
         if isinstance(loaded, list):
@@ -100,37 +100,15 @@ class MemoryBrain:
         if not MEMORY_STATS_FILE.exists():
             return
 
-        try:
-            with MEMORY_STATS_FILE.open("r", encoding="utf-8") as file:
-                self.statistics = json.load(file)
-        except (OSError, json.JSONDecodeError):
-            self.statistics = {}
+        self.statistics = load_json_resilient(MEMORY_STATS_FILE, {})
 
     def save_memory(self):
 
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-        with MEMORY_FILE.open("w", encoding="utf-8") as file:
-            json.dump(
-                self.database,
-                file,
-                indent=2,
-                ensure_ascii=False
-            )
-            file.write("\n")
+        atomic_write_json(MEMORY_FILE, self.database)
 
     def save_statistics(self):
 
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-        with MEMORY_STATS_FILE.open("w", encoding="utf-8") as file:
-            json.dump(
-                self.statistics,
-                file,
-                indent=2,
-                ensure_ascii=False
-            )
-            file.write("\n")
+        atomic_write_json(MEMORY_STATS_FILE, self.statistics)
 
     # ---------- extraction ----------
 

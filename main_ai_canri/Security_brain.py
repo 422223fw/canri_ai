@@ -8,6 +8,8 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
+from Brain_storage import atomic_write_json, load_json_resilient
+
 
 DATA_DIR = Path(__file__).parent / "data"
 STATS_FILE = DATA_DIR / "Security_statistics.json"
@@ -200,33 +202,11 @@ class SecurityBrain:
         if not path.exists():
             return default
 
-        try:
-            with path.open(
-                "r",
-                encoding="utf-8"
-            ) as file:
-                return json.load(file)
-        except (OSError, json.JSONDecodeError):
-            return default
+        return load_json_resilient(path, default)
 
     def save_statistics(self):
 
-        DATA_DIR.mkdir(
-            parents=True,
-            exist_ok=True
-        )
-
-        with STATS_FILE.open(
-            "w",
-            encoding="utf-8"
-        ) as file:
-            json.dump(
-                self.statistics,
-                file,
-                ensure_ascii=False,
-                indent=2
-            )
-            file.write("\n")
+        atomic_write_json(STATS_FILE, self.statistics)
 
     def extract_text(
         self,

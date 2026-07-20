@@ -32,6 +32,7 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
+from Brain_storage import atomic_write_json, load_json_resilient
 from Scanner_knowledge import scanner_evidence
 
 
@@ -91,12 +92,7 @@ class ScienceBrain:
             print(f"[Science_brain] WARNING: {path} not found, using default")
             return default
 
-        try:
-            with path.open("r", encoding="utf-8") as f:
-                return json.load(f)
-        except (json.JSONDecodeError, OSError) as e:
-            print(f"[Science_brain] ERROR loading {path}: {e}")
-            return default
+        return load_json_resilient(path, default)
 
     def _load_articles(self):
         data = self._load_json(ARTICLES_PATH, [])
@@ -107,12 +103,7 @@ class ScienceBrain:
         return data if isinstance(data, dict) else {}
 
     def _save_statistics(self):
-        try:
-            DATA_DIR.mkdir(parents=True, exist_ok=True)
-            with STATISTICS_PATH.open("w", encoding="utf-8") as f:
-                json.dump(self.statistics, f, ensure_ascii=False, indent=4)
-        except OSError as e:
-            print(f"[Science_brain] ERROR saving statistics: {e}")
+        atomic_write_json(STATISTICS_PATH, self.statistics, indent=4)
 
     # ---------- ניתוח ה-report ----------
 

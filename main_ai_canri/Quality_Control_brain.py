@@ -13,6 +13,8 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
+from Brain_storage import atomic_write_json
+
 
 DATA_DIR = Path(__file__).parent / "data"
 STATS_FILE = DATA_DIR / "Quality_control_statistics.json"
@@ -43,10 +45,7 @@ class QualityControlBrain:
         stats["last_used_utc"] = datetime.now(timezone.utc).isoformat()
         self.statistics["Quality_Control_brain"] = stats
 
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
-        with STATS_FILE.open("w", encoding="utf-8") as file:
-            json.dump(self.statistics, file, ensure_ascii=False, indent=2)
-            file.write("\n")
+        atomic_write_json(STATS_FILE, self.statistics)
 
     # ---------- input ----------
 
@@ -338,12 +337,11 @@ class QualityControlBrain:
             preferred.extend(["Research_brain", "Fact_Check_brain"])
         preferred.append("Response_brain")
 
-        parts = []
         for brain_name in preferred:
             text = self.text_from_result(results.get(brain_name, {}))
             if text:
-                parts.append(text)
-        return "\n".join(parts)
+                return text
+        return ""
 
     def atomic_requirement_check(self, requirement, output, results, requirements):
 
@@ -469,7 +467,8 @@ class QualityControlBrain:
                 )
 
         if requirements.get("is_story_request"):
-            lowered_output = output.lower()
+            story_output = self.text_from_result(results.get("Story_brain", {}))
+            lowered_output = (story_output or output).lower()
             ignored_names = {
                 "write", "create", "continue", "story", "only", "canri"
             }
@@ -1155,35 +1154,32 @@ class QualityControlBrain:
         if not isinstance(result, dict):
             return str(result)
 
-        parts = []
         project_files = self.project_files_from_result(result)
         if project_files:
-            parts.append(self.code_text_from_result(result))
+            return self.code_text_from_result(result)
         for key in [
             "display_text",
-            "answer",
             "final_output",
             "story",
-            "draft",
-            "summary",
+            "answer",
             "generated_code",
+            "best_answer",
             "result",
-            "best_answer"
+            "summary",
+            "draft"
         ]:
-            if key == "generated_code" and project_files:
-                continue
             value = result.get(key)
             if value:
-                parts.append(str(value))
+                return str(value)
 
         creative_help = result.get("creative_help") or result.get("creative_fallback")
         if isinstance(creative_help, dict):
             for key in ["answer", "final_output", "story", "generated_code", "concept", "title"]:
                 value = creative_help.get(key)
                 if value:
-                    parts.append(str(value))
+                    return str(value)
 
-        return "\n".join(parts)
+        return ""
 
     def looks_like_internal_report(self, text):
 
@@ -1334,10 +1330,7 @@ class QualityControlBrain:
             if not isinstance(result, dict):
                 continue
 
-            text = " ".join(
-                str(result.get(key, ""))
-                for key in ["answer", "final_output", "story", "draft", "summary"]
-            ).lower()
+            text = self.text_from_result(result).lower()
 
             if text and sum(1 for marker in bad_markers if marker in text) >= 3:
                 target = brain_name

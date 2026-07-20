@@ -14,6 +14,10 @@ import re
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
+
+from Brain_runtime import brain_runtime
+from Brain_storage import load_json_resilient
 
 try:
     from Data_context import (
@@ -88,20 +92,15 @@ class ManagerBrain:
         self._request_deadline = None
         self._retry_counts = {}
         self._active_brain_stack = []
+        self._runtime_events = []
+        self._request_id = None
+        self.registry_health = {}
         self.company_products = self.load_json(COMPANY_PRODUCTS_FILE, {})
 
         print("Manager Brain Loaded")
 
     def load_json(self, path, default):
-
-        if not path.exists():
-            return default
-
-        try:
-            with path.open("r", encoding="utf-8") as file:
-                return json.load(file)
-        except (OSError, json.JSONDecodeError):
-            return default
+        return load_json_resilient(path, default=default)
 
     # ---------- registration ----------
 
@@ -111,6 +110,10 @@ class ManagerBrain:
             return
 
         self.brains[name] = brain_object
+        self.registry_health[name] = brain_runtime.validate_registration(
+            name,
+            brain_object
+        )
 
     # ---------- report extraction ----------
 
@@ -683,7 +686,10 @@ class ManagerBrain:
         for item in report.get("central_domains", []):
             domain = item.get("domain") if isinstance(item, dict) else item
             domain = str(domain or "").lower().strip()
-            if domain and domain not in {"unknown", "general"}:
+            # Secondary dictionary associations are evidence, not an explicit
+            # user request. Domain rules below add them only when the prompt
+            # itself contains a matching term.
+            if domain == topic and domain not in {"unknown", "general"}:
                 domains.append(domain)
 
         domain_rules = [
@@ -873,6 +879,13 @@ class ManagerBrain:
 
         memory_report = memory_report or {}
         primary = self.primary_domain(report, memory_report)
+        contract = report.get("request_contract", {})
+        conversation = memory_report.get("conversation", {}) if isinstance(memory_report, dict) else {}
+        continuation_contract = contract.get("continuation", {}) if isinstance(contract, dict) else {}
+        continuation_requested = bool(
+            (isinstance(continuation_contract, dict) and continuation_contract.get("requested"))
+            or (isinstance(conversation, dict) and conversation.get("continuation_request"))
+        )
         domains = self.focus_domains(
             self.classify_request(report, memory_report),
             report,
@@ -931,10 +944,7 @@ class ManagerBrain:
             ]) > 1,
             "action": action,
             "intent": intent,
-            "continuation": bool(
-                isinstance(contract, dict)
-                and contract.get("continuation", {}).get("requested")
-            ),
+            "continuation": continuation_requested,
             "reason": f"intent={intent}; primary_domain={primary}; specialist={primary_brain}"
         }
 
@@ -993,21 +1003,40 @@ class ManagerBrain:
         memory_report = memory_report or {}
         domains = self.classify_request(report, memory_report)
         domains = self.focus_domains(domains, report, memory_report)
+        primary = self.primary_domain(report, memory_report)
+        contract = report.get("request_contract", {})
+        conversation = memory_report.get("conversation", {}) if isinstance(memory_report, dict) else {}
+        continuation_contract = contract.get("continuation", {}) if isinstance(contract, dict) else {}
+        continuation_requested = bool(
+            (isinstance(continuation_contract, dict) and continuation_contract.get("requested"))
+            or (isinstance(conversation, dict) and conversation.get("continuation_request"))
+        )
+        story_continuation = primary == "story" and continuation_requested
+        central_domains = [
+            domain for domain in domains
+            if domain not in {"memory_context", "creative"}
+        ]
+        needs_collaboration = len(central_domains) > 1
+        needs_planner = (
+            primary in {"code", "game", "planning"}
+            or needs_collaboration
+        )
+        needs_fact_check = primary in {
+            "knowledge", "science", "geography", "technology", "history"
+        }
 
         phases = [
             {
                 "phase": "safety_and_context",
-                "brains": [
-                    "Memory_brain",
-                    "Emotion_brain",
-                    "Security_brain"
-                ]
+                "brains": (
+                    ([] if memory_report else ["Memory_brain"])
+                    + (["Emotion_brain"] if primary in {"emotion", "story"} and not story_continuation else [])
+                    + ["Security_brain"]
+                )
             },
             {
                 "phase": "core_reasoning",
-                "brains": [
-                    "Planner_brain"
-                ]
+                "brains": ["Planner_brain"] if needs_planner else []
             },
             {
                 "phase": "domain_experts",
@@ -1015,17 +1044,15 @@ class ManagerBrain:
             },
             {
                 "phase": "brain_collaboration",
-                "brains": [
-                    "Collaboration_brain"
-                ]
+                "brains": ["Collaboration_brain"] if needs_collaboration else []
             },
             {
                 "phase": "verification",
-                "brains": [
-                    "Fact_Check_brain",
-                    "Quality_Control_brain",
-                    "Learning_brain"
-                ]
+                "brains": (
+                    (["Fact_Check_brain"] if needs_fact_check else [])
+                    + ["Quality_Control_brain"]
+                    + ([] if story_continuation else ["Learning_brain"])
+                )
             },
             {
                 "phase": "response",
@@ -1119,19 +1146,29 @@ class ManagerBrain:
                 "Creative_brain"
             ])
 
-        if "creative" in domains:
+        if "creative" in domains and not story_continuation:
             experts.extend([
                 "Creative_brain",
                 "Planner_brain"
             ])
 
         if "story" in domains:
-            experts.extend([
-                "Creative_brain",
-                "Story_brain",
-                "Character_brain",
-                "World_brain"
-            ])
+            story_text = " ".join(
+                str(report.get(key, ""))
+                for key in ["original_text", "corrected_text", "text", "goal", "prompt"]
+                if report.get(key)
+            ).lower()
+            if not story_continuation:
+                experts.append("Creative_brain")
+            if any(
+                marker in story_text
+                for marker in [
+                    "character profile", "character sheet", "worldbuilding",
+                    "world building", "novel", "chapter outline"
+                ]
+            ):
+                experts.extend(["Character_brain", "World_brain"])
+            experts.append("Story_brain")
 
         if "game" in domains:
             experts.extend([
@@ -1141,10 +1178,7 @@ class ManagerBrain:
                 "Planner_brain"
             ])
 
-        central_domains = [
-            domain for domain in domains if domain != "memory_context"
-        ]
-        if len(central_domains) > 1:
+        if needs_collaboration:
             core.extend(["Reasoning_brain", "Planner_brain"])
             if "code" in central_domains and any(
                 domain in central_domains
@@ -1456,65 +1490,95 @@ class ManagerBrain:
             )
 
             try:
-                started = time.perf_counter()
                 self._active_brain_stack.append(brain_name)
-                result = brain.process(context)
-                elapsed = time.perf_counter() - started
-                result = self.attach_creative_help_if_needed(
-                    brain_name,
-                    result,
-                    context,
-                    phase
+                remaining_seconds = (
+                    max(self._request_deadline - time.perf_counter(), 0.05)
+                    if self._request_deadline
+                    else None
                 )
-                if isinstance(result, dict):
-                    scanner_view = context.get("scanner_knowledge", {})
-                    result["scanner_context"] = {
-                        "received": bool(scanner_view.get("available")),
-                        "required": bool(scanner_view.get("required_for_answer")),
-                        "article_ids": [
-                            item.get("article_id")
-                            for item in scanner_view.get("matches", [])
-                            if isinstance(item, dict) and item.get("article_id")
-                        ],
-                        "sources": list(dict.fromkeys(
-                            source.get("source_id")
-                            for item in scanner_view.get("matches", [])
-                            if isinstance(item, dict)
-                            for source in item.get("sources", [])
-                            if isinstance(source, dict) and source.get("source_id")
-                        ))
-                    }
-                    result["performance"] = {
-                        "elapsed_seconds": round(elapsed, 4),
-                        "soft_timeout_seconds": DEFAULT_BRAIN_SOFT_TIMEOUT_SECONDS,
-                        "slow": elapsed > DEFAULT_BRAIN_SOFT_TIMEOUT_SECONDS
-                    }
+                timeout_seconds = brain_runtime.timeout_for(
+                    brain_name,
+                    remaining_seconds
+                )
+                execution = brain_runtime.invoke(
+                    brain_name,
+                    brain,
+                    context,
+                    phase=phase,
+                    timeout_seconds=timeout_seconds,
+                    request_id=self._request_id,
+                    attempt=self._retry_counts.get(brain_name, 0) + 1
+                )
+                self._runtime_events.append(execution.telemetry)
+                result = execution.result
+
+                # Creative assistance is useful for weak drafts, not for runtime
+                # failures. Applying it to an exception was a source of unrelated
+                # story output in code, math, and factual requests.
+                if execution.ok:
+                    result = self.attach_creative_help_if_needed(
+                        brain_name,
+                        result,
+                        context,
+                        phase
+                    )
+
+                scanner_view = context.get("scanner_knowledge", {})
+                result["scanner_context"] = {
+                    "received": bool(scanner_view.get("available")),
+                    "required": bool(scanner_view.get("required_for_answer")),
+                    "article_ids": [
+                        item.get("article_id")
+                        for item in scanner_view.get("matches", [])
+                        if isinstance(item, dict) and item.get("article_id")
+                    ],
+                    "sources": list(dict.fromkeys(
+                        source.get("source_id")
+                        for item in scanner_view.get("matches", [])
+                        if isinstance(item, dict)
+                        for source in item.get("sources", [])
+                        if isinstance(source, dict) and source.get("source_id")
+                    ))
+                }
+                result["performance"] = {
+                    "elapsed_seconds": execution.telemetry.get("elapsed_seconds", 0),
+                    "queue_seconds": execution.telemetry.get("queue_seconds", 0),
+                    "timeout_seconds": execution.telemetry.get("timeout_seconds"),
+                    "slow": bool(execution.telemetry.get("slow")),
+                    "status": execution.telemetry.get("status"),
+                    "runtime_contract": execution.telemetry.get("contract_version")
+                }
                 results[brain_name] = result
                 self.emit_progress(
                     data,
-                    "brain_done",
-                    f"Finished {brain_name}",
+                    "brain_done" if execution.ok else "brain_error",
+                    (
+                        f"Finished {brain_name}"
+                        if execution.ok
+                        else f"{brain_name} could not complete its work"
+                    ),
                     brain_name,
                     phase,
                     result
                 )
 
-            except Exception as error:
+            except Exception:
                 error_result = {
-                    "error": str(error),
-                    "phase": phase
+                    "brain": brain_name,
+                    "error": "manager_postprocessing_failed",
+                    "error_code": "manager_postprocessing_failed",
+                    "user_safe_error": (
+                        "Canri could not validate this brain result safely."
+                    ),
+                    "phase": phase,
+                    "recoverable": True,
+                    "confidence": 0
                 }
-                error_result = self.attach_creative_help_if_needed(
-                    brain_name,
-                    error_result,
-                    context,
-                    phase
-                )
                 results[brain_name] = error_result
                 self.emit_progress(
                     data,
                     "brain_error",
-                    f"{brain_name} failed",
+                    f"{brain_name} result validation failed",
                     brain_name,
                     phase,
                     error_result
@@ -2087,9 +2151,24 @@ class ManagerBrain:
     def process(self, data):
 
         self._request_started = time.perf_counter()
-        self._request_deadline = self._request_started + REQUEST_TIME_BUDGET_SECONDS
+        requested_deadline = (
+            data.get("_request_deadline_monotonic")
+            if isinstance(data, dict)
+            else None
+        )
+        local_deadline = self._request_started + REQUEST_TIME_BUDGET_SECONDS
+        if isinstance(requested_deadline, (int, float)):
+            self._request_deadline = min(local_deadline, float(requested_deadline))
+        else:
+            self._request_deadline = local_deadline
         self._retry_counts = {}
         self._active_brain_stack = []
+        self._runtime_events = []
+        self._request_id = (
+            str(data.get("_request_id"))
+            if isinstance(data, dict) and data.get("_request_id")
+            else "request_" + uuid4().hex
+        )
 
         report = self.get_understanding_report(data)
         memory_report = self.get_memory_report(data)
@@ -2119,6 +2198,7 @@ class ManagerBrain:
 
         if isinstance(data, dict):
             data = dict(data)
+            data["_request_id"] = self._request_id
             data["knowledge"] = shared_knowledge
             data["dictionary"] = shared_dictionary
             data["data_context"] = shared_data_context
@@ -2135,6 +2215,7 @@ class ManagerBrain:
             memory_report
         )
 
+        runtime_events = brain_runtime.events_for_request(self._request_id)
         manager_report = {
             "brain": "Manager_brain",
             "created_utc": datetime.now(timezone.utc).isoformat(),
@@ -2231,7 +2312,20 @@ class ManagerBrain:
                 "budget_seconds": REQUEST_TIME_BUDGET_SECONDS,
                 "within_budget": time.perf_counter() <= self._request_deadline,
                 "retry_counts": dict(self._retry_counts),
-                "loop_prevention": True
+                "loop_prevention": True,
+                "runtime": brain_runtime.summarize_events(runtime_events)
+            },
+            "runtime": {
+                "contract_version": brain_runtime.CONTRACT_VERSION,
+                "request_id": self._request_id,
+                "summary": brain_runtime.summarize_events(runtime_events),
+                "events": runtime_events,
+                "registry": dict(self.registry_health),
+                "all_registered_brains_valid": bool(self.registry_health) and all(
+                    item.get("valid")
+                    for item in self.registry_health.values()
+                    if isinstance(item, dict)
+                )
             },
             "suggested_next_brains": self.collect_suggested_next_brains(results),
             "suggested_follow_up_tasks": self.collect_follow_up_tasks(results),
@@ -2284,6 +2378,8 @@ class ManagerBrain:
         })
 
         self.execution_history = self.execution_history[-200:]
+
+        brain_runtime.flush_statistics()
 
         return manager_report
 

@@ -174,6 +174,12 @@ def test_understanding_preserves_original_file_names():
     assert_true("expense.json" not in files, "A spelling rewrite changed an exact filename requirement.")
 
 
+def test_spelling_preserves_valid_program_terms_and_file_names():
+    prompt = "Build a terminal expense tracker and save all expenses to expenses.json."
+    result = SpellingBrain().process(prompt)
+    assert_true(result.get("corrected_text") == prompt, "Spelling changed valid program terms or an exact filename.")
+
+
 def test_standard_library_does_not_mean_book_library():
     code = CodeBrain()
     quiz_prompt = "Build a Python terminal quiz game. Use only the standard library."
@@ -1167,6 +1173,123 @@ def test_story_uses_dynamic_request_graph_before_templates():
     assert_true("open a hidden door" in output, "Dynamic story lost the requested decision.")
 
 
+def test_story_preserves_named_entity_without_named_keyword():
+    prompt = "Write a short story about Maya finding a glowing key in a quiet park. Only output the story."
+    spelling = SpellingBrain()
+    spelling_result = spelling.process(prompt)
+    corrected = spelling_result.get("corrected_text", "")
+    assert_true("Maya" in corrected, "Spelling rewrote a valid proper name.")
+
+    understanding = UnderstandingBrain()
+    report = understanding.process({"original_text": corrected})
+    story = StoryBrain()
+    story.update_statistics = lambda *args, **kwargs: None
+    result = story.process({
+        "original_text": corrected,
+        "understanding_report": report,
+    })
+    output = result.get("final_output", "").lower()
+    assert_true("maya" in output, "Story replaced the requested character name.")
+    assert_true("key" in output and "park" in output, "Story lost explicit object or setting details.")
+
+
+def test_quality_checks_final_story_instead_of_internal_candidates():
+    prompt = "Write a short story about Maya finding a glowing key in a quiet park."
+    understanding = UnderstandingBrain()
+    report = understanding.process({"original_text": prompt})
+    quality = QualityControlBrain()
+    quality.save_statistics = lambda *args, **kwargs: None
+    result = quality.process({
+        "original_text": prompt,
+        "understanding": report,
+        "results": {
+            "Story_brain": {"final_output": "Ari found a glowing key in a quiet park."},
+            "Creative_brain": {"final_output": "An internal candidate happened to mention Maya."},
+        },
+    })
+    issue_text = " ".join(str(item.get("problem", "")) for item in result.get("issues", []))
+    assert_true("Maya" in issue_text, "Quality control let an internal candidate mask a missing final-story detail.")
+    assert_true(result.get("needs_retry") is True, "Quality control did not request a targeted story retry.")
+
+
+def test_quality_ignores_private_story_draft_when_final_output_is_clean():
+    prompt = "Write a short story about Maya finding a key. Only output the story."
+    report = UnderstandingBrain().process({"original_text": prompt})
+    quality = QualityControlBrain()
+    quality.save_statistics = lambda *args, **kwargs: None
+    result = quality.process({
+        "original_text": prompt,
+        "understanding": report,
+        "results": {
+            "Story_brain": {
+                "final_output": "Maya found a key beneath a tree and carefully opened the hidden door.",
+                "draft": "Goal: story. Core idea: key. Novel twist: door. Validation: internal only.",
+            }
+        },
+    })
+    leakage_issues = [
+        item for item in result.get("issues", [])
+        if "internal" in str(item.get("problem", "")).lower()
+    ]
+    assert_true(not leakage_issues, "Quality control audited a private draft instead of the clean final story.")
+
+
+def test_story_continuation_uses_previous_turn_without_rewriting_it():
+    current = "Continue the same story: she opens the door that the key unlocks. Only output the continuation."
+    report = UnderstandingBrain().process({"original_text": current})
+    story = StoryBrain()
+    story.update_statistics = lambda *args, **kwargs: None
+    story.run_creative = lambda data: {"confidence": 80, "best_idea": {}}
+    result = story.process({
+        "original_text": current,
+        "understanding_report": report,
+        "memory": {
+            "conversation": {
+                "continuation_request": True,
+                "continuation_source": {
+                    "user": "Write a story about Maya finding a glowing key in a quiet park.",
+                    "canri": "Maya found the key and discovered a hidden door beneath an old tree."
+                }
+            }
+        }
+    })
+    output = result.get("final_output", "").lower()
+    assert_true("maya" in output and "key" in output and "opened the door" in output, "Continuation lost prior story context.")
+    assert_true("went for a quiet walk" not in output, "Continuation rewrote the opening instead of advancing the story.")
+
+
+def test_simple_story_plan_avoids_unnecessary_expensive_brains():
+    report = UnderstandingBrain().process({
+        "original_text": "Write a short story about Maya finding a key in a park."
+    })
+    manager = ManagerBrain()
+    plan = manager.flatten_plan(manager.build_plan(report, {"session_id": "story_test"}))
+    assert_true("Story_brain" in plan and "Creative_brain" in plan, "Simple story lost its required creative specialists.")
+    for brain_name in ["Collaboration_brain", "Fact_Check_brain", "Character_brain", "World_brain"]:
+        assert_true(brain_name not in plan, f"Simple story unnecessarily routes through {brain_name}.")
+
+
+def test_story_continuation_plan_reuses_previous_creative_work():
+    report = UnderstandingBrain().process({
+        "original_text": "Continue the same story: Maya opens the door."
+    })
+    memory = {
+        "session_id": "continuation_plan",
+        "conversation": {
+            "continuation_request": True,
+            "continuation_source": {
+                "user": "Write a story about Maya and a key.",
+                "canri": "Maya found the key beside a hidden door."
+            }
+        }
+    }
+    manager = ManagerBrain()
+    plan = manager.flatten_plan(manager.build_plan(report, memory))
+    assert_true("Story_brain" in plan and "Response_brain" in plan, "Continuation lost its required output path.")
+    for brain_name in ["Creative_brain", "Emotion_brain", "Learning_brain", "Collaboration_brain"]:
+        assert_true(brain_name not in plan, f"Continuation unnecessarily reruns {brain_name}.")
+
+
 def advanced_project_prompt():
     return (
         "Build an advanced professional Python multi-file REST API with a SQLite database, "
@@ -1311,6 +1434,7 @@ def main():
         test_science_prefers_the_exact_user_topic,
         test_quality_treats_code_analysis_as_explanation,
         test_understanding_preserves_original_file_names,
+        test_spelling_preserves_valid_program_terms_and_file_names,
         test_standard_library_does_not_mean_book_library,
         test_atoms_route_to_science,
         test_learning_does_not_use_creativity_for_missing_metadata,
@@ -1355,6 +1479,12 @@ def main():
         test_creative_builds_dictionary_guided_lexical_candidates,
         test_reasoning_and_creative_evolve_source_backed_answers,
         test_story_uses_dynamic_request_graph_before_templates,
+        test_story_preserves_named_entity_without_named_keyword,
+        test_quality_checks_final_story_instead_of_internal_candidates,
+        test_quality_ignores_private_story_draft_when_final_output_is_clean,
+        test_story_continuation_uses_previous_turn_without_rewriting_it,
+        test_simple_story_plan_avoids_unnecessary_expensive_brains,
+        test_story_continuation_plan_reuses_previous_creative_work,
         test_advanced_code_project_is_complete_and_executable,
         test_advanced_project_response_is_clean_multi_file_code,
         test_advanced_existing_project_files_are_never_silently_overwritten,

@@ -10,6 +10,8 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
+from Brain_storage import atomic_write_json
+
 
 DATA_DIR = Path(__file__).parent / "data"
 TEMPLATES_FILE = DATA_DIR / "Character_templates.json"
@@ -35,9 +37,7 @@ class CharacterBrain:
             return default
 
     def save_statistics(self):
-        with STATS_FILE.open("w", encoding="utf-8") as file:
-            json.dump(self.statistics, file, ensure_ascii=False, indent=2)
-            file.write("\n")
+        atomic_write_json(STATS_FILE, self.statistics)
 
     def get_understanding_report(self, data):
         if isinstance(data, dict) and isinstance(data.get("understanding"), dict):
