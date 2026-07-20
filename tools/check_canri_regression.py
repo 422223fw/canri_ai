@@ -25,6 +25,7 @@ from Fact_Check_brain import FactCheckBrain  # noqa: E402
 from Math_brain import MathBrain  # noqa: E402
 from Manager_brain import ManagerBrain  # noqa: E402
 from Memory_brain import MemoryBrain  # noqa: E402
+from Nervous_system_brain import NervousSystemBrain  # noqa: E402
 from Quality_Control_brain import QualityControlBrain  # noqa: E402
 from Reasoning_brain import ReasoningBrain  # noqa: E402
 from Response_brain import ResponseBrain  # noqa: E402
@@ -182,10 +183,10 @@ def test_manager_retries_target_brain_until_quality_passes():
                 "confidence": 80,
             }
 
-    class ThirdAttemptQualityBrain:
+    class SeventhAttemptQualityBrain:
         def process(self, data):
             attempt = data.get("results", {}).get("Code_brain", {}).get("attempt", 0)
-            if attempt >= 3:
+            if attempt >= 7:
                 return {
                     "brain": "Quality_Control_brain",
                     "passed": True,
@@ -217,7 +218,7 @@ def test_manager_retries_target_brain_until_quality_passes():
     manager = ManagerBrain()
     code_brain = ImprovingCodeBrain()
     manager.register_brain("Code_brain", code_brain)
-    manager.register_brain("Quality_Control_brain", ThirdAttemptQualityBrain())
+    manager.register_brain("Quality_Control_brain", SeventhAttemptQualityBrain())
     manager._request_started = time.perf_counter()
     manager._request_deadline = None
     manager._request_id = "retry_regression"
@@ -247,8 +248,8 @@ def test_manager_retries_target_brain_until_quality_passes():
         {"available": False},
         {"available": False},
     )
-    assert_true(code_brain.attempts == 3, f"Expected three retries, got {code_brain.attempts}.")
-    assert_true(len(rounds) == 3, f"Expected three retry rounds, got {len(rounds)}.")
+    assert_true(code_brain.attempts == 7, f"Expected seven retries, got {code_brain.attempts}.")
+    assert_true(len(rounds) == 7, f"Expected seven retry rounds, got {len(rounds)}.")
     assert_true(final_quality.get("passed") is True, "Quality did not pass after improvement.")
 
 
@@ -368,7 +369,7 @@ def test_learning_does_not_use_creativity_for_missing_metadata():
     assert_true(result == [], "Missing confidence metadata should not start a creative simulation.")
 
 
-def test_response_blocks_bad_quality():
+def test_response_keeps_quality_internal_and_returns_best_candidate():
     response = ResponseBrain()
     display = response.process({
         "original_text": "Build a real runnable Python expense tracker.",
@@ -401,7 +402,114 @@ def test_response_blocks_bad_quality():
     })
 
     text = display["display_text"]
-    assert_true("did not pass Canri's quality check" in text, "Response should not present bad code as final.")
+    assert_true("did not pass Canri's quality check" not in text, "Internal quality failure leaked to the user.")
+    assert_true("def main" in text, "Response did not return the strongest available candidate.")
+
+
+def test_simple_name_greeter_is_complete_and_passes_quality():
+    prompt = (
+        "Build a real runnable Python program that asks for the user's name and prints: "
+        "Hello, <name>! Keep asking for names until the user types exit. "
+        "Use only the Python standard library. Only output the final working Python code."
+    )
+    understanding = UnderstandingBrain().process({"original_text": prompt})
+    result = CodeBrain().process({
+        "original_text": prompt,
+        "understanding": understanding,
+    })
+    code = result.get("generated_code", "")
+    assert_true(result.get("program_kind") == "name_greeter", "Simple greeter used the wrong program kind.")
+    compile(code, "generated_name_greeter.py", "exec")
+    for marker in ("while True", "input(", "name.lower()", '== "exit"', "break", 'Hello, {name}!'):
+        assert_true(marker in code, f"Simple greeter is missing {marker}.")
+
+    quality = QualityControlBrain().process({
+        "original_text": prompt,
+        "understanding": understanding,
+        "results": {"Code_brain": result},
+    })
+    assert_true(quality.get("passed") is True, f"Simple greeter quality failed: {quality.get('issues')}")
+
+
+def test_memory_chat_crud_and_deep_turn_capacity():
+    memory = MemoryBrain()
+    memory.database = {
+        "episodes": [],
+        "conversations": {},
+        "semantic_memory": {"topics": {}, "intents": {}, "keywords": {}, "tasks": {}},
+        "metadata": {"version": "test"},
+    }
+    memory.save_memory = lambda: None
+    assert_true(memory.create_session("chat_crud", "Original"), "Chat session was not created.")
+    assert_true(memory.rename_session("chat_crud", "Renamed"), "Chat session was not renamed.")
+    assert_true(
+        memory.database["conversations"]["chat_crud"]["title"] == "Renamed",
+        "Renamed chat title was not stored.",
+    )
+    memory.database["episodes"].append({
+        "id": "episode_crud",
+        "session_id": "chat_crud",
+        "created_utc": "2026-01-01T00:00:00+00:00",
+        "main_topic": "code",
+        "intent": "code_generation",
+        "keywords": ["code"],
+        "possible_tasks": [],
+    })
+    assert_true(memory.delete_session("chat_crud"), "Chat session was not deleted.")
+    assert_true("chat_crud" not in memory.database["conversations"], "Deleted chat remained in memory.")
+    assert_true(not memory.database["episodes"], "Deleted chat episodes remained in memory.")
+    memory.store_response("chat_crud", "late request", "late response")
+    assert_true(
+        "chat_crud" not in memory.database["conversations"],
+        "A late background response recreated a deleted chat.",
+    )
+
+    memory.create_session("chat_clear", "Clear me")
+    result = memory.clear_conversation_memory()
+    assert_true(result.get("cleared") is True, "Clear-all did not report success.")
+    assert_true(not memory.database["conversations"], "Clear-all left conversation buckets.")
+
+
+def test_nervous_system_integrates_brains_without_user_output():
+    nervous = NervousSystemBrain()
+    result = nervous.process({
+        "understanding": {
+            "main_topic": "code",
+            "domains": ["code"],
+            "request_contract": {
+                "requirements": [
+                    {"id": "r1", "kind": "feature", "text": "print a greeting"}
+                ]
+            },
+        },
+        "results": {
+            "Code_brain": {
+                "brain": "Code_brain",
+                "generated_code": 'print("Hello")',
+                "confidence": 90,
+                "self_review": {"ready": True},
+            },
+            "Reasoning_brain": {
+                "brain": "Reasoning_brain",
+                "answer": "internal reasoning",
+                "confidence": 80,
+            },
+        },
+    })
+    assert_true(result.get("internal_only") is True, "Nervous system must stay internal.")
+    assert_true(result.get("best_candidate", {}).get("brain") == "Code_brain", "Wrong best candidate selected.")
+    assert_true("Code_brain" in result.get("owner_brains", []), "Code owner was not mapped.")
+
+    learning = LearningBrain()
+    analysis = learning.analyze_results(
+        {"Nervous_system_brain": result},
+        {"main_topic": "code", "intent": "code_generation"},
+    )
+    reliability = analysis[3]
+    assert_true(
+        "Nervous_system_brain" not in reliability,
+        "Learning_brain treated internal neural state as a user-facing specialist result.",
+    )
 
 
 def test_quality_catches_wrong_program_kind():
@@ -1596,6 +1704,9 @@ def main():
         test_expense_tracker_code_and_quality,
         test_library_manager_full_requirements_and_old_json_compatibility,
         test_manager_retries_target_brain_until_quality_passes,
+        test_simple_name_greeter_is_complete_and_passes_quality,
+        test_memory_chat_crud_and_deep_turn_capacity,
+        test_nervous_system_integrates_brains_without_user_output,
         test_quadratic_math,
         test_math_ignores_request_words_around_expression,
         test_science_prefers_the_exact_user_topic,
@@ -1605,7 +1716,7 @@ def main():
         test_standard_library_does_not_mean_book_library,
         test_atoms_route_to_science,
         test_learning_does_not_use_creativity_for_missing_metadata,
-        test_response_blocks_bad_quality,
+        test_response_keeps_quality_internal_and_returns_best_candidate,
         test_quality_catches_wrong_program_kind,
         test_fact_check_evidence_coverage,
         test_creative_story_returns_final_story,

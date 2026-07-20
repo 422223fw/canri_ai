@@ -58,6 +58,21 @@ def main() -> int:
     )
     require("canri" in greeting["display_text"].lower() or "help" in greeting["display_text"].lower(), "Greeting was not conversational")
 
+    greeter = ask(
+        canri_main,
+        "Build a real runnable Python program that asks for the user's name and prints "
+        "Hello, <name>! Keep asking for names until the user types exit. "
+        "Use only the Python standard library. Only output the final working Python code.",
+        "smoke_simple_greeter",
+    )
+    greeter_text = greeter["display_text"]
+    for required in ("while True", "input(", "exit", "break", "Hello, {name}!"):
+        require(required in greeter_text, f"Simple greeter is missing {required}")
+    require(
+        "did not pass Canri's quality check" not in greeter_text,
+        "Internal quality failure replaced the simple program",
+    )
+
     science = ask(
         canri_main,
         "Explain photosynthesis accurately in 3 clear sentences for a student.",

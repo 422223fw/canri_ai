@@ -45,6 +45,7 @@ from Learning_brain import brain as learning_brain
 from Fact_Check_brain import brain as fact_check_brain
 from Quality_Control_brain import brain as quality_control_brain
 from Collaboration_brain import brain as collaboration_brain
+from Nervous_system_brain import brain as nervous_system_brain
 from Planner_brain import brain as planner_brain
 from Emotion_brain import brain as emotion_brain
 
@@ -188,6 +189,11 @@ def register_all_brains():
     manager_brain.register_brain(
         "Collaboration_brain",
         collaboration_brain
+    )
+
+    manager_brain.register_brain(
+        "Nervous_system_brain",
+        nervous_system_brain
     )
 
     manager_brain.register_brain(
@@ -483,6 +489,19 @@ def process_user_message(message, attached_files=None, progress_callback=None, s
     }
 
 
+def manage_chat_memory(action, chat_id=None, title=None):
+
+    if action == "create":
+        return memory_brain.create_session(chat_id, title)
+    if action == "rename":
+        return memory_brain.rename_session(chat_id, title)
+    if action == "delete":
+        return memory_brain.delete_session(chat_id)
+    if action == "clear_all":
+        return memory_brain.clear_conversation_memory()
+    raise ValueError(f"Unknown chat memory action: {action}")
+
+
 def summarize_brain_result(result):
 
     if not isinstance(result, dict):
@@ -640,7 +659,8 @@ def main():
     print(f"Canri AI {startup_status['version']} ready")
 
     start_graphics(
-        message_handler=process_user_message
+        message_handler=process_user_message,
+        memory_handler=manage_chat_memory
     )
 
     print("Canri AI Closed")
