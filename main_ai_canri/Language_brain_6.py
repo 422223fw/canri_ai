@@ -58,6 +58,10 @@ class LanguageStatisticsEngine:
         self.statistics.setdefault("confidence_history", [])
         self.statistics.setdefault("requests", 0)
         self.statistics.setdefault("last_used_utc", None)
+        self.statistics.setdefault("detail_contracts_detected", 0)
+        self.statistics.setdefault("continuations_detected", 0)
+        self.statistics.setdefault("protected_code_fragments", 0)
+        self.statistics.setdefault("scanner_evidence_used", 0)
 
     def increase_counter(self, container, key, amount=1):
         if key:
@@ -179,6 +183,14 @@ class LanguageStatisticsEngine:
             if isinstance(frame, dict):
                 record["requested_output"] = frame.get("requested_output")
                 record["actions"] = frame.get("actions", [])
+                record["quantified_constraints"] = frame.get("quantified_constraints", [])
+                record["explicit_constraints"] = frame.get("explicit_constraints", [])
+                record["output_constraints"] = frame.get("output_constraints", [])
+                record["continuation"] = frame.get("continuation", {})
+                record["code_fragments"] = frame.get("code_fragments", [])
+
+        scanner_evidence = results.get("scanner_evidence", [])
+        record["scanner_evidence_count"] = len(scanner_evidence) if isinstance(scanner_evidence, list) else 0
 
         self.history.append(record)
         self.history = self.history[-1000:]
@@ -231,6 +243,18 @@ class LanguageStatisticsEngine:
         self.update_grammar_statistics(grammar_data)
         self.update_engine_usage(results)
         self.update_confidence_history(confidence)
+
+        analysis = results.get("analysis", {})
+        frame = analysis.get("semantic_frame", {}) if isinstance(analysis, dict) else {}
+        if isinstance(frame, dict):
+            if frame.get("detail_count", 0):
+                self.statistics["detail_contracts_detected"] += 1
+            if frame.get("continuation", {}).get("is_continuation"):
+                self.statistics["continuations_detected"] += 1
+            self.statistics["protected_code_fragments"] += len(frame.get("code_fragments", []))
+        scanner_evidence = results.get("scanner_evidence", [])
+        if isinstance(scanner_evidence, list):
+            self.statistics["scanner_evidence_used"] += len(scanner_evidence)
         self.add_history_record(text, report, results, confidence)
 
         statistics_saved = self.save_json(STATISTICS_FILE, self.statistics)

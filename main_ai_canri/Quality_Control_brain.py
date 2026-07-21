@@ -283,6 +283,14 @@ class QualityControlBrain:
             "wants_history": "history" in lowered,
             "wants_steps": "step by step" in lowered or "steps" in lowered,
             "requested_sentence_count": self.extract_requested_sentence_count(lowered),
+            "requested_question_count": self.extract_requested_item_count(
+                lowered,
+                r"(?:multiple[- ]choice\s+)?questions?",
+            ),
+            "requested_choice_count": self.extract_requested_item_count(
+                lowered,
+                r"(?:answer\s+)?(?:choices?|options?)",
+            ),
             "expected_program_kind": expected_program_kind,
             "requested_code_features": self.extract_requested_code_features(
                 lowered,
@@ -353,6 +361,66 @@ class QualityControlBrain:
         requested = str(requirement_text or "").lower()
         lowered = str(code or "").lower()
 
+        question_count = self.extract_requested_item_count(
+            requested,
+            r"(?:multiple[- ]choice\s+)?questions?",
+        )
+        if question_count is not None:
+            actual = len(self.quiz_records(code))
+            return actual == question_count, f"semantic:question count {actual}/{question_count}"
+
+        choice_count = self.extract_requested_item_count(
+            requested,
+            r"(?:answer\s+)?(?:choices?|options?)",
+        )
+        if choice_count is not None:
+            questions = self.quiz_records(code)
+            counts = [len(item.get("choices", [])) for item in questions]
+            return bool(counts) and all(count == choice_count for count in counts), f"semantic:choice counts {counts}"
+
+        if "invalid input" in requested or "ask again" in requested or "invalid numbers" in requested or "invalid units" in requested:
+            passed = self.code_feature_present("retry_invalid_input", code)
+            return passed, "semantic:invalid input is retried"
+
+        if "keep running" in requested and "exit" in requested:
+            return self.code_feature_present("repeat_until_exit", code), "semantic:loop exits on request"
+
+        if "standard library" in requested:
+            try:
+                tree = ast.parse(code)
+            except (SyntaxError, ValueError):
+                return False, "semantic:code cannot be parsed for import validation"
+            imported = set()
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    imported.update(alias.name.split(".", 1)[0] for alias in node.names)
+                elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                    imported.add(node.module.split(".", 1)[0])
+            external = imported - set(getattr(sys, "stdlib_module_names", set())) - {"__future__"}
+            return not external, f"semantic:external imports {sorted(external)}"
+
+        if "only output" in requested and "code" in requested:
+            return True, "semantic:output format is checked on Response_brain"
+
+        if "play again" in requested or "run again" in requested:
+            return self.code_feature_present("play_again", code), "semantic:repeat complete run"
+
+        score_match = re.search(r"\b(?:score\s+)?(?:of|out\s+of)\s+(\d+)\b", requested)
+        if score_match:
+            expected = int(score_match.group(1))
+            passed, evidence = self.quantified_code_constraint_passed(
+                {
+                    "target": "score_denominator",
+                    "quantity": expected,
+                    "mode": "exact",
+                },
+                code,
+            )
+            return passed, f"semantic:{evidence}"
+
+        if "celsius" in requested and "fahrenheit" in requested and "convert" in requested:
+            return self.code_feature_present("temperature_conversion", code), "semantic:both temperature formulas"
+
         repeats_for_names = (
             "name" in requested
             and "exit" in requested
@@ -394,6 +462,25 @@ class QualityControlBrain:
         if kind == "feature" and feature:
             passed = self.code_feature_present(feature, code) if requirements.get("is_code_generation") else True
             return passed, f"feature:{feature}"
+
+        if kind == "quantified_constraint" and requirements.get("is_code_generation"):
+            return self.quantified_code_constraint_passed(requirement, code)
+
+        if kind == "interaction_constraint" and requirements.get("is_code_generation"):
+            interaction_feature = {
+                "repeat_until_exit": "repeat_until_exit",
+                "retry_invalid_input": "retry_invalid_input",
+                "play_again": "play_again",
+                "preserve_previous_work": None,
+            }.get(requirement_id)
+            if interaction_feature:
+                return self.code_feature_present(interaction_feature, code), f"interaction:{interaction_feature}"
+            if requirement_id == "preserve_previous_work":
+                continuation = code_result.get("continuation_preservation", {}) if isinstance(code_result, dict) else {}
+                return bool(
+                    continuation.get("previous_kind_preserved")
+                    or code_result.get("existing_code_detected")
+                ), "continuation preservation metadata"
 
         if requirement_id == "runnable_output":
             if not requirements.get("is_code_generation"):
@@ -592,6 +679,24 @@ class QualityControlBrain:
         except ValueError:
             return None
 
+    def extract_requested_item_count(self, lowered, target_pattern):
+
+        number_words = {
+            "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+            "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+            "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14,
+            "fifteen": 15, "sixteen": 16, "seventeen": 17,
+            "eighteen": 18, "nineteen": 19, "twenty": 20,
+        }
+        match = re.search(
+            rf"\b(?:exactly\s+)?(\d+|{'|'.join(number_words)})\s+{target_pattern}\b",
+            str(lowered or ""),
+        )
+        if not match:
+            return None
+        value = match.group(1)
+        return int(value) if value.isdigit() else number_words.get(value)
+
     def detect_expected_program_kind(self, lowered):
 
         checks = [
@@ -607,7 +712,12 @@ class QualityControlBrain:
             ("shop_inventory", ["shop inventory", "store inventory", "inventory tracker", "stock", "products in stock"]),
             ("todo_app", ["to-do", "todo", "task list", "tasks", "mark a task"]),
             ("notes_app", ["note app", "notes app", "notes", "note taking"]),
-            ("weather_app", ["weather app", "weather", "temperature", "humidity"]),
+            ("temperature_converter", [
+                "temperature converter", "convert temperature", "convert celsius",
+                "convert fahrenheit", "celsius or fahrenheit", "celsius to fahrenheit",
+                "fahrenheit to celsius",
+            ]),
+            ("weather_app", ["weather app", "weather", "humidity", "forecast", "weather api"]),
             ("calculator", ["calculator", "calculate", "addition", "subtraction", "multiplication", "division"]),
             ("quiz_game", ["quiz", "multiple choice"]),
         ]
@@ -669,6 +779,20 @@ class QualityControlBrain:
                 ("search_expense_category", ["search expenses by category", "search by category"]),
                 ("expense_total", ["total amount spent", "show the total", "total spent"]),
                 ("expenses_json", ["expenses.json"]),
+            ],
+            "quiz_game": [
+                ("quiz_multiple_choice", ["multiple choice", "multiple-choice", "answer choices", "answer options"]),
+                ("quiz_numeric_choice", ["entering 1, 2, 3, or 4", "enter 1, 2, 3, or 4", "answer by entering"]),
+                ("retry_invalid_input", ["invalid input", "ask again", "reject invalid"]),
+                ("quiz_final_score", ["final score", "score out of"]),
+                ("play_again", ["play again", "run again"]),
+            ],
+            "temperature_converter": [
+                ("temperature_value", ["temperature value", "temperature"]),
+                ("temperature_units", ["celsius", "fahrenheit"]),
+                ("temperature_conversion", ["convert", "converted temperature"]),
+                ("retry_invalid_input", ["invalid number", "invalid unit", "invalid input", "safely"]),
+                ("repeat_until_exit", ["keep running until", "types exit", "enter exit"]),
             ],
         }
 
@@ -857,6 +981,30 @@ class QualityControlBrain:
                 "Select the dedicated complete program template for the user's requested app type."
             )
 
+        if expected_kind == "quiz_game":
+            questions = self.quiz_records(code)
+            expected_questions = requirements.get("requested_question_count")
+            if expected_questions is not None and len(questions) != expected_questions:
+                self.add_issue(
+                    issues,
+                    "Code_brain",
+                    "high",
+                    f"Quiz question count is wrong: expected {expected_questions}, got {len(questions)}.",
+                    "Generate exactly the requested number of complete question records.",
+                )
+            expected_choices = requirements.get("requested_choice_count")
+            if expected_choices is not None and questions:
+                choice_counts = [len(item.get("choices", [])) for item in questions]
+                if any(count != expected_choices for count in choice_counts):
+                    self.add_issue(
+                        issues,
+                        "Code_brain",
+                        "high",
+                        f"Quiz choice count is wrong: expected {expected_choices} choices for every question.",
+                        "Give every question exactly the requested number of answer choices.",
+                        choice_counts,
+                    )
+
         if requirements["code_only"]:
             forbidden = ["main pieces:", "plan:", "draft structure", "helper variant", "placeholder"]
             if any(marker in lowered_code for marker in forbidden):
@@ -965,6 +1113,92 @@ class QualityControlBrain:
                 errors.append(f"{path}: line {error.lineno}: {error.msg}")
         return errors
 
+    def literal_assignment(self, code, variable_name):
+
+        try:
+            tree = ast.parse(str(code or ""))
+        except (SyntaxError, ValueError):
+            return None
+        for node in tree.body:
+            if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+                continue
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            if not any(isinstance(target, ast.Name) and target.id == variable_name for target in targets):
+                continue
+            try:
+                return ast.literal_eval(node.value)
+            except (ValueError, TypeError, SyntaxError):
+                return None
+        return None
+
+    def quiz_records(self, code):
+
+        questions = self.literal_assignment(code, "QUESTIONS")
+        if not isinstance(questions, (list, tuple)):
+            return []
+        return [item for item in questions if isinstance(item, dict)]
+
+    def quantified_code_constraint_passed(self, requirement, code):
+
+        target = str(requirement.get("target", "")).lower()
+        quantity = requirement.get("quantity")
+        mode = requirement.get("mode", "exact")
+        questions = self.quiz_records(code)
+
+        if target in {"question", "multiple_choice_question"}:
+            actual = len(questions)
+        elif target in {"answer_choice", "answer_option", "choice", "option"}:
+            if not questions:
+                return False, "no literal quiz question records"
+            counts = [len(item.get("choices", [])) for item in questions]
+            passed = all(
+                count == quantity if mode == "exact"
+                else count >= quantity if mode == "minimum"
+                else count <= quantity
+                for count in counts
+            )
+            return passed, f"choice counts per question: {counts}"
+        elif target == "score_denominator":
+            compact = re.sub(r"\s+", "", str(code or "").lower())
+            passed = bool(
+                isinstance(quantity, int)
+                and len(questions) == quantity
+                and ("len(questions)" in compact or f"/{quantity}" in compact)
+            )
+            return passed, f"score denominator expected: {quantity}"
+        elif requirement.get("values") and target == "user_input":
+            values = [str(value) for value in requirement.get("values", [])]
+            literal_values = set(re.findall(r"['\"](\d+)['\"]", str(code or "")))
+            question_counts = [
+                len(item.get("choices", []))
+                for item in questions
+                if isinstance(item.get("choices"), (list, tuple))
+            ]
+            range_driven = bool(
+                values
+                and question_counts
+                and all(count == len(values) for count in question_counts)
+                and "range(1, choice_count + 1)" in str(code or "")
+            )
+            passed = (
+                set(values).issubset(literal_values) or range_driven
+            ) and "input(" in str(code or "").lower()
+            return passed, (
+                f"allowed input values found: {sorted(literal_values)}; "
+                f"choice counts: {question_counts}"
+            )
+        else:
+            return True, "quantity handled by the domain specialist"
+
+        if not isinstance(quantity, int):
+            return False, "missing numeric quantity"
+        passed = (
+            actual == quantity if mode == "exact"
+            else actual >= quantity if mode == "minimum"
+            else actual <= quantity
+        )
+        return passed, f"actual {target} count: {actual}"
+
     def code_feature_present(self, feature, code):
 
         lowered = str(code).lower()
@@ -1040,6 +1274,60 @@ class QualityControlBrain:
 
         if feature == "expenses_json":
             return "expenses.json" in lowered
+
+        if feature == "quiz_multiple_choice":
+            questions = self.quiz_records(code)
+            return bool(questions) and all(
+                isinstance(item.get("choices"), (list, tuple))
+                and len(item.get("choices", [])) >= 2
+                and isinstance(item.get("answer"), int)
+                for item in questions
+            )
+
+        if feature == "quiz_numeric_choice":
+            questions = self.quiz_records(code)
+            return (
+                bool(questions)
+                and "input(" in lowered
+                and "int(" in lowered
+                and all(
+                    1 <= item.get("answer", 0) <= len(item.get("choices", []))
+                    for item in questions
+                )
+            )
+
+        if feature == "retry_invalid_input":
+            return (
+                "while true" in lowered
+                and "input(" in lowered
+                and any(marker in lowered for marker in ["please enter", "invalid", "except valueerror"])
+            )
+
+        if feature == "quiz_final_score":
+            return "final score" in lowered and (
+                "len(questions)" in lowered or re.search(r"/\s*\d+", code) is not None
+            )
+
+        if feature == "play_again":
+            return "play again" in lowered and "while true" in lowered
+
+        if feature == "temperature_value":
+            return "temperature" in lowered and "float(" in lowered and "input(" in lowered
+
+        if feature == "temperature_units":
+            return "celsius" in lowered and "fahrenheit" in lowered
+
+        if feature == "temperature_conversion":
+            compact = re.sub(r"\s+", "", lowered)
+            return (
+                ("*9/5" in compact or "*1.8" in compact)
+                and "+32" in compact
+                and "-32" in compact
+                and ("*5/9" in compact or "/1.8" in compact)
+            )
+
+        if feature == "repeat_until_exit":
+            return all(marker in lowered for marker in ["while true", "input(", "exit", "break"])
 
         if feature == "json_persistence":
             return "json.loads" in lowered and "json.dumps" in lowered and "write_text" in lowered

@@ -561,6 +561,13 @@ def context_view_for_brain(context, brain_name, max_sources=6):
             for item in context.get("scanner_matches", [])[:max_sources]
             if isinstance(item, dict)
         ],
+        "scanner_usage_contract": {
+            "must_consider_relevant_matches": True,
+            "must_ignore_irrelevant_matches": True,
+            "must_preserve_source_metadata": True,
+            "must_fact_check_high_stakes_claims": True,
+            "retrieval_mode": "indexed_relevant_excerpts_only"
+        },
         "profiled_files": context.get("profiled_files", 0),
         "total_profiled_bytes": context.get("total_profiled_bytes", 0),
         "selection_policy": "domain_filtered_lazy_context",

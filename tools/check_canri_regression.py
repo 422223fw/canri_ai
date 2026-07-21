@@ -43,6 +43,10 @@ from Emotion_brain import EmotionBrain  # noqa: E402
 from Image_brain import ImageBrain  # noqa: E402
 from Vision_brain import VisionBrain  # noqa: E402
 from Voice_brain import VoiceBrain  # noqa: E402
+from Language_brain_1 import LanguageLoader  # noqa: E402
+from Language_brain_2 import TranslationEngine  # noqa: E402
+from Language_brain_3 import GrammarEngine  # noqa: E402
+from Language_brain_7 import LanguageAnalysisEngine  # noqa: E402
 
 
 def assert_true(condition, message):
@@ -1699,6 +1703,116 @@ def test_advanced_existing_project_files_are_never_silently_overwritten():
     )
 
 
+def test_temperature_converter_is_not_misrouted_to_weather():
+    prompt = (
+        "Build a real runnable Python temperature converter for the terminal. "
+        "Ask for a temperature value and whether it is Celsius or Fahrenheit, "
+        "convert to the other unit, handle invalid numbers and units safely, "
+        "and keep running until the user types exit. Use only the Python standard library. "
+        "Only output the final complete runnable Python code."
+    )
+    understanding = UnderstandingBrain().process({"original_text": prompt})
+    result = CodeBrain().process({"original_text": prompt, "understanding": understanding})
+    code = result.get("generated_code", "")
+    assert_true(result.get("program_kind") == "temperature_converter", "Temperature conversion routed to another app.")
+    assert_true("urlopen" not in code and "weather" not in code.lower(), "Converter incorrectly generated weather code.")
+    assert_true("* 9 / 5) + 32" in code and "- 32) * 5 / 9" in code, "Conversion formulas are incomplete.")
+    compile(code, "generated_temperature_converter.py", "exec")
+    quality = QualityControlBrain().process({
+        "original_text": prompt,
+        "understanding": understanding,
+        "results": {"Code_brain": result},
+    })
+    assert_true(quality.get("passed") is True, f"Temperature converter quality failed: {quality.get('issues')}")
+
+
+def test_quiz_honors_exact_counts_choices_retry_and_replay():
+    prompt = (
+        "Build a real runnable Python quiz game for the terminal with exactly 10 multiple-choice questions. "
+        "Show exactly four answer choices for each question. Let the user enter 1, 2, 3, or 4, "
+        "reject invalid input and ask again, show whether each answer is correct, display the final "
+        "score out of 10, and allow the user to play again. Use only the Python standard library."
+    )
+    understanding = UnderstandingBrain().process({"original_text": prompt})
+    result = CodeBrain().process({"original_text": prompt, "understanding": understanding})
+    code = result.get("generated_code", "")
+    records = CodeBrain().self_reviewer.quiz_records(code)
+    assert_true(result.get("program_kind") == "quiz_game", "Quiz request chose the wrong program kind.")
+    assert_true(len(records) == 10, f"Expected 10 questions, found {len(records)}.")
+    assert_true(all(len(item.get("choices", [])) == 4 for item in records), "Every quiz item must have four choices.")
+    assert_true("while True" in code and "play_again" in code, "Retry or replay loop is missing.")
+    compile(code, "generated_quiz.py", "exec")
+    quality = QualityControlBrain().process({
+        "original_text": prompt,
+        "understanding": understanding,
+        "results": {"Code_brain": result},
+    })
+    assert_true(quality.get("passed") is True, f"Quiz quality failed: {quality.get('issues')}")
+
+
+def test_understanding_and_language_preserve_small_request_details():
+    prompt = (
+        "Continue the same Python program. Keep print() and data.json unchanged. "
+        "Add exactly 10 questions with four choices each, reject invalid input and ask again, "
+        "then only output the final code."
+    )
+    understanding = UnderstandingBrain().process({"original_text": prompt})
+    contract = understanding.get("request_contract", {})
+    details = contract.get("detail_inventory", {})
+    quantities = details.get("quantified_constraints", [])
+    interactions = details.get("interaction_requirements", [])
+    assert_true(any(item.get("quantity") == 10 for item in quantities), "The exact question count was lost.")
+    assert_true(any(item.get("quantity") == 4 for item in quantities), "The choice count was lost.")
+    assert_true(any(item.get("id") == "retry_invalid_input" for item in interactions), "Invalid-input retry was not extracted.")
+
+    language_data = LanguageLoader().load_all()
+    analysis = LanguageAnalysisEngine().analyze(prompt, understanding, language_data)
+    frame = analysis.get("semantic_frame", {})
+    assert_true(frame.get("continuation", {}).get("is_continuation"), "Language analysis missed continuation context.")
+    assert_true("print()" in frame.get("code_fragments", []), "A function call was not preserved as code.")
+    assert_true("data.json" in frame.get("code_fragments", []), "A file name was not preserved as code.")
+    assert_true(frame.get("detail_count", 0) >= 4, "Language analysis did not retain enough explicit detail.")
+
+    translated = TranslationEngine().process(prompt, understanding, language_data)
+    assert_true("print()" in translated.get("protected_tokens", []), "Translation treated print() as ordinary prose.")
+    grammar = GrammarEngine().process(prompt, understanding)
+    assert_true("print()" in grammar.get("protected_code_spans", []), "Grammar did not protect print().")
+
+
+def test_nervous_system_prefers_exact_requirement_evidence():
+    nervous = NervousSystemBrain()
+    result = nervous.process({
+        "integration_stage": "post_quality",
+        "understanding": {
+            "main_topic": "code",
+            "request_contract": {
+                "requirements": [
+                    {"id": "r1", "kind": "feature", "text": "include exactly 10 questions"},
+                    {"id": "r2", "kind": "interaction", "text": "ask again after invalid input"},
+                ]
+            },
+        },
+        "results": {
+            "Code_brain": {
+                "brain": "Code_brain",
+                "generated_code": "QUESTIONS = [1] * 10\nwhile True:\n    pass\n",
+                "self_review": {"ready": True, "checks": []},
+            },
+            "Quality_Control_brain": {
+                "brain": "Quality_Control_brain",
+                "passed": True,
+                "requirement_checks": [
+                    {"requirement": "r1", "passed": True},
+                    {"requirement": "r2", "passed": True},
+                ],
+            },
+        },
+    })
+    coverage = result.get("coverage", {})
+    assert_true(coverage.get("exactly_verified_requirements") == 2, f"Exact requirement evidence was not used: {coverage}")
+    assert_true(result.get("unresolved_requirements") == [], "Passed exact requirements were marked missing.")
+
+
 def main():
     tests = [
         test_expense_tracker_code_and_quality,
@@ -1766,6 +1880,10 @@ def main():
         test_advanced_code_project_is_complete_and_executable,
         test_advanced_project_response_is_clean_multi_file_code,
         test_advanced_existing_project_files_are_never_silently_overwritten,
+        test_temperature_converter_is_not_misrouted_to_weather,
+        test_quiz_honors_exact_counts_choices_retry_and_replay,
+        test_understanding_and_language_preserve_small_request_details,
+        test_nervous_system_prefers_exact_requirement_evidence,
     ]
 
     for test in tests:

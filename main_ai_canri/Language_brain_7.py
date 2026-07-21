@@ -55,6 +55,18 @@ class LanguageAnalysisEngine:
     def get_examples_data(self, language_data):
         return language_data.get("examples", [])
 
+    def get_precision_data(self, language_data):
+        data = language_data.get("precision_patterns", {})
+        return data if isinstance(data, dict) else {}
+
+    def request_action_map(self, language_data):
+        actions = self.get_precision_data(language_data).get("request_actions", [])
+        return {
+            str(item.get("word", "")).lower(): item
+            for item in actions
+            if isinstance(item, dict) and item.get("word")
+        }
+
     def detect_language_by_chars(self, text):
         hebrew_count = self.count_hebrew_chars(text)
         english_count = self.count_english_chars(text)
@@ -307,7 +319,7 @@ class LanguageAnalysisEngine:
 
         return []
 
-    def tag_sentence_roles(self, text, report):
+    def tag_sentence_roles(self, text, report, language_data=None):
         report_tags = self.extract_report_tags(report)
         if report_tags:
             normalized = []
@@ -321,13 +333,14 @@ class LanguageAnalysisEngine:
             return normalized
 
         tags = []
+        action_map = self.request_action_map(language_data or {})
 
         for index, token in enumerate(self.tokenize(text)):
             lower = token.lower()
 
             if not re.search(r"\w", token, flags=re.UNICODE):
                 role = "punctuation"
-            elif lower in self.command_verbs:
+            elif lower in self.command_verbs or lower in action_map:
                 role = "action"
             elif lower in self.determiners:
                 role = "determiner"
@@ -340,15 +353,105 @@ class LanguageAnalysisEngine:
             else:
                 role = "content_word"
 
-            tags.append({
+            tag = {
                 "word": token,
                 "role": role,
                 "source": "language_analysis",
-            })
+            }
+            if lower in action_map:
+                tag["action_domain"] = action_map[lower].get("domain")
+                tag["action_role"] = action_map[lower].get("role")
+            tags.append(tag)
 
         return tags
 
-    def build_semantic_frame(self, tags, text):
+    def extract_code_fragments(self, text):
+        source = str(text)
+        patterns = [
+            r"```[\s\S]*?```",
+            r"`[^`\n]+`",
+            r"\b[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*\s*\([^\n()]*\)",
+            r"\b[A-Za-z_]\w*\.(?:py|json|jsonl|txt|csv|md|yaml|yml|toml)\b",
+            r"(?:^|\s)--?[A-Za-z][\w-]*",
+        ]
+        values = []
+        for pattern in patterns:
+            values.extend(match.strip() for match in re.findall(pattern, source))
+        return list(dict.fromkeys(value for value in values if value))[:30]
+
+    def extract_quantities(self, text, language_data):
+        source = str(text)
+        lower = source.lower()
+        quantity_words = self.get_precision_data(language_data).get("quantity_words", {})
+        word_values = {}
+        if isinstance(quantity_words, dict):
+            for values in quantity_words.values():
+                if isinstance(values, dict):
+                    word_values.update({str(key).lower(): value for key, value in values.items()})
+
+        quantities = []
+        pattern = re.compile(
+            r"\b(?P<value>\d+|[A-Za-z\u0590-\u05FF]+)\s+"
+            r"(?P<target>[A-Za-z\u0590-\u05FF][A-Za-z\u0590-\u05FF_-]*(?:\s+[A-Za-z\u0590-\u05FF][A-Za-z\u0590-\u05FF_-]*){0,2})",
+            flags=re.IGNORECASE,
+        )
+        for match in pattern.finditer(source):
+            raw_value = match.group("value")
+            value = int(raw_value) if raw_value.isdigit() else word_values.get(raw_value.lower())
+            if value is None:
+                continue
+            target_parts = match.group("target").strip().split()
+            target = []
+            for part in target_parts:
+                part_lower = part.lower()
+                if target and (
+                    part_lower in {"and", "or", "with", "each", "then", "but"}
+                    or (re.match(r"[\u0590-\u05FF]", part) and part.startswith("\u05d5"))
+                ):
+                    break
+                target.append(part)
+            prefix = lower[max(0, match.start() - 20):match.start()]
+            mode = "exact"
+            if any(marker in prefix for marker in ["at least", "minimum", "no fewer"]):
+                mode = "minimum"
+            elif any(marker in prefix for marker in ["at most", "maximum", "no more"]):
+                mode = "maximum"
+            quantities.append({
+                "value": value,
+                "raw_value": raw_value,
+                "target": " ".join(target),
+                "mode": mode,
+            })
+        return quantities[:30]
+
+    def extract_marker_groups(self, text, mapping):
+        lower = str(text).lower()
+        results = []
+        iterable = mapping.items() if isinstance(mapping, dict) else []
+        for group, markers in iterable:
+            found = [marker for marker in markers if str(marker).lower() in lower]
+            if found:
+                results.append({"type": group, "markers": found})
+        return results
+
+    def extract_continuation(self, text, language_data):
+        groups = self.get_precision_data(language_data).get("continuation_markers", {})
+        markers = []
+        for values in groups.values() if isinstance(groups, dict) else []:
+            markers.extend(values if isinstance(values, list) else [])
+        lower = str(text).lower()
+        matched = [marker for marker in markers if str(marker).lower() in lower]
+        return {
+            "is_continuation": bool(matched),
+            "markers": list(dict.fromkeys(matched)),
+            "must_preserve_previous_result": bool(matched),
+        }
+
+    def extract_output_constraints(self, text, language_data):
+        mapping = self.get_precision_data(language_data).get("output_markers", {})
+        return self.extract_marker_groups(text, mapping)
+
+    def build_semantic_frame(self, tags, text, language_data=None):
         actions = []
         targets = []
         relations = []
@@ -379,6 +482,17 @@ class LanguageAnalysisEngine:
         elif "step by step" in lower or "solve" in lower:
             requested_output = "solution"
 
+        language_data = language_data or {}
+        precision = self.get_precision_data(language_data)
+        quantified_constraints = self.extract_quantities(text, language_data)
+        explicit_constraints = self.extract_marker_groups(
+            text,
+            precision.get("constraint_markers", {}),
+        )
+        continuation = self.extract_continuation(text, language_data)
+        output_constraints = self.extract_output_constraints(text, language_data)
+        code_fragments = self.extract_code_fragments(text)
+
         return {
             "actions": list(dict.fromkeys(actions)),
             "targets": list(dict.fromkeys(targets))[:30],
@@ -386,6 +500,17 @@ class LanguageAnalysisEngine:
             "numbers": numbers,
             "requested_output": requested_output,
             "is_action_request": bool(actions),
+            "quantified_constraints": quantified_constraints,
+            "explicit_constraints": explicit_constraints,
+            "continuation": continuation,
+            "output_constraints": output_constraints,
+            "code_fragments": code_fragments,
+            "detail_count": (
+                len(quantified_constraints)
+                + len(explicit_constraints)
+                + len(output_constraints)
+                + len(code_fragments)
+            ),
         }
 
     def build_context_links(self, tags):
@@ -449,8 +574,8 @@ class LanguageAnalysisEngine:
         text_type = self.detect_text_type(text)
         rules = self.find_matching_rules(text, language_code, language_data)
         examples = self.find_related_examples(text, language_code, language_data)
-        word_tags = self.tag_sentence_roles(text, report)
-        semantic_frame = self.build_semantic_frame(word_tags, text)
+        word_tags = self.tag_sentence_roles(text, report, language_data)
+        semantic_frame = self.build_semantic_frame(word_tags, text, language_data)
         context_links = self.build_context_links(word_tags)
         complexity = self.calculate_complexity(text, word_tags)
         confidence = self.calculate_confidence(
@@ -479,6 +604,7 @@ class LanguageAnalysisEngine:
             "semantic_frame": semantic_frame,
             "context_links": context_links,
             "complexity": complexity,
+            "scanner_evidence_count": len(language_data.get("scanner_evidence", [])),
             "confidence": confidence,
         }
 

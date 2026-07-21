@@ -79,12 +79,42 @@ class DictionaryEngine:
         }
 
     def scan_technical_terms(self, words, language_data):
-        return {
+        results = {
             word: found
             for word in words
             for found in [self.find_technical_term(word, language_data)]
             if found
         }
+        terms = self.get_terms_data(language_data)
+        if isinstance(terms, dict):
+            joined = " ".join(words)
+            for term, data in terms.items():
+                normalized = str(term).lower().strip()
+                if " " in normalized and normalized in joined:
+                    results[normalized] = data
+        return results
+
+    def scanner_definitions(self, focus_words, language_data):
+
+        focus = {str(word).lower() for word in focus_words if str(word).strip()}
+        matches = []
+        for item in language_data.get("scanner_evidence", [])[:8]:
+            if not isinstance(item, dict):
+                continue
+            title = str(item.get("title", ""))
+            summary = str(item.get("summary") or item.get("content_excerpt") or "").strip()
+            searchable = f"{title} {summary}".lower()
+            overlap = sorted(word for word in focus if word in searchable)
+            if not summary or not overlap:
+                continue
+            matches.append({
+                "title": title,
+                "summary": summary[:700],
+                "trust_score": item.get("trust_score", 0),
+                "matched_words": overlap,
+                "sources": item.get("sources", [])[:3],
+            })
+        return matches
 
     def scan_abbreviations(self, text, language_data):
         results = {}
@@ -214,6 +244,7 @@ class DictionaryEngine:
         antonyms,
         technical_terms,
         abbreviations,
+        scanner_definitions,
     ):
         if not is_dictionary_request:
             return ""
@@ -244,7 +275,13 @@ class DictionaryEngine:
                 lines.append(f"Antonyms for {word}: {', '.join(map(str, antonyms[word][:6]))}.")
 
         if not lines and is_dictionary_request:
-            lines.append("I checked the local language dictionaries but did not find a strong definition.")
+            if scanner_definitions:
+                evidence = scanner_definitions[0]
+                lines.append(
+                    f"{evidence.get('title')}: {evidence.get('summary')}"
+                )
+            else:
+                lines.append("I checked the local language dictionaries but did not find a strong definition.")
 
         return "\n".join(lines)
 
@@ -282,12 +319,14 @@ class DictionaryEngine:
         definitions = self.get_definitions(words)
         connections = self.get_connections(words)
         word_exists = self.check_words_exist(words)
+        scanner_matches = self.scanner_definitions(focus_words, language_data)
         confidence = self.calculate_confidence(
             words,
             synonyms,
             antonyms,
             technical_terms,
             abbreviations,
+            scanner_matches,
             definitions,
             connections,
         )
@@ -313,6 +352,7 @@ class DictionaryEngine:
             "antonyms": antonyms,
             "technical_terms": technical_terms,
             "abbreviations": abbreviations,
+            "scanner_definitions": scanner_matches,
             "answer": answer,
             "confidence": confidence,
         }

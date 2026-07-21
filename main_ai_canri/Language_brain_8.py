@@ -34,6 +34,14 @@ class LanguageReportBuilder:
             "text_type": analysis.get("text_type", "unknown"),
             "formality": analysis.get("formality", {}),
             "semantic_frame": analysis.get("semantic_frame", {}),
+            "precision_contract": {
+                "quantified_constraints": analysis.get("semantic_frame", {}).get("quantified_constraints", []),
+                "explicit_constraints": analysis.get("semantic_frame", {}).get("explicit_constraints", []),
+                "output_constraints": analysis.get("semantic_frame", {}).get("output_constraints", []),
+                "continuation": analysis.get("semantic_frame", {}).get("continuation", {}),
+                "code_fragments": analysis.get("semantic_frame", {}).get("code_fragments", []),
+                "detail_count": analysis.get("semantic_frame", {}).get("detail_count", 0),
+            },
             "word_tags": analysis.get("word_tags", []),
             "context_links": analysis.get("context_links", []),
             "complexity": analysis.get("complexity", {}),
@@ -82,6 +90,7 @@ class LanguageReportBuilder:
             "grammar_issues": grammar.get("grammar_issues", []),
             "tenses": grammar.get("tenses", {}),
             "base_forms": grammar.get("base_forms", {}),
+            "protected_code_spans": grammar.get("protected_code_spans", []),
             "confidence": grammar.get("confidence", 0),
         }
 
@@ -99,6 +108,7 @@ class LanguageReportBuilder:
             "antonyms": dictionary.get("antonyms", {}),
             "technical_terms": dictionary.get("technical_terms", {}),
             "abbreviations": dictionary.get("abbreviations", {}),
+            "scanner_definitions": dictionary.get("scanner_definitions", []),
             "answer": dictionary.get("answer", ""),
             "confidence": dictionary.get("confidence", 0),
         }
@@ -113,6 +123,9 @@ class LanguageReportBuilder:
             "slang": expressions.get("slang", {}),
             "emojis": expressions.get("emojis", {}),
             "units": expressions.get("units", []),
+            "discourse_relations": expressions.get("discourse_relations", []),
+            "interaction_signals": expressions.get("interaction_signals", []),
+            "enumerations": expressions.get("enumerations", []),
             "summary": expressions.get("summary", []),
             "answer": expressions.get("answer", ""),
             "confidence": expressions.get("confidence", 0),
@@ -152,6 +165,12 @@ class LanguageReportBuilder:
             value = raw_report.get(key)
             if isinstance(value, dict) and "error" in value:
                 warnings.append(f"{key} error: {value.get('error')}")
+
+        analysis = raw_report.get("analysis", {})
+        frame = analysis.get("semantic_frame", {}) if isinstance(analysis, dict) else {}
+        if isinstance(frame, dict) and frame.get("continuation", {}).get("is_continuation"):
+            if not frame.get("continuation", {}).get("must_preserve_previous_result"):
+                warnings.append("Continuation was detected without a preservation contract.")
 
         return list(dict.fromkeys(warnings))
 
@@ -268,6 +287,9 @@ class LanguageReportBuilder:
             "dictionary": dictionary_summary,
             "expressions": expressions_summary,
             "statistics": statistics_summary,
+            "precision_contract": language_summary.get("precision_contract", {}),
+            "scanner_evidence": raw_report.get("scanner_evidence", []),
+            "scanner_usage": raw_report.get("scanner_usage", {}),
             "human_summary": human_summary,
             "answer": final_answer,
             "final_output": final_answer,
