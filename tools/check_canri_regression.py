@@ -1813,6 +1813,66 @@ def test_nervous_system_prefers_exact_requirement_evidence():
     assert_true(result.get("unresolved_requirements") == [], "Passed exact requirements were marked missing.")
 
 
+def test_quality_zero_rebuilds_wrong_program_with_selected_functions():
+    prompt = (
+        "Build a real runnable Python equation calculator for the terminal. "
+        "It must solve linear and quadratic equations, verify the solutions, "
+        "handle invalid input, and keep running until the user types exit. "
+        "Only output the final working Python code."
+    )
+    wrong_result = {
+        "brain": "Code_brain",
+        "program_kind": "quiz_game",
+        "generated_code": (
+            "def run_quiz():\n"
+            "    print('game')\n\n"
+            "def main():\n"
+            "    run_quiz()\n\n"
+            "if __name__ == '__main__':\n"
+            "    main()\n"
+        ),
+    }
+    quality = QualityControlBrain().process({
+        "original_text": prompt,
+        "results": {"Code_brain": wrong_result},
+    })
+    request = next((
+        item for item in quality["retry_requests"]
+        if item.get("target_brain") == "Code_brain"
+    ), None)
+    assert_true(request is not None, f"QC did not request a Code_brain retry: {quality}")
+    assert_true(request.get("expected_program_kind") == "equation_calculator", "QC lost the expected app kind.")
+    assert_true(request.get("force_regeneration"), "A wrong app must force regeneration.")
+
+    manager = ManagerBrain()
+    retry_context = manager.build_retry_context(
+        {"original_text": prompt},
+        {"Code_brain": wrong_result},
+        {},
+        {},
+        {},
+        quality,
+        "Code_brain",
+        request,
+    )
+    contract = retry_context.get("quality_correction", {})
+    assert_true(contract.get("expected_program_kind") == "equation_calculator", "Manager lost the correction target.")
+
+    fixed = CodeBrain().process(retry_context)
+    assert_true(fixed.get("program_kind") == "equation_calculator", "Retry did not replace the wrong program.")
+    selection = fixed.get("function_selection", {})
+    assert_true(selection.get("complete"), f"Required functions were not selected: {selection}")
+    assert_true("solve_equation" in selection.get("selected_functions", []), "Equation solver was not selected.")
+    assert_true(fixed.get("quality_correction_applied"), "Code brain did not record the applied correction.")
+
+    namespace = {}
+    exec(fixed["generated_code"], namespace)
+    coefficients = namespace["parse_equation"]("x^2 - 5x + 6 = 0")
+    solved = namespace["solve_equation"](*coefficients)
+    assert_true(solved["solutions"] == [2.0, 3.0], "The regenerated calculator solved incorrectly.")
+    assert_true(namespace["verify_solutions"](coefficients, solved["solutions"]), "Solutions were not verified.")
+
+
 def main():
     tests = [
         test_expense_tracker_code_and_quality,
@@ -1884,6 +1944,7 @@ def main():
         test_quiz_honors_exact_counts_choices_retry_and_replay,
         test_understanding_and_language_preserve_small_request_details,
         test_nervous_system_prefers_exact_requirement_evidence,
+        test_quality_zero_rebuilds_wrong_program_with_selected_functions,
     ]
 
     for test in tests:

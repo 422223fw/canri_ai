@@ -250,17 +250,27 @@ class QualityControlBrain:
         if not isinstance(contract, dict):
             contract = {}
         expected_program_kind = self.detect_expected_program_kind(lowered)
+        inferred_code_request = bool(
+            topic == "code"
+            or intent in {"code_generation", "code_analysis"}
+            or (
+                expected_program_kind
+                and any(marker in lowered for marker in [
+                    "python", "code", "program", "app", "terminal", "runnable",
+                ])
+            )
+        )
 
         requirements = {
             "has_request_contract": bool(contract),
             "topic": topic,
             "intent": intent,
-            "is_code_request": topic == "code" or intent in {"code_generation", "code_analysis"},
+            "is_code_request": inferred_code_request,
             "is_code_analysis": intent == "code_analysis",
-            "is_code_generation": (topic == "code" and intent != "code_analysis") or intent == "code_generation",
+            "is_code_generation": inferred_code_request and intent != "code_analysis",
             "is_math_request": topic == "math" or intent == "math" or self.looks_like_math(lowered),
             "is_story_request": topic == "story" or intent == "story_creation",
-            "is_reliability_request": any(
+            "is_reliability_request": not inferred_code_request and any(
                 marker in lowered
                 for marker in ["reliable", "fact check", "check if", "verify", "sources", "local knowledge"]
             ),
@@ -299,8 +309,7 @@ class QualityControlBrain:
             "advanced_code_capabilities": advanced_capabilities,
             "is_advanced_code_project": advanced_capabilities.get("advanced_project", False),
             "needs_local_data": (
-                topic != "code"
-                and intent not in {"code_generation", "code_analysis"}
+                not inferred_code_request
                 and any(
                     marker in lowered
                     for marker in [
@@ -699,6 +708,15 @@ class QualityControlBrain:
 
     def detect_expected_program_kind(self, lowered):
 
+        equation_signals = [
+            "equation calculator", "calculator for equations", "solve equations",
+            "solve an equation", "linear equation calculator",
+            "quadratic equation calculator", "polynomial equation calculator",
+            "\u05de\u05d7\u05e9\u05d1\u05d5\u05df \u05de\u05e9\u05d5\u05d5\u05d0\u05d5\u05ea",
+        ]
+        if any(signal in lowered for signal in equation_signals):
+            return "equation_calculator"
+
         checks = [
             ("name_greeter", [
                 "asks for the user's name", "ask for the user's name",
@@ -793,6 +811,13 @@ class QualityControlBrain:
                 ("temperature_conversion", ["convert", "converted temperature"]),
                 ("retry_invalid_input", ["invalid number", "invalid unit", "invalid input", "safely"]),
                 ("repeat_until_exit", ["keep running until", "types exit", "enter exit"]),
+            ],
+            "equation_calculator": [
+                ("parse_equation", ["equation", "equations"]),
+                ("solve_linear_equation", ["linear", "equation calculator", "solve equations"]),
+                ("solve_quadratic_equation", ["quadratic", "x^2", "x**2"]),
+                ("verify_equation_solution", ["verify", "check the solution", "equation calculator"]),
+                ("repeat_until_exit", ["keep running", "until", "exit", "terminal"]),
             ],
         }
 
@@ -1274,6 +1299,18 @@ class QualityControlBrain:
 
         if feature == "expenses_json":
             return "expenses.json" in lowered
+
+        if feature == "parse_equation":
+            return "def parse_equation" in lowered and "=" in code
+
+        if feature == "solve_linear_equation":
+            return "def solve_equation" in lowered and "-c / b" in lowered
+
+        if feature == "solve_quadratic_equation":
+            return "discriminant" in lowered and "math.sqrt" in lowered
+
+        if feature == "verify_equation_solution":
+            return "def verify_solutions" in lowered and "math.isclose" in lowered
 
         if feature == "quiz_multiple_choice":
             questions = self.quiz_records(code)
@@ -1770,8 +1807,16 @@ class QualityControlBrain:
 
     # ---------- output ----------
 
-    def build_retry_requests(self, issues):
+    def build_retry_requests(
+        self,
+        issues,
+        requirements=None,
+        requirement_checks=None,
+        quality_score=None,
+    ):
         retry_requests = []
+        requirements = requirements or {}
+        requirement_checks = requirement_checks or []
 
         non_retry_brains = {
             "Response_brain",
@@ -1810,7 +1855,32 @@ class QualityControlBrain:
                 "failed_requirements": [
                     item.get("problem")
                     for item in brain_issues[:8]
-                ]
+                ],
+                "failed_requirement_checks": [
+                    check.get("requirement")
+                    for check in requirement_checks
+                    if isinstance(check, dict)
+                    and check.get("target_brain") == brain_name
+                    and check.get("passed") is False
+                ],
+                "expected_program_kind": (
+                    requirements.get("expected_program_kind")
+                    if brain_name == "Code_brain"
+                    else None
+                ),
+                "required_features": (
+                    requirements.get("requested_code_features", [])
+                    if brain_name == "Code_brain"
+                    else []
+                ),
+                "quality_score": quality_score,
+                "force_regeneration": bool(
+                    quality_score == 0
+                    or any(
+                        "wrong program kind" in str(item.get("problem", "")).lower()
+                        for item in brain_issues
+                    )
+                ),
             })
 
         return retry_requests[:5]
@@ -1932,9 +2002,14 @@ class QualityControlBrain:
         self.audit_atomic_requirements(results, requirements, issues)
         self.audit_small_details(results, requirements, issues)
 
-        retry_requests = self.build_retry_requests(issues)
         score = self.quality_score(issues)
         requirement_checks = self.build_requirement_checks(results, requirements)
+        retry_requests = self.build_retry_requests(
+            issues,
+            requirements,
+            requirement_checks,
+            score,
+        )
         blocking_issues = [
             issue
             for issue in issues

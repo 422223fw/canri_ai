@@ -1985,6 +1985,38 @@ class ManagerBrain:
             and (not target_brain or item.get("target_brain") == target_brain)
             and item.get("instruction")
         ]
+        request_data = retry_request or {}
+        requirements = quality_result.get("requirements", {})
+        failed_checks = [
+            check.get("requirement")
+            for check in quality_result.get("requirement_checks", [])
+            if isinstance(check, dict)
+            and check.get("passed") is False
+            and (not target_brain or check.get("target_brain") == target_brain)
+        ]
+        retry_context["quality_correction"] = {
+            "quality_score": quality_result.get("quality_score"),
+            "expected_program_kind": (
+                request_data.get("expected_program_kind")
+                or requirements.get("expected_program_kind")
+            ),
+            "required_features": (
+                request_data.get("required_features")
+                or requirements.get("requested_code_features", [])
+            ),
+            "failed_requirements": (
+                request_data.get("failed_requirement_checks")
+                or failed_checks
+                or request_data.get("failed_requirements", [])
+            ),
+            "problem": request_data.get("problem", ""),
+            "instruction": request_data.get("instruction", ""),
+            "force_regeneration": bool(
+                request_data.get("force_regeneration")
+                or quality_result.get("quality_score") == 0
+                or "wrong program kind" in str(request_data.get("problem", "")).lower()
+            ),
+        }
         if target_brain:
             retry_context["previous_attempt"] = all_results.get(target_brain)
 

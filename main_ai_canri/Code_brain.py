@@ -27,6 +27,7 @@ COMPOSITION_TABLE_FILE = DATA_DIR / "Code_composition_tables.json"
 ASSEMBLY_PATTERNS_FILE = DATA_DIR / "Code_assembly_patterns.json"
 PROJECT_RECIPES_FILE = DATA_DIR / "Code_project_recipes.json"
 ADVANCED_PROFILES_FILE = DATA_DIR / "Code_advanced_profiles.json"
+FUNCTION_SELECTION_PROFILES_FILE = DATA_DIR / "Code_function_selection_profiles.json"
 
 GENERIC_CODE_TERMS = {
     "code",
@@ -1958,6 +1959,7 @@ class CodeBrain:
         self.assembly_patterns = {}
         self.project_recipes = {}
         self.advanced_profiles = {}
+        self.function_selection_profiles = {}
         self.recipe_by_kind = {}
         self.code_by_id = {}
         self.library_catalog = CodeArtifactCatalog()
@@ -2014,6 +2016,12 @@ class CodeBrain:
             self.advanced_profiles = load_json_resilient(
                 ADVANCED_PROFILES_FILE,
                 self.advanced_profiles
+            )
+
+        if FUNCTION_SELECTION_PROFILES_FILE.exists():
+            self.function_selection_profiles = load_json_resilient(
+                FUNCTION_SELECTION_PROFILES_FILE,
+                self.function_selection_profiles
             )
 
         self.code_by_id = {
@@ -3872,6 +3880,15 @@ if __name__ == "__main__":
             lowered
         )
 
+        equation_signals = [
+            "equation calculator", "calculator for equations", "solve equations",
+            "solve an equation", "linear equation calculator",
+            "quadratic equation calculator", "polynomial equation calculator",
+            "\u05de\u05d7\u05e9\u05d1\u05d5\u05df \u05de\u05e9\u05d5\u05d5\u05d0\u05d5\u05ea",
+        ]
+        if any(signal in domain_text for signal in equation_signals):
+            return "equation_calculator"
+
         recipe_matches = []
         for kind, recipes in self.recipe_by_kind.items():
             aliases = {
@@ -3935,6 +3952,7 @@ if __name__ == "__main__":
 
         lowered = str(code or "").lower()
         markers = [
+            ("equation_calculator", ["def parse_equation", "def solve_equation"]),
             ("notes_app", ["def add_note", "def list_notes"]),
             ("expense_tracker", ["def add_expense", "def show_total"]),
             ("library_manager", ["def add_book", "def borrow_book"]),
@@ -4124,6 +4142,142 @@ def main():
         print(f"Converted temperature: {converted:.2f} {target_unit}")
 
     print("Goodbye.")
+
+
+if __name__ == "__main__":
+    main()
+'''
+
+    def build_equation_calculator_code(self):
+
+        return '''import math
+import re
+
+
+TOLERANCE = 1e-9
+
+
+def normalize_expression(expression):
+    normalized = expression.lower().replace("**", "^").replace(" ", "")
+    if not normalized:
+        raise ValueError("An equation side cannot be empty.")
+    if not re.fullmatch(r"[0-9x.+\\-^]+", normalized):
+        raise ValueError("Use only numbers, x, +, -, ^, and =.")
+    return normalized
+
+
+def parse_polynomial_expression(expression):
+    expression = normalize_expression(expression)
+    terms = re.findall(r"[+-]?[^+-]+", expression)
+    coefficients = {2: 0.0, 1: 0.0, 0: 0.0}
+
+    for term in terms:
+        if "x^" in term and not term.endswith("x^2"):
+            raise ValueError("Only linear and quadratic equations are supported.")
+
+        if term.endswith("x^2"):
+            coefficient_text = term[:-3]
+            degree = 2
+        elif term.endswith("x"):
+            coefficient_text = term[:-1]
+            degree = 1
+        elif "x" in term or "^" in term:
+            raise ValueError(f"Invalid term: {term}")
+        else:
+            coefficient_text = term
+            degree = 0
+
+        if degree > 0 and coefficient_text in {"", "+", "-"}:
+            coefficient = -1.0 if coefficient_text == "-" else 1.0
+        else:
+            try:
+                coefficient = float(coefficient_text)
+            except ValueError as error:
+                raise ValueError(f"Invalid term: {term}") from error
+        coefficients[degree] += coefficient
+
+    return coefficients[2], coefficients[1], coefficients[0]
+
+
+def parse_equation(equation):
+    if equation.count("=") != 1:
+        raise ValueError("Enter exactly one equals sign.")
+    left, right = equation.split("=", 1)
+    left_coefficients = parse_polynomial_expression(left)
+    right_coefficients = parse_polynomial_expression(right)
+    return tuple(
+        left_value - right_value
+        for left_value, right_value in zip(left_coefficients, right_coefficients)
+    )
+
+
+def solve_equation(a, b, c):
+    if abs(a) <= TOLERANCE:
+        if abs(b) <= TOLERANCE:
+            return {
+                "status": "all_real" if abs(c) <= TOLERANCE else "no_solution",
+                "solutions": [],
+            }
+        return {"status": "solved", "solutions": [-c / b]}
+
+    discriminant = (b * b) - (4 * a * c)
+    if discriminant < -TOLERANCE:
+        return {"status": "no_real_solution", "solutions": []}
+    if abs(discriminant) <= TOLERANCE:
+        return {"status": "solved", "solutions": [-b / (2 * a)]}
+
+    root = math.sqrt(discriminant)
+    solutions = sorted([(-b - root) / (2 * a), (-b + root) / (2 * a)])
+    return {"status": "solved", "solutions": solutions}
+
+
+def evaluate_polynomial(coefficients, x):
+    a, b, c = coefficients
+    return (a * x * x) + (b * x) + c
+
+
+def verify_solutions(coefficients, solutions):
+    return all(
+        math.isclose(evaluate_polynomial(coefficients, value), 0.0, abs_tol=1e-7)
+        for value in solutions
+    )
+
+
+def format_number(value):
+    if math.isclose(value, round(value), abs_tol=TOLERANCE):
+        return str(int(round(value)))
+    return f"{value:.10g}"
+
+
+def format_result(result):
+    status = result["status"]
+    if status == "all_real":
+        return "Every real number is a solution."
+    if status == "no_solution":
+        return "The equation has no solution."
+    if status == "no_real_solution":
+        return "The equation has no real solutions."
+    solutions = ", ".join(format_number(value) for value in result["solutions"])
+    return f"Solution(s): {solutions}"
+
+
+def main():
+    print("Linear and Quadratic Equation Calculator")
+    print("Examples: 2x + 3 = 7 or x^2 - 5x + 6 = 0")
+
+    while True:
+        equation = input("Equation (or 'exit'): ").strip()
+        if equation.lower() == "exit":
+            print("Goodbye.")
+            break
+        try:
+            coefficients = parse_equation(equation)
+            result = solve_equation(*coefficients)
+            if not verify_solutions(coefficients, result["solutions"]):
+                raise ArithmeticError("The calculated solution could not be verified.")
+            print(format_result(result))
+        except (ValueError, ArithmeticError) as error:
+            print(f"Invalid equation: {error}")
 
 
 if __name__ == "__main__":
@@ -4887,6 +5041,9 @@ if __name__ == "__main__":
 
         if program_kind == "temperature_converter":
             return self.build_temperature_converter_code()
+
+        if program_kind == "equation_calculator":
+            return self.build_equation_calculator_code()
 
         if program_kind == "weather_app":
             return '''import json
@@ -6103,7 +6260,71 @@ if __name__ == "__main__":
             ),
         }
 
-    def build_direct_python_program_result(self, text, terms, task_type, existing_code=""):
+    def quality_correction_contract(self, data):
+
+        if not isinstance(data, dict) or data.get("retry_target") != "Code_brain":
+            return {}
+        direct = data.get("quality_correction", {})
+        feedback = data.get("quality_feedback", {})
+        request = data.get("retry_request", {})
+        requirements = feedback.get("requirements", {}) if isinstance(feedback, dict) else {}
+        contract = dict(direct) if isinstance(direct, dict) else {}
+        contract.setdefault(
+            "quality_score",
+            feedback.get("quality_score") if isinstance(feedback, dict) else None,
+        )
+        contract.setdefault(
+            "expected_program_kind",
+            request.get("expected_program_kind") or requirements.get("expected_program_kind"),
+        )
+        contract.setdefault(
+            "required_features",
+            request.get("required_features") or requirements.get("requested_code_features", []),
+        )
+        contract.setdefault(
+            "failed_requirements",
+            request.get("failed_requirement_checks") or data.get("failed_requirements", []),
+        )
+        contract["force_regeneration"] = bool(
+            contract.get("force_regeneration")
+            or contract.get("quality_score") == 0
+            or "wrong program kind" in str(request.get("problem", "")).lower()
+        )
+        return contract
+
+    def select_program_functions(self, program_kind, code):
+
+        profile = self.function_selection_profiles.get(program_kind, {})
+        required = list(profile.get("required_functions", []))
+        try:
+            tree = ast.parse(code)
+            defined = {
+                node.name
+                for node in ast.walk(tree)
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            }
+        except (SyntaxError, ValueError):
+            defined = set()
+        selected = [name for name in required if name in defined]
+        missing = [name for name in required if name not in defined]
+        return {
+            "program_kind": program_kind,
+            "purpose": profile.get("purpose", "Fulfil the request contract."),
+            "required_functions": required,
+            "selected_functions": selected,
+            "missing_functions": missing,
+            "forbidden_substitutes": profile.get("forbidden_substitutes", []),
+            "complete": not missing,
+        }
+
+    def build_direct_python_program_result(
+        self,
+        text,
+        terms,
+        task_type,
+        existing_code="",
+        correction_contract=None,
+    ):
 
         detected_kind = self.detect_direct_program_kind(
             text,
@@ -6118,11 +6339,14 @@ if __name__ == "__main__":
                 "improve the", "add to", "keep the existing",
             ]
         )
-        program_kind = detected_kind
+        correction_contract = correction_contract or {}
+        expected_kind = correction_contract.get("expected_program_kind")
+        program_kind = expected_kind or detected_kind
         if (
             continuation_requested
             and existing_kind
             and detected_kind in {"json_cli", "number_summary"}
+            and not expected_kind
         ):
             program_kind = existing_kind
 
@@ -6138,6 +6362,7 @@ if __name__ == "__main__":
             program_kind,
             code,
         )
+        function_selection = self.select_program_functions(program_kind, code)
 
         return {
             "brain": "Code_brain",
@@ -6149,10 +6374,13 @@ if __name__ == "__main__":
             "output_mode": "code_only",
             "terms_used": terms,
             "confidence": 86,
-            "matched_functions": 1,
-            "selected": [
+            "matched_functions": len(function_selection["selected_functions"]),
+            "selected": function_selection["selected_functions"] or [
                 f"direct_python_{program_kind}"
             ],
+            "function_selection": function_selection,
+            "quality_correction_applied": bool(correction_contract),
+            "quality_correction_contract": correction_contract,
             "assembly_plan": {
                 "task_type": task_type,
                 "program_kind": program_kind,
@@ -6179,6 +6407,7 @@ if __name__ == "__main__":
                     "invalid input handling"
                 ]),
                 "data_files_used": [
+                    "Code_function_selection_profiles.json",
                     "Code_project_recipes.json",
                     "Code_assembly_patterns.json",
                     "Code_composition_tables.json",
@@ -6857,6 +7086,7 @@ if __name__ == "__main__":
 
         retry_request = data.get("retry_request", {})
         retry_instructions = data.get("retry_instructions", [])
+        correction_contract = self.quality_correction_contract(data)
         if (
             data.get("retry_target") == "Code_brain"
             and isinstance(retry_request, dict)
@@ -7056,7 +7286,8 @@ if __name__ == "__main__":
                     text,
                     terms,
                     task_type,
-                    existing_code
+                    existing_code,
+                    correction_contract=correction_contract,
                 ),
                 scanner_articles,
                 library_context
