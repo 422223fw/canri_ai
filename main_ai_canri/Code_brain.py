@@ -75,15 +75,17 @@ class CodeSelfReviewer:
         lowered = request.lower()
         requirements = []
 
-        def add(identifier, kind, evidence, alternatives=None):
+        def add(identifier, kind, evidence, alternatives=None, **metadata):
             if any(item["id"] == identifier for item in requirements):
                 return
-            requirements.append({
+            requirement = {
                 "id": identifier,
                 "kind": kind,
                 "evidence": list(evidence),
                 "alternatives": list(alternatives or [])
-            })
+            }
+            requirement.update(metadata)
+            requirements.append(requirement)
 
         if any(marker in lowered for marker in ["runnable", "must run", "terminal", "command line"]):
             add("runnable_entry_point", "structure", ["def main(", 'if __name__ == "__main__"'])
@@ -145,9 +147,151 @@ class CodeSelfReviewer:
         for field in program_fields.get(program_kind, []):
             add(f"field_{field}", "data_field", [f'"{field}"'], [(f"'{field}'",)])
 
+        if program_kind == "quiz_game":
+            question_match = re.search(
+                r"\b(?:exactly\s+)?(\d+|one|two|three|four|five|six|seven|eight|nine|ten|"
+                r"eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|"
+                r"nineteen|twenty)\s+(?:multiple[- ]choice\s+)?questions?\b",
+                lowered,
+            )
+            question_count = self.number_value(question_match.group(1)) if question_match else 10
+            add(
+                "quiz_question_count",
+                "quiz_question_count",
+                [],
+                expected=question_count,
+            )
+
+            choice_match = re.search(
+                r"\b(?:exactly\s+)?(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+"
+                r"(?:answer\s+)?(?:choices?|options?)\b",
+                lowered,
+            )
+            choice_count = self.number_value(choice_match.group(1)) if choice_match else None
+            if choice_count is not None or "multiple choice" in lowered or "multiple-choice" in lowered:
+                add(
+                    "quiz_choice_count",
+                    "quiz_choice_count",
+                    [],
+                    expected=choice_count or 4,
+                )
+            if re.search(r"\b(?:1|one)\s*,\s*(?:2|two)\s*,\s*(?:3|three)\s*,?\s*(?:or|and)\s*(?:4|four)\b", lowered):
+                add("quiz_numeric_choice_input", "quiz_numeric_choice_input", [])
+            if "invalid input" in lowered or "ask again" in lowered or "reject invalid" in lowered:
+                add("retry_invalid_input", "retry_invalid_input", [])
+            if "play again" in lowered or "run again" in lowered:
+                add("play_again", "play_again", [])
+            score_match = re.search(r"\b(?:score\s+)?(?:of|out\s+of)\s+(\d+)\b", lowered)
+            score_count = int(score_match.group(1)) if score_match else question_count
+            add("quiz_score_denominator", "score_denominator", [], expected=score_count)
+
+        if program_kind == "temperature_converter":
+            add("temperature_input", "temperature_input", [])
+            add("temperature_units", "temperature_units", [])
+            add("temperature_conversion", "temperature_conversion", [])
+            if "invalid" in lowered or "safely" in lowered:
+                add("retry_invalid_input", "retry_invalid_input", [])
+            if "exit" in lowered or "keep running" in lowered:
+                add("repeat_until_exit", "repeat_until_exit", [])
+
         return requirements
 
-    def requirement_passed(self, requirement, lowered_code):
+    def number_value(self, value):
+
+        values = {
+            "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+            "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+            "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14,
+            "fifteen": 15, "sixteen": 16, "seventeen": 17,
+            "eighteen": 18, "nineteen": 19, "twenty": 20,
+        }
+        normalized = str(value or "").strip().lower()
+        return int(normalized) if normalized.isdigit() else values.get(normalized)
+
+    def literal_assignment(self, code, variable_name):
+
+        try:
+            tree = ast.parse(str(code or ""))
+        except (SyntaxError, ValueError):
+            return None
+
+        for node in tree.body:
+            if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+                continue
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            if not any(isinstance(target, ast.Name) and target.id == variable_name for target in targets):
+                continue
+            try:
+                return ast.literal_eval(node.value)
+            except (ValueError, TypeError, SyntaxError):
+                return None
+        return None
+
+    def quiz_records(self, code):
+
+        questions = self.literal_assignment(code, "QUESTIONS")
+        if not isinstance(questions, (list, tuple)):
+            return []
+        return [item for item in questions if isinstance(item, dict)]
+
+    def requirement_passed(self, requirement, code):
+
+        lowered_code = str(code or "").lower()
+        kind = requirement.get("kind")
+
+        if kind == "quiz_question_count":
+            expected = requirement.get("expected")
+            questions = self.quiz_records(code)
+            return isinstance(expected, int) and len(questions) == expected
+        if kind == "quiz_choice_count":
+            expected = requirement.get("expected")
+            questions = self.quiz_records(code)
+            return bool(questions) and isinstance(expected, int) and all(
+                isinstance(item.get("choices"), (list, tuple))
+                and len(item["choices"]) == expected
+                for item in questions
+            )
+        if kind == "quiz_numeric_choice_input":
+            questions = self.quiz_records(code)
+            valid_answers = bool(questions) and all(
+                isinstance(item.get("answer"), int)
+                and 1 <= item["answer"] <= len(item.get("choices", []))
+                for item in questions
+            )
+            return valid_answers and "int(" in lowered_code and "input(" in lowered_code
+        if kind == "retry_invalid_input":
+            return (
+                all(marker in lowered_code for marker in ["while true", "input("])
+                and any(
+                    marker in lowered_code
+                    for marker in ["please enter", "invalid", "except valueerror", "try:"]
+                )
+            )
+        if kind == "play_again":
+            return (
+                "play again" in lowered_code
+                and "while true" in lowered_code
+                and ("def ask_to_play_again" in lowered_code or "again" in lowered_code)
+            )
+        if kind == "score_denominator":
+            expected = requirement.get("expected")
+            questions = self.quiz_records(code)
+            return (
+                isinstance(expected, int)
+                and len(questions) == expected
+                and ("len(questions)" in lowered_code or f"/{expected}" in lowered_code.replace(" ", ""))
+            )
+        if kind == "temperature_input":
+            return "input(" in lowered_code and "float(" in lowered_code and "temperature" in lowered_code
+        if kind == "temperature_units":
+            return all(marker in lowered_code for marker in ["celsius", "fahrenheit"])
+        if kind == "temperature_conversion":
+            compact = re.sub(r"\s+", "", lowered_code)
+            c_to_f = ("*9/5" in compact or "*1.8" in compact) and "+32" in compact
+            f_to_c = "-32" in compact and ("*5/9" in compact or "/1.8" in compact)
+            return c_to_f and f_to_c
+        if kind == "repeat_until_exit":
+            return all(marker in lowered_code for marker in ["while true", "input(", "exit", "break"])
 
         if requirement["kind"] == "negative_constraint":
             external_imports = [
@@ -314,14 +458,13 @@ class CodeSelfReviewer:
 
     def review_request_alignment(self, code, request_text="", program_kind=None):
 
-        lowered_code = str(code or "").lower()
         extracted = self.extract_request_requirements(request_text, program_kind)
         checks = []
         for requirement in extracted:
             checks.append({
                 "requirement": requirement["id"],
                 "kind": requirement["kind"],
-                "passed": self.requirement_passed(requirement, lowered_code),
+                "passed": self.requirement_passed(requirement, code),
                 "evidence": requirement.get("evidence", []),
                 "alternatives": requirement.get("alternatives", [])
             })
@@ -2431,6 +2574,51 @@ class CodeBrain:
 
         return ""
 
+    def merge_continuation_request(self, current_text, memory_report):
+
+        current = str(current_text or "").strip()
+        if not isinstance(memory_report, dict):
+            return current
+        conversation = memory_report.get("conversation", {})
+        if not isinstance(conversation, dict):
+            return current
+
+        lowered = current.lower()
+        continuation_requested = bool(conversation.get("continuation_request")) or any(
+            marker in lowered
+            for marker in [
+                "continue", "same code", "same program", "same project",
+                "you just wrote", "previous code", "improve it", "fix it",
+                "add to it", "not a new project",
+            ]
+        )
+        if not continuation_requested:
+            return current
+
+        source = conversation.get("continuation_source", {})
+        previous_request = source.get("user") if isinstance(source, dict) else None
+        if not previous_request:
+            previous = conversation.get("last_completed_turn", {})
+            if isinstance(previous, dict):
+                previous_request = previous.get("user")
+        if not previous_request:
+            recent = conversation.get("recent_turns", [])
+            if isinstance(recent, list):
+                for turn in reversed(recent):
+                    if isinstance(turn, dict) and turn.get("user"):
+                        previous_request = turn["user"]
+                        break
+
+        previous = str(previous_request or "").strip()
+        if not previous or previous.lower() == current.lower():
+            return current
+        return (
+            "Previous project requirements to preserve:\n"
+            f"{previous[:6000]}\n\n"
+            "Current requested changes:\n"
+            f"{current}"
+        )
+
     def is_code_analysis_request(
         self,
         text,
@@ -3704,7 +3892,12 @@ if __name__ == "__main__":
                 "asks for the user's name", "ask for the user's name",
                 "asks for names", "hello, <name>", "hello <name>",
             ]),
-            ("weather_app", ["weather", "temperature", "humidity", "forecast"]),
+            ("temperature_converter", [
+                "temperature converter", "convert temperature", "convert celsius",
+                "convert fahrenheit", "celsius or fahrenheit", "celsius to fahrenheit",
+                "fahrenheit to celsius",
+            ]),
+            ("weather_app", ["weather app", "weather", "humidity", "forecast", "weather api"]),
             ("expense_tracker", ["expense tracker", "expenses", "amount spent", "total amount", "search expenses", "category"]),
             ("calendar_app", ["calendar", "appointment", "appointments", "event planner", "events by date", "schedule event"]),
             ("todo_app", ["to-do", "todo", "task list", "tasks", "mark a task"]),
@@ -3737,6 +3930,205 @@ if __name__ == "__main__":
             return "json_cli"
 
         return "number_summary"
+
+    def detect_existing_program_kind(self, code):
+
+        lowered = str(code or "").lower()
+        markers = [
+            ("notes_app", ["def add_note", "def list_notes"]),
+            ("expense_tracker", ["def add_expense", "def show_total"]),
+            ("library_manager", ["def add_book", "def borrow_book"]),
+            ("quiz_game", ["questions =", "def run_quiz"]),
+            ("temperature_converter", ["celsius", "fahrenheit", "def convert"]),
+            ("todo_app", ["def add_task", "def list_tasks"]),
+            ("contact_book", ["def add_contact", "def list_contacts"]),
+            ("shop_inventory", ["quantity", "price", "def add_"]),
+            ("weather_app", ["def fetch_weather", "humidity"]),
+            ("name_greeter", ["hello, {name}", "enter your name"]),
+            ("calculator", ["def calculate", "operator"]),
+        ]
+        for kind, required in markers:
+            if all(marker in lowered for marker in required):
+                return kind
+        return None
+
+    def requested_count(self, text, target_pattern, default, minimum=1, maximum=50):
+
+        number_words = {
+            "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+            "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+            "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14,
+            "fifteen": 15, "sixteen": 16, "seventeen": 17,
+            "eighteen": 18, "nineteen": 19, "twenty": 20,
+        }
+        match = re.search(
+            rf"\b(?:exactly\s+)?(\d+|{'|'.join(number_words)})\s+(?:{target_pattern})\b",
+            str(text or "").lower(),
+        )
+        if not match:
+            return default
+        raw = match.group(1)
+        value = int(raw) if raw.isdigit() else number_words.get(raw, default)
+        return max(minimum, min(int(value), maximum))
+
+    def build_quiz_game_code(self, text):
+
+        question_count = self.requested_count(
+            text,
+            r"(?:multiple[- ]choice\s+)?questions?",
+            10,
+            minimum=1,
+            maximum=50,
+        )
+        bank = [
+            {"question": "Which keyword defines a function in Python?", "choices": ["class", "def", "func", "method"], "answer": 2},
+            {"question": "Which planet is known as the Red Planet?", "choices": ["Venus", "Earth", "Mars", "Jupiter"], "answer": 3},
+            {"question": "What is 9 multiplied by 7?", "choices": ["56", "63", "72", "79"], "answer": 2},
+            {"question": "Which gas do plants absorb during photosynthesis?", "choices": ["Oxygen", "Hydrogen", "Carbon dioxide", "Nitrogen"], "answer": 3},
+            {"question": "What is the capital of Japan?", "choices": ["Seoul", "Tokyo", "Kyoto", "Beijing"], "answer": 2},
+            {"question": "Which file extension is commonly used for JSON data?", "choices": [".json", ".py", ".html", ".exe"], "answer": 1},
+            {"question": "How many sides does a hexagon have?", "choices": ["Five", "Six", "Seven", "Eight"], "answer": 2},
+            {"question": "Which ocean is the largest?", "choices": ["Atlantic", "Indian", "Arctic", "Pacific"], "answer": 4},
+            {"question": "Who wrote Romeo and Juliet?", "choices": ["Charles Dickens", "Jane Austen", "William Shakespeare", "Mark Twain"], "answer": 3},
+            {"question": "What does CPU stand for?", "choices": ["Central Processing Unit", "Computer Personal Utility", "Core Program User", "Central Program Upload"], "answer": 1},
+            {"question": "What is the freezing point of water in Celsius?", "choices": ["0", "10", "32", "100"], "answer": 1},
+            {"question": "Which data type stores True or False in Python?", "choices": ["str", "float", "bool", "list"], "answer": 3},
+            {"question": "What is the square root of 81?", "choices": ["7", "8", "9", "10"], "answer": 3},
+            {"question": "Which continent contains Egypt?", "choices": ["Africa", "Asia", "Europe", "South America"], "answer": 1},
+            {"question": "Which instrument measures temperature?", "choices": ["Barometer", "Thermometer", "Compass", "Altimeter"], "answer": 2},
+            {"question": "Which symbol starts a Python comment?", "choices": ["//", "#", "--", "/*"], "answer": 2},
+            {"question": "How many minutes are in one hour?", "choices": ["30", "45", "60", "90"], "answer": 3},
+            {"question": "Which animal is a mammal?", "choices": ["Shark", "Frog", "Dolphin", "Trout"], "answer": 3},
+            {"question": "What is H2O commonly called?", "choices": ["Salt", "Water", "Oxygen", "Hydrogen"], "answer": 2},
+            {"question": "Which direction is opposite to east?", "choices": ["North", "South", "West", "Up"], "answer": 3},
+        ]
+        questions = list(bank[:question_count])
+        while len(questions) < question_count:
+            number = len(questions) + 2
+            correct = number + 3
+            questions.append({
+                "question": f"What is {number} + 3?",
+                "choices": [str(correct - 1), str(correct), str(correct + 1), str(correct + 2)],
+                "answer": 2,
+            })
+        questions_literal = json.dumps(questions, ensure_ascii=True, indent=4)
+
+        return f'''QUESTIONS = {questions_literal}
+
+
+def read_choice(choice_count):
+    valid_choices = {{str(index) for index in range(1, choice_count + 1)}}
+
+    while True:
+        raw = input("Your answer: ").strip()
+        if raw in valid_choices:
+            return int(raw)
+        print(f"Please enter a number from 1 to {{choice_count}}.")
+
+
+def run_quiz():
+    score = 0
+
+    for question_number, item in enumerate(QUESTIONS, start=1):
+        print(f"\\nQuestion {{question_number}}/{{len(QUESTIONS)}}")
+        print(item["question"])
+
+        for choice_number, choice in enumerate(item["choices"], start=1):
+            print(f"{{choice_number}}. {{choice}}")
+
+        selected = read_choice(len(item["choices"]))
+        if selected == item["answer"]:
+            print("Correct.")
+            score += 1
+        else:
+            correct = item["choices"][item["answer"] - 1]
+            print(f"Incorrect. The correct answer is {{item['answer']}}. {{correct}}")
+
+    print(f"\\nFinal score: {{score}}/{{len(QUESTIONS)}}")
+
+
+def ask_to_play_again():
+    while True:
+        answer = input("Play again? (yes/no): ").strip().lower()
+        if answer in {{"yes", "y"}}:
+            return True
+        if answer in {{"no", "n"}}:
+            return False
+        print("Please enter yes or no.")
+
+
+def main():
+    print("Terminal Quiz Game")
+
+    while True:
+        run_quiz()
+        if not ask_to_play_again():
+            print("Goodbye.")
+            break
+
+
+if __name__ == "__main__":
+    main()
+'''
+
+    def build_temperature_converter_code(self):
+
+        return '''def read_temperature():
+    while True:
+        raw = input("Temperature value (or 'exit'): ").strip()
+        if raw.lower() == "exit":
+            return None
+
+        try:
+            return float(raw)
+        except ValueError:
+            print("Please enter a valid number or type exit.")
+
+
+def read_unit():
+    aliases = {
+        "c": "celsius",
+        "celsius": "celsius",
+        "f": "fahrenheit",
+        "fahrenheit": "fahrenheit",
+    }
+
+    while True:
+        raw = input("Unit (Celsius/Fahrenheit or 'exit'): ").strip().lower()
+        if raw == "exit":
+            return None
+        if raw in aliases:
+            return aliases[raw]
+        print("Please enter Celsius, Fahrenheit, C, F, or exit.")
+
+
+def convert_temperature(value, source_unit):
+    if source_unit == "celsius":
+        return (value * 9 / 5) + 32, "Fahrenheit"
+    return (value - 32) * 5 / 9, "Celsius"
+
+
+def main():
+    print("Temperature Converter")
+
+    while True:
+        value = read_temperature()
+        if value is None:
+            break
+
+        source_unit = read_unit()
+        if source_unit is None:
+            break
+
+        converted, target_unit = convert_temperature(value, source_unit)
+        print(f"Converted temperature: {converted:.2f} {target_unit}")
+
+    print("Goodbye.")
+
+
+if __name__ == "__main__":
+    main()
+'''
 
     def build_json_record_cli_code(
         self,
@@ -4449,13 +4841,10 @@ if __name__ == "__main__":
     main()
 '''
 
-    def build_direct_python_program_code(self, text, task_type):
+    def build_direct_python_program_code(self, text, task_type, program_kind=None):
 
         lowered = str(text).lower()
-        program_kind = self.detect_direct_program_kind(
-            text,
-            task_type
-        )
+        program_kind = program_kind or self.detect_direct_program_kind(text, task_type)
 
         if program_kind == "name_greeter":
             return '''def main():
@@ -4496,7 +4885,10 @@ if __name__ == "__main__":
             )
             return self.apply_requested_file_name(code, text)
 
-        if program_kind == "weather_app" or "api" in lowered:
+        if program_kind == "temperature_converter":
+            return self.build_temperature_converter_code()
+
+        if program_kind == "weather_app":
             return '''import json
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
@@ -5374,39 +5766,7 @@ if __name__ == "__main__":
 '''
 
         if program_kind == "quiz_game":
-            return '''QUESTIONS = [
-    {
-        "question": "What language is this program written in?",
-        "answer": "python"
-    },
-    {
-        "question": "What keyword defines a function in Python?",
-        "answer": "def"
-    },
-    {
-        "question": "What file format often stores structured data?",
-        "answer": "json"
-    }
-]
-
-
-def run_quiz():
-    score = 0
-
-    for item in QUESTIONS:
-        answer = input(item["question"] + " ").strip().lower()
-        if answer == item["answer"]:
-            print("Correct.")
-            score += 1
-        else:
-            print(f"Wrong. The answer is {item['answer']}.")
-
-    print(f"Final score: {score}/{len(QUESTIONS)}")
-
-
-if __name__ == "__main__":
-    run_quiz()
-'''
+            return self.build_quiz_game_code(text)
 
         if program_kind == "guessing_game":
             return '''import random
@@ -5695,19 +6055,89 @@ if __name__ == "__main__":
             flags=re.IGNORECASE
         )
 
+    def derive_enhancement_decisions(self, text, program_kind, code):
+
+        requirements = self.self_reviewer.extract_request_requirements(
+            text,
+            program_kind,
+        )
+        verified = [
+            item["id"]
+            for item in requirements
+            if self.self_reviewer.requirement_passed(item, code)
+        ]
+        failed = [
+            item["id"]
+            for item in requirements
+            if item["id"] not in verified
+        ]
+        lowered = str(text or "").lower()
+        strict_output = "only output" in lowered
+        improvements = [
+            {
+                "id": "failure_path_validation",
+                "applied": "try:" in code or "while True" in code,
+                "reason": "Keep invalid input inside a recoverable interaction path.",
+            },
+            {
+                "id": "clean_exit",
+                "applied": "exit" in code.lower() or "quit" in code.lower(),
+                "reason": "Interactive programs should have a predictable exit path.",
+            },
+            {
+                "id": "request_specific_structure",
+                "applied": program_kind not in {"json_cli", "number_summary"},
+                "reason": "Prefer a domain-specific implementation over a generic record template.",
+            },
+        ]
+        return {
+            "basis": "request_contract_and_verified_behavior",
+            "verified_requirement_ids": verified,
+            "failed_requirement_ids": failed,
+            "improvements_considered": improvements,
+            "strict_output": strict_output,
+            "visible_after_code": False if strict_output else None,
+            "policy": (
+                "Add robustness and useful depth inside the requested program, but never add "
+                "unrequested output sections or trade correctness for code length."
+            ),
+        }
+
     def build_direct_python_program_result(self, text, terms, task_type, existing_code=""):
 
-        program_kind = self.detect_direct_program_kind(
+        detected_kind = self.detect_direct_program_kind(
             text,
             task_type
         )
+        existing_kind = self.detect_existing_program_kind(existing_code)
+        lowered = str(text or "").lower()
+        continuation_requested = bool(existing_code) and any(
+            marker in lowered
+            for marker in [
+                "continue", "same", "previous", "you just wrote", "fix the",
+                "improve the", "add to", "keep the existing",
+            ]
+        )
+        program_kind = detected_kind
+        if (
+            continuation_requested
+            and existing_kind
+            and detected_kind in {"json_cli", "number_summary"}
+        ):
+            program_kind = existing_kind
 
         code = self.build_direct_python_program_code(
             text,
-            task_type
+            task_type,
+            program_kind=program_kind,
         )
         code = self.apply_requested_file_name(code, text)
         recipe = self.choose_project_recipe(program_kind, text)
+        enhancement_decisions = self.derive_enhancement_decisions(
+            text,
+            program_kind,
+            code,
+        )
 
         return {
             "brain": "Code_brain",
@@ -5728,8 +6158,8 @@ if __name__ == "__main__":
                 "program_kind": program_kind,
                 "ordered_ids": [f"direct_python_{program_kind}"],
                 "steps": [
-                    "Detect requested Python program kind from the Understanding_brain report and user text.",
-                    "Choose a complete runnable standard-library template.",
+                    "Build a program specification from the full request contract and prior code context.",
+                    "Assemble request-specific behavior from verified standard-library components.",
                     "Run CodeSelfReviewer for syntax, placeholder, and main-guard checks.",
                     "Return final code instead of module names or draft helper variants."
                 ],
@@ -5769,9 +6199,23 @@ if __name__ == "__main__":
                 "Previous conversation code was detected and used as continuation context." if existing_code else "No previous code context was needed."
             ],
             "existing_code_detected": bool(existing_code),
+            "existing_program_kind": existing_kind,
+            "continuation_requested": continuation_requested,
+            "continuation_preservation": {
+                "previous_kind_preserved": bool(
+                    continuation_requested and existing_kind == program_kind
+                ),
+                "previous_code_available": bool(existing_code),
+                "strategy": (
+                    "rebuild_known_program_from_merged_requirements"
+                    if continuation_requested and existing_kind
+                    else "request_contract_generation"
+                ),
+            },
             "match_details": [],
             "generated_code": code,
             "request_text": text,
+            "generation_basis": enhancement_decisions,
             "project_recipe": {
                 "id": recipe.get("id"),
                 "kind": recipe.get("kind", program_kind),
@@ -6395,6 +6839,10 @@ if __name__ == "__main__":
         text = self.extract_text(
             data,
             report
+        )
+        text = self.merge_continuation_request(
+            text,
+            memory_report,
         )
 
         scanner_articles = (

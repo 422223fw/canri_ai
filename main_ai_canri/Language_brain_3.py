@@ -37,13 +37,44 @@ class GrammarEngine:
             if token.strip()
         ]
 
+    def extract_protected_spans(self, text):
+
+        pattern = (
+            r"```[\s\S]*?```|`[^`\n]+`|https?://[^\s]+|"
+            r"\b[A-Za-z_][A-Za-z0-9_]*\([^()\n]*\)|"
+            r"\b[\w.-]+\.(?:jsonl?|py|txt|csv|md|html?|css|js|ts|ya?ml)\b"
+        )
+        return list(dict.fromkeys(re.findall(pattern, str(text), flags=re.IGNORECASE)))
+
+    def protected_word_names(self, text):
+
+        names = set()
+        for span in self.extract_protected_spans(text):
+            names.update(
+                word.lower()
+                for word in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", span)
+            )
+        return names
+
     def analyze_words(self, text):
         if dk is None:
             return []
 
         results = []
 
+        protected_names = self.protected_word_names(text)
         for word in self.extract_word_tokens(text):
+            if word in protected_names:
+                results.append({
+                    "word": word,
+                    "exists": True,
+                    "grammar_exists": True,
+                    "tense": None,
+                    "forms": {},
+                    "meanings": [],
+                    "protected_code_term": True,
+                })
+                continue
             try:
                 results.append({
                     "word": word,
@@ -69,10 +100,27 @@ class GrammarEngine:
         if dk is None:
             return text
 
+        protected = self.extract_protected_spans(text)
+        prepared = str(text)
+        placeholders = {}
+        for index, span in enumerate(protected):
+            placeholder = f"CANRIPROTECTED{index}"
+            placeholders[placeholder] = span
+            prepared = prepared.replace(span, placeholder)
+
         try:
-            return dk.fix_sentence(text)
+            fixed = dk.fix_sentence(prepared)
         except Exception:
             return text
+
+        for placeholder, span in placeholders.items():
+            fixed = re.sub(
+                re.escape(placeholder),
+                lambda _: span,
+                fixed,
+                flags=re.IGNORECASE,
+            )
+        return fixed
 
     def analyze_sentence(self, text):
         if dk is None:
@@ -178,6 +226,8 @@ class GrammarEngine:
         issues = []
 
         for item in word_analysis:
+            if item.get("protected_code_term"):
+                continue
             if not item.get("exists"):
                 issues.append({
                     "word": item.get("word"),
@@ -197,6 +247,7 @@ class GrammarEngine:
         base_forms = self.get_base_forms(text)
         word_type_groups = self.build_word_type_groups(word_analysis, report)
         grammar_issues = self.find_grammar_issues(word_analysis)
+        protected_spans = self.extract_protected_spans(text)
 
         known_words = sum(1 for item in word_analysis if item.get("exists"))
         total_words = len(word_analysis)
@@ -210,6 +261,8 @@ class GrammarEngine:
             "word_analysis": word_analysis,
             "word_type_groups": word_type_groups,
             "grammar_issues": grammar_issues,
+            "protected_spans": protected_spans,
+            "protected_code_spans": protected_spans,
             "sentence_analysis": sentence_analysis,
             "tenses": tenses,
             "base_forms": base_forms,

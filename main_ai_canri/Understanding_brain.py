@@ -2064,7 +2064,14 @@ class UnderstandingBrain:
                 marker in lowered
                 for marker in ["do not", "don't", "never", "without", "no external"]
             )
-            if ("," in cleaned or ";" in cleaned) and not negative_line:
+            contains_numeric_choice_list = bool(
+                re.search(r"\b\d+\s*,\s*\d+\s*,", cleaned)
+            )
+            if (
+                ("," in cleaned or ";" in cleaned)
+                and not negative_line
+                and not contains_numeric_choice_list
+            ):
                 pieces = re.split(r"\s*[,;]\s*|\s+and\s+", cleaned)
                 if len(pieces) > 1:
                     for piece in pieces:
@@ -2090,6 +2097,149 @@ class UnderstandingBrain:
                     add_clause(sentence, f"sentence_{sentence_number}")
 
         return clauses[:80]
+
+    def quantity_value(self, value):
+
+        number_words = {
+            "zero": 0,
+            "one": 1,
+            "two": 2,
+            "three": 3,
+            "four": 4,
+            "five": 5,
+            "six": 6,
+            "seven": 7,
+            "eight": 8,
+            "nine": 9,
+            "ten": 10,
+            "eleven": 11,
+            "twelve": 12,
+            "thirteen": 13,
+            "fourteen": 14,
+            "fifteen": 15,
+            "sixteen": 16,
+            "seventeen": 17,
+            "eighteen": 18,
+            "nineteen": 19,
+            "twenty": 20,
+        }
+        normalized = str(value or "").strip().lower()
+        if normalized.isdigit():
+            return int(normalized)
+        return number_words.get(normalized)
+
+    def extract_quantified_constraints(self, text):
+
+        raw = str(text or "")
+        lowered = raw.lower()
+        number_token = (
+            r"\d+|zero|one|two|three|four|five|six|seven|eight|nine|ten|"
+            r"eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|"
+            r"eighteen|nineteen|twenty"
+        )
+        target_pattern = (
+            r"multiple[- ]choice\s+questions?|answer\s+choices?|answer\s+options?|"
+            r"questions?|sentences?|files?|attempts?|choices?|options?|items?|records?|"
+            r"examples?|steps?|paragraphs?|chapters?"
+        )
+        constraints = []
+        seen = set()
+
+        for match in re.finditer(
+            rf"\b(?:(exactly|at\s+least|at\s+most|no\s+more\s+than|minimum(?:\s+of)?|maximum(?:\s+of)?)\s+)?"
+            rf"({number_token})\s+({target_pattern})\b",
+            lowered,
+            flags=re.IGNORECASE,
+        ):
+            quantity = self.quantity_value(match.group(2))
+            if quantity is None:
+                continue
+            qualifier = re.sub(r"\s+", " ", str(match.group(1) or "").strip())
+            mode = "exact"
+            if qualifier in {"at least", "minimum", "minimum of"}:
+                mode = "minimum"
+            elif qualifier in {"at most", "no more than", "maximum", "maximum of"}:
+                mode = "maximum"
+            target = re.sub(r"\s+", "_", match.group(3).lower().replace("-", " ")).rstrip("s")
+            identity = (mode, quantity, target)
+            if identity in seen:
+                continue
+            seen.add(identity)
+            start = max(0, match.start() - 45)
+            end = min(len(raw), match.end() + 45)
+            constraints.append({
+                "id": f"quantity_{target}_{mode}_{quantity}",
+                "mode": mode,
+                "quantity": quantity,
+                "target": target,
+                "context": re.sub(r"\s+", " ", raw[start:end]).strip(),
+            })
+
+        score_match = re.search(rf"\b(?:score|result)\s+(?:of|out\s+of)\s+({number_token})\b", lowered)
+        if score_match:
+            quantity = self.quantity_value(score_match.group(1))
+            if quantity is not None:
+                constraints.append({
+                    "id": f"score_out_of_{quantity}",
+                    "mode": "exact",
+                    "quantity": quantity,
+                    "target": "score_denominator",
+                    "context": score_match.group(0),
+                })
+
+        allowed_match = re.search(
+            r"\b(?:enter|entering|type|typing|choose|choosing|answer\s+with)\s+"
+            r"(\d+(?:(?:\s*,\s*(?:or\s+|and\s+)?|\s+(?:or|and)\s+)\d+)+)\b",
+            lowered,
+        )
+        if allowed_match:
+            values = list(dict.fromkeys(re.findall(r"\d+", allowed_match.group(1))))
+            if len(values) >= 2:
+                constraints.append({
+                    "id": "allowed_input_values_" + "_".join(values),
+                    "mode": "allowed_values",
+                    "values": values,
+                    "target": "user_input",
+                    "context": allowed_match.group(0),
+                })
+
+        return constraints[:40]
+
+    def extract_interaction_requirements(self, text):
+
+        lowered = str(text or "").lower()
+        checks = [
+            (
+                "repeat_until_exit",
+                ["until the user types exit", "until the user enters exit", "keep running until", "keep asking until"],
+                "Repeat the interaction until the user explicitly exits.",
+            ),
+            (
+                "retry_invalid_input",
+                ["handle invalid input", "reject invalid input", "ask again", "invalid input safely"],
+                "Reject invalid input safely and ask again when required.",
+            ),
+            (
+                "play_again",
+                ["play again", "run again", "start another quiz", "restart the quiz"],
+                "Offer another complete run without restarting the program.",
+            ),
+            (
+                "preserve_previous_work",
+                ["same project", "same program", "same code", "you just wrote", "continue from", "improve the same"],
+                "Preserve previous working behavior while applying the requested changes.",
+            ),
+        ]
+        requirements = []
+        for identifier, markers, description in checks:
+            matched = [marker for marker in markers if marker in lowered]
+            if matched:
+                requirements.append({
+                    "id": identifier,
+                    "description": description,
+                    "matched_markers": matched,
+                })
+        return requirements
 
     def extract_detail_inventory(
         self,
@@ -2148,9 +2298,14 @@ class UnderstandingBrain:
             if value not in named_entities:
                 named_entities.append(value)
 
+        quantified_constraints = self.extract_quantified_constraints(raw)
+        interaction_requirements = self.extract_interaction_requirements(raw)
+
         return {
             "explicit_details": requirement_clauses,
             "numbers": numbers[:30],
+            "quantified_constraints": quantified_constraints,
+            "interaction_requirements": interaction_requirements,
             "file_names": file_names[:30],
             "quoted_values": quoted_values[:30],
             "named_entities": named_entities[:30],
@@ -2162,6 +2317,8 @@ class UnderstandingBrain:
             "coverage": {
                 "explicit_detail_count": len(requirement_clauses),
                 "number_count": len(numbers),
+                "quantified_constraint_count": len(quantified_constraints),
+                "interaction_requirement_count": len(interaction_requirements),
                 "file_name_count": len(file_names),
                 "named_entity_count": len(named_entities),
                 "negative_constraint_count": len(negative_constraints)
@@ -2195,6 +2352,27 @@ class UnderstandingBrain:
                 "text": f"Implement requested feature: {feature}",
                 "kind": "feature",
                 "feature": feature
+            })
+
+        for constraint in self.extract_quantified_constraints(text):
+            requirement = {
+                "id": constraint["id"],
+                "text": constraint.get("context") or constraint["id"],
+                "kind": "quantified_constraint",
+                "mode": constraint.get("mode"),
+                "quantity": constraint.get("quantity"),
+                "target": constraint.get("target"),
+            }
+            if constraint.get("values"):
+                requirement["values"] = constraint["values"]
+            requirements.append(requirement)
+
+        for interaction in self.extract_interaction_requirements(text):
+            requirements.append({
+                "id": interaction["id"],
+                "text": interaction["description"],
+                "kind": "interaction_constraint",
+                "matched_markers": interaction.get("matched_markers", []),
             })
 
         if output_constraints.get("must_be_runnable"):
@@ -2235,7 +2413,9 @@ class UnderstandingBrain:
         continuation_markers = [
             "continue", "same", "previous", "earlier", "above",
             "improve it", "fix it", "add to it", "that code", "this code",
-            "the story", "more sentences", "from the code you just wrote"
+            "the story", "more sentences", "from the code you just wrote",
+            "you just wrote", "continue from", "same project", "same program",
+            "same code", "improve the same", "keep the existing"
         ]
         output_constraints = self.extract_output_constraints(text, intent)
         requirements = self.extract_atomic_requirements(
@@ -2284,7 +2464,31 @@ class UnderstandingBrain:
             "detail_inventory": detail_inventory,
             "continuation": {
                 "requested": any(marker in lowered for marker in continuation_markers),
-                "markers": [marker for marker in continuation_markers if marker in lowered][:8]
+                "markers": [marker for marker in continuation_markers if marker in lowered][:12],
+                "preserve_previous_behavior": any(
+                    marker in lowered
+                    for marker in [
+                        "same", "previous", "continue", "you just wrote",
+                        "keep the existing", "improve it", "fix it"
+                    ]
+                ),
+                "requested_changes": [
+                    item.get("text")
+                    for item in detail_inventory.get("explicit_details", [])
+                    if isinstance(item, dict)
+                ][:40],
+            },
+            "enhancement_policy": {
+                "always_consider_improvements": True,
+                "priorities": [
+                    "complete every explicit requirement",
+                    "preserve previous working behavior",
+                    "handle realistic invalid input and failure paths",
+                    "add useful depth only when it stays inside the requested scope",
+                ],
+                "strict_output": bool(output_constraints.get("only_output")),
+                "user_visible_extras_allowed": not bool(output_constraints.get("only_output")),
+                "never_trade_precision_for_length": True,
             },
             "coverage": {
                 "whole_input_analyzed": True,

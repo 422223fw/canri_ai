@@ -75,7 +75,27 @@ class TranslationEngine:
         return False
 
     def tokenize(self, text):
-        return re.findall(r"\w+|[^\w\s]", str(text), flags=re.UNICODE)
+        pattern = (
+            r"```[\s\S]*?```|`[^`\n]+`|https?://[^\s]+|"
+            r"\b[A-Za-z_][A-Za-z0-9_]*\([^()\n]*\)|"
+            r"\b[\w.-]+\.(?:jsonl?|py|txt|csv|md|html?|css|js|ts|ya?ml)\b|"
+            r"\w+|[^\w\s]"
+        )
+        return re.findall(pattern, str(text), flags=re.UNICODE)
+
+    def is_protected_token(self, token):
+
+        value = str(token or "")
+        return bool(
+            value.startswith(("```", "`", "http://", "https://"))
+            or re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*\([^()\n]*\)", value)
+            or re.fullmatch(
+                r"[\w.-]+\.(?:jsonl?|py|txt|csv|md|html?|css|js|ts|ya?ml)",
+                value,
+                flags=re.IGNORECASE,
+            )
+            or re.fullmatch(r"--?[A-Za-z][A-Za-z0-9-]*", value)
+        )
 
     def join_tokens(self, tokens):
         text = ""
@@ -156,8 +176,13 @@ class TranslationEngine:
         tokens = self.tokenize(source_text)
         output_tokens = []
         word_reports = []
+        protected_tokens = []
 
         for token in tokens:
+            if self.is_protected_token(token):
+                output_tokens.append(token)
+                protected_tokens.append(token)
+                continue
             if not re.search(r"\w", token, flags=re.UNICODE):
                 output_tokens.append(token)
                 continue
@@ -182,6 +207,7 @@ class TranslationEngine:
                 for item in word_reports
                 if not item.get("found")
             ],
+            "protected_tokens": protected_tokens,
             "confidence": confidence,
         }
 
@@ -199,6 +225,7 @@ class TranslationEngine:
             "translated_text": translation_result.get("translated_text", ""),
             "translated_words": translation_result.get("translated_words", []),
             "missing_words": translation_result.get("missing_words", []),
+            "protected_tokens": translation_result.get("protected_tokens", []),
             "result": translation_result,
             "confidence": translation_result.get("confidence", 0),
         }

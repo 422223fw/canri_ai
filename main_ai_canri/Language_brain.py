@@ -153,6 +153,45 @@ class LanguageBrain:
             return "en"
         return "unknown"
 
+    def extract_scanner_evidence(self, data, limit=20):
+        if not isinstance(data, dict):
+            return []
+
+        candidates = []
+        scanner_view = data.get("scanner_knowledge", {})
+        if isinstance(scanner_view, dict):
+            candidates.extend(scanner_view.get("matches", []))
+
+        for key in ["data_context", "full_data_context"]:
+            context = data.get(key, {})
+            if not isinstance(context, dict):
+                continue
+            candidates.extend(context.get("scanner_matches", []))
+            candidates.extend(context.get("scanner_evidence", []))
+            pack = context.get("context_pack", {})
+            if isinstance(pack, dict):
+                candidates.extend(pack.get("scanner_evidence", []))
+
+        unique = []
+        seen = set()
+        for item in candidates:
+            if not isinstance(item, dict):
+                continue
+            identity = (
+                item.get("url")
+                or item.get("source_url")
+                or item.get("article_id")
+                or item.get("title")
+                or str(item)[:160]
+            )
+            if identity in seen:
+                continue
+            seen.add(identity)
+            unique.append(item)
+            if len(unique) >= limit:
+                break
+        return unique
+
     def build_unified_report(self, raw_report, final_report):
         text = raw_report.get("input_text", "")
         analysis = raw_report.get("analysis") if isinstance(raw_report.get("analysis"), dict) else {}
@@ -228,7 +267,10 @@ class LanguageBrain:
             "translation": translation,
             "dictionary": dictionary,
             "expressions": expressions,
-            "language_data_summary": raw_report.get("language_data_summary", {})
+            "language_data_summary": raw_report.get("language_data_summary", {}),
+            "precision_contract": analysis.get("semantic_frame", {}),
+            "scanner_evidence": raw_report.get("scanner_evidence", []),
+            "scanner_usage": raw_report.get("scanner_usage", {})
         })
         return unified
 
@@ -248,6 +290,13 @@ class LanguageBrain:
             "load_all",
             default={}
         )
+        if not isinstance(language_data, dict):
+            language_data = {}
+        else:
+            language_data = dict(language_data)
+
+        scanner_evidence = self.extract_scanner_evidence(understanding_report)
+        language_data["scanner_evidence"] = scanner_evidence
 
         # ניתוח שפה
         analysis_result = self.run_module(
@@ -309,7 +358,8 @@ class LanguageBrain:
                 "grammar": grammar_result,
                 "translation": translation_result,
                 "dictionary": dictionary_result,
-                "expressions": expressions_result
+                "expressions": expressions_result,
+                "scanner_evidence": scanner_evidence,
             },
             default={}
         )
@@ -324,6 +374,19 @@ class LanguageBrain:
                 if isinstance(language_data, dict)
                 else {}
             ),
+            "scanner_evidence": scanner_evidence,
+            "scanner_usage": {
+                "received": len(scanner_evidence),
+                "considered_by": [
+                    "LanguageAnalysisEngine",
+                    "GrammarEngine",
+                    "TranslationEngine",
+                    "DictionaryEngine",
+                    "ExpressionsEngine",
+                    "LanguageReportBuilder",
+                ],
+                "retrieval_mode": "indexed_relevant_excerpts",
+            },
 
             "analysis": analysis_result,
             "grammar": grammar_result,

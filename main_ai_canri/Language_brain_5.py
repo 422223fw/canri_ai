@@ -35,6 +35,10 @@ class ExpressionsEngine:
     def get_emojis_data(self, language_data):
         return language_data.get("emojis", {})
 
+    def get_precision_data(self, language_data):
+        data = language_data.get("precision_patterns", {})
+        return data if isinstance(data, dict) else {}
+
     def find_idioms(self, text, language_data):
         idioms = self.get_idioms_data(language_data)
         text_lower = self.clean_text(text)
@@ -81,6 +85,52 @@ class ExpressionsEngine:
                     "data": units[clean_unit],
                 })
 
+        return results
+
+    def find_discourse_relations(self, text, language_data):
+        text_lower = self.clean_text(text)
+        relation_data = self.get_precision_data(language_data).get("relation_markers", {})
+        results = []
+
+        if not isinstance(relation_data, dict):
+            return results
+
+        for relation, markers in relation_data.items():
+            for marker in markers if isinstance(markers, list) else []:
+                marker_text = str(marker).lower()
+                if marker_text and marker_text in text_lower:
+                    results.append({"relation": relation, "marker": marker})
+
+        return results
+
+    def find_interaction_signals(self, text, language_data):
+        text_lower = self.clean_text(text)
+        patterns = self.get_precision_data(language_data).get("interaction_patterns", [])
+        results = []
+
+        for item in patterns if isinstance(patterns, list) else []:
+            if not isinstance(item, dict):
+                continue
+            matches = [
+                marker for marker in item.get("markers", [])
+                if str(marker).lower() in text_lower
+            ]
+            if matches:
+                results.append({"id": item.get("id"), "markers": matches})
+
+        return results
+
+    def find_enumerations(self, text):
+        results = []
+        pattern = re.compile(
+            r"(?:^|\n)\s*(?P<label>\d+[.)]|[-*])\s*(?P<text>[^\n]+)",
+            flags=re.MULTILINE,
+        )
+        for match in pattern.finditer(str(text)):
+            results.append({
+                "label": match.group("label"),
+                "text": match.group("text").strip(),
+            })
         return results
 
     def build_expression_summary(self, idioms, slang, emojis, units):
@@ -146,6 +196,9 @@ class ExpressionsEngine:
         slang = self.find_slang(text, language_data)
         emojis = self.find_emojis(text, language_data)
         units = self.find_units(text, language_data)
+        discourse_relations = self.find_discourse_relations(text, language_data)
+        interaction_signals = self.find_interaction_signals(text, language_data)
+        enumerations = self.find_enumerations(text)
         summary = self.build_expression_summary(idioms, slang, emojis, units)
         answer = self.build_answer(idioms, slang, emojis, units)
         confidence = self.calculate_confidence(idioms, slang, emojis, units)
@@ -156,6 +209,9 @@ class ExpressionsEngine:
             "slang": slang,
             "emojis": emojis,
             "units": units,
+            "discourse_relations": discourse_relations,
+            "interaction_signals": interaction_signals,
+            "enumerations": enumerations,
             "summary": summary,
             "answer": answer,
             "confidence": confidence,

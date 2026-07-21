@@ -36,6 +36,7 @@ class LanguageLoader:
             "units": "Units_dictionary.json",
             "emojis": "Emoji_dictionary.json",
             "history": "Language_history.json",
+            "precision_patterns": "Language_precision_patterns.json",
         }
         self._cache = None
         self._cache_signature = None

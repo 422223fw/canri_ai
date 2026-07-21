@@ -208,6 +208,44 @@ class BrainRuntime:
             return payload
         prepared = dict(payload)
         prepared.setdefault("_request_id", request_id)
+        scanner_evidence = []
+        scanner_view = prepared.get("scanner_knowledge", {})
+        if isinstance(scanner_view, Mapping):
+            scanner_evidence.extend(scanner_view.get("matches", []))
+        data_context = prepared.get("data_context", {})
+        if isinstance(data_context, Mapping):
+            scanner_evidence.extend(data_context.get("scanner_matches", []))
+
+        compact_evidence = []
+        seen_evidence = set()
+        for item in scanner_evidence:
+            if not isinstance(item, Mapping):
+                continue
+            identity = (
+                item.get("article_id")
+                or item.get("record_id")
+                or item.get("url")
+                or item.get("title")
+                or str(item)[:160]
+            )
+            if identity in seen_evidence:
+                continue
+            seen_evidence.add(identity)
+            compact_evidence.append(dict(item))
+            if len(compact_evidence) >= 12:
+                break
+
+        prepared["_knowledge_context"] = {
+            "available": bool(compact_evidence),
+            "indexed_evidence": compact_evidence,
+            "usage_contract": [
+                "Consider every relevant excerpt before producing the domain result.",
+                "Ignore excerpts that do not support the current request.",
+                "Do not turn unverified scanner text into a certain factual claim.",
+                "Preserve source and trust metadata for fact checking.",
+            ],
+            "retrieval_mode": "lazy_indexed_relevant_excerpts",
+        }
         prepared["_runtime_control"] = {
             "contract_version": self.CONTRACT_VERSION,
             "brain": brain_name,

@@ -360,6 +360,14 @@ class ManagerBrain:
             "Code_brain": {"code", "general", "trusted_knowledge"},
             "Technology_brain": {"code", "product", "general", "trusted_knowledge"},
             "Science_brain": {"general", "trusted_knowledge", "product"},
+            "Math_brain": {"general", "trusted_knowledge", "code"},
+            "History_brain": {"general", "trusted_knowledge"},
+            "Geography_brain": {"general", "trusted_knowledge", "product"},
+            "Language_brain": {"general", "trusted_knowledge", "code", "product"},
+            "Story_brain": {"general", "trusted_knowledge", "product"},
+            "Emotion_brain": {"general", "trusted_knowledge"},
+            "Planner_brain": {"general", "trusted_knowledge", "product", "code"},
+            "Reasoning_brain": {"general", "trusted_knowledge", "product", "code"},
             "Research_brain": {"general", "trusted_knowledge", "product", "code"},
             "Fact_Check_brain": {"general", "trusted_knowledge", "product", "code"},
             "Creative_brain": {"product", "general", "code", "trusted_knowledge"},
@@ -400,7 +408,9 @@ class ManagerBrain:
                     "metadata": item.get("metadata", {})
                 })
 
-        required = brain_name in factual_brains and bool(matches)
+        required = bool(matches) and brain_name not in {
+            "Memory_brain", "Security_brain", "Response_brain"
+        }
         return {
             "brain": brain_name,
             "available": bool(matches),
@@ -409,8 +419,9 @@ class ManagerBrain:
             "retrieval": "indexed_jsonl_excerpt",
             "policy": (
                 "Use relevant scanner evidence and preserve its sources. Separate evidence from inference."
-                if required else
-                "Use scanner evidence only when it helps the current task; ignore unrelated articles."
+                if brain_name in factual_brains else
+                "Consider the relevant scanner excerpts before producing the specialist result; "
+                "use them when they improve accuracy and ignore unrelated evidence."
             )
         }
 
@@ -622,7 +633,11 @@ class ManagerBrain:
                 "possible_tasks": report.get("possible_tasks", [])[:12],
                 "requested_action": report.get("requested_action", {}),
                 "semantic_frame": report.get("semantic_frame", {}),
-                "meaning_frame": report.get("meaning_frame", {})
+                "meaning_frame": report.get("meaning_frame", {}),
+                "request_contract": report.get("request_contract", {}),
+                "global_picture": report.get("global_picture", {}),
+                "detail_inventory": report.get("detail_inventory", {}),
+                "requirements": report.get("requirements", [])[:80],
             },
             "conversation": {
                 "session_id": conversation.get("session_id"),
@@ -658,6 +673,8 @@ class ManagerBrain:
             "recommended_brains": list(dict.fromkeys(recommended)),
             "handoff_rules": [
                 "Every specialist should use Understanding + Memory + shared_context before answering.",
+                "Every specialist must preserve the global goal and account for every assigned atomic requirement.",
+                "Every specialist receives indexed scanner evidence and should use relevant excerpts instead of loading full databases.",
                 "If a specialist cannot satisfy the request, return needs_help=True with missing parts.",
                 "Quality_Control_brain must check whether the final answer matches the user request.",
                 "Response_brain must show the final user-facing result, not internal planning reports."
@@ -1016,7 +1033,12 @@ class ManagerBrain:
             domain for domain in domains
             if domain not in {"memory_context", "creative"}
         ]
-        needs_collaboration = len(central_domains) > 1
+        requirement_count = len(contract.get("requirements", [])) if isinstance(contract, dict) else 0
+        high_detail_request = (
+            primary in {"code", "planning", "knowledge", "science", "technology"}
+            and requirement_count >= 6
+        )
+        needs_collaboration = len(central_domains) > 1 or high_detail_request
         needs_planner = (
             primary in {"code", "game", "planning"}
             or needs_collaboration
@@ -1049,6 +1071,10 @@ class ManagerBrain:
             {
                 "phase": "brain_collaboration",
                 "brains": ["Collaboration_brain"] if needs_collaboration else []
+            },
+            {
+                "phase": "post_collaboration_integration",
+                "brains": ["Nervous_system_brain"] if needs_collaboration else []
             },
             {
                 "phase": "verification",
@@ -1266,9 +1292,12 @@ class ManagerBrain:
             "detail_inventory": request_contract.get("detail_inventory", {}),
             "requirements": request_contract.get("requirements", []),
             "output_constraints": request_contract.get("output_constraints", {}),
+            "continuation": request_contract.get("continuation", {}),
+            "enhancement_policy": request_contract.get("enhancement_policy", {}),
             "instruction": (
                 "Satisfy the global goal and then verify every small detail. "
-                "Do not discard a detail merely because the main topic is correct."
+                "Do not discard a detail merely because the main topic is correct. "
+                "Consider useful improvements, but never replace an explicit requirement or violate a strict output format."
             )
         }
         context["memory"] = memory_report
@@ -1531,6 +1560,8 @@ class ManagerBrain:
                 result["scanner_context"] = {
                     "received": bool(scanner_view.get("available")),
                     "required": bool(scanner_view.get("required_for_answer")),
+                    "considered_by_contract": bool(scanner_view.get("available")),
+                    "retrieval": scanner_view.get("retrieval"),
                     "article_ids": [
                         item.get("article_id")
                         for item in scanner_view.get("matches", [])
