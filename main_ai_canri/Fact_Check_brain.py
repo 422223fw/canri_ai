@@ -40,7 +40,15 @@ WEAK_LANGUAGE = {
 STRONG_SOURCE_TYPES = {
     "official_archive", "official_library", "academic_database",
     "medical_database", "public_health_authority", "official_science_agency",
-    "standards_body", "government", "official"
+    "standards_body", "government", "official", "official_statistics",
+    "scholarly_metadata_registry", "official_health_regulator",
+    "official_security_authority", "official_documentation",
+    "official_package_registry", "standards_repository"
+}
+
+STRONG_SOURCE_TYPE_MARKERS = {
+    "official_", "government", "standards", "academic", "scholarly",
+    "medical_database", "public_health", "package_registry"
 }
 
 
@@ -416,8 +424,15 @@ class FactCheckBrain:
             evidence.append({
                 "source_brain": "Knowledge_database",
                 "name": item.get("title", "knowledge article"),
-                "url": "",
-                "source_type": "local_knowledge_article",
+                "url": (
+                    item.get("url")
+                    or (
+                        sources[0].get("url")
+                        if sources and isinstance(sources[0], dict)
+                        else ""
+                    )
+                ),
+                "source_type": item.get("source_type", "local_knowledge_article"),
                 "trust_score": max(50, min(round(trust, 2), 90)),
                 "supports": item.get("terms", [])[:12],
                 "notes": (
@@ -453,7 +468,7 @@ class FactCheckBrain:
 
         for key in [
             "fetched_sources", "approved_research_links", "sources",
-            "citations", "evidence", "references"
+            "citations", "evidence", "references", "scanner_evidence"
         ]:
             value = result.get(key)
             if isinstance(value, list):
@@ -476,7 +491,10 @@ class FactCheckBrain:
 
         source_type = str(source.get("source_type", "")).lower()
 
-        if source_type in STRONG_SOURCE_TYPES:
+        if (
+            source_type in STRONG_SOURCE_TYPES
+            or any(marker in source_type for marker in STRONG_SOURCE_TYPE_MARKERS)
+        ):
             score += 5
 
         return {

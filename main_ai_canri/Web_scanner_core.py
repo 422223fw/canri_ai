@@ -765,6 +765,11 @@ class BaseWebScanner:
         self.source_file = Path(source_file)
         self.config = load_json(self.source_file, {})
         self.collection = str(self.config.get("collection") or scanner_id)
+        self.source_quality_policy = (
+            self.config.get("source_quality_policy", {})
+            if isinstance(self.config.get("source_quality_policy"), dict)
+            else {}
+        )
         self.sleep_seconds = max(30, int(self.config.get("sleep_seconds", sleep_seconds)))
         self.queue_file = DATA_DIR / f"{scanner_id}_scan_queue.json"
         self.statistics_file = DATA_DIR / f"{scanner_id}_scan_statistics.json"
@@ -844,6 +849,13 @@ class BaseWebScanner:
                     records = self.process_target(target)
                     statuses = []
                     for record in records[: int(self.config.get("max_records_per_target", 8))]:
+                        if not isinstance(record, dict):
+                            continue
+                        record.setdefault("source_quality_policy", self.source_quality_policy)
+                        metadata = record.setdefault("metadata", {})
+                        if isinstance(metadata, dict):
+                            metadata.setdefault("scanner_id", self.scanner_id)
+                            metadata.setdefault("quality_policy_applied", bool(self.source_quality_policy))
                         result = self.store.upsert(record)
                         statuses.append(result)
                         if result.get("status") in {"inserted", "updated"}:
@@ -872,6 +884,7 @@ class BaseWebScanner:
             "records_indexed": self.store.count(),
             "database_bytes": self.store.database_bytes(),
             "max_database_bytes": self.store.max_database_bytes,
+            "source_quality_policy": self.source_quality_policy,
             "last_run": {
                 "processed_targets": processed,
                 "stored_or_updated": stored,

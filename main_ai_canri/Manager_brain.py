@@ -414,6 +414,7 @@ class ManagerBrain:
         return {
             "brain": brain_name,
             "available": bool(matches),
+            "required_for_consideration": bool(matches),
             "required_for_answer": required,
             "matches": matches,
             "retrieval": "indexed_jsonl_excerpt",
@@ -752,7 +753,16 @@ class ManagerBrain:
         if intent in {"code_generation", "code_analysis"}:
             domains.append("code")
 
-        if intent == "math" or (
+        explicit_math_request = any(
+            keyword_is_explicit(marker)
+            for marker in [
+                "math", "calculate", "solve", "equation", "algebra",
+                "geometry", "probability", "step by step",
+            ]
+        )
+        if intent == "math" or explicit_math_request or (
+            intent != "code_analysis"
+            and
             re.search(r"\d|\bx\b", raw_text)
             and (
                 "=" in raw_text
@@ -934,7 +944,9 @@ class ManagerBrain:
         if primary == "story":
             supporting.extend(["Creative_brain", "Character_brain", "World_brain"])
         if primary == "code":
-            supporting.extend(["Planner_brain", "Quality_Control_brain"])
+            if intent != "code_analysis":
+                supporting.append("Planner_brain")
+            supporting.append("Quality_Control_brain")
         if primary == "math":
             supporting.extend(["Reasoning_brain", "Quality_Control_brain"])
         if primary == "emotion":
@@ -1021,6 +1033,7 @@ class ManagerBrain:
         domains = self.classify_request(report, memory_report)
         domains = self.focus_domains(domains, report, memory_report)
         primary = self.primary_domain(report, memory_report)
+        intent = str(report.get("intent", "")).lower()
         contract = report.get("request_contract", {})
         conversation = memory_report.get("conversation", {}) if isinstance(memory_report, dict) else {}
         continuation_contract = contract.get("continuation", {}) if isinstance(contract, dict) else {}
@@ -1040,7 +1053,8 @@ class ManagerBrain:
         )
         needs_collaboration = len(central_domains) > 1 or high_detail_request
         needs_planner = (
-            primary in {"code", "game", "planning"}
+            (primary == "code" and intent != "code_analysis")
+            or primary in {"game", "planning"}
             or needs_collaboration
         )
         needs_fact_check = primary in {
@@ -1102,10 +1116,11 @@ class ManagerBrain:
             ])
 
         if "code" in domains:
-            core.extend([
-                "Reasoning_brain",
-                "Technology_brain"
-            ])
+            if intent != "code_analysis" or len(central_domains) > 1:
+                core.extend([
+                    "Reasoning_brain",
+                    "Technology_brain"
+                ])
             experts.extend([
                 "Code_brain"
             ])
@@ -1560,8 +1575,22 @@ class ManagerBrain:
                 result["scanner_context"] = {
                     "received": bool(scanner_view.get("available")),
                     "required": bool(scanner_view.get("required_for_answer")),
-                    "considered_by_contract": bool(scanner_view.get("available")),
+                    "considered_by_contract": bool(scanner_view.get("required_for_consideration")),
                     "retrieval": scanner_view.get("retrieval"),
+                    "matches_received": len(scanner_view.get("matches", [])),
+                    "collections": sorted({
+                        item.get("collection", "trusted_knowledge")
+                        for item in scanner_view.get("matches", [])
+                        if isinstance(item, dict)
+                    }),
+                    "maximum_trust_score": max(
+                        (
+                            float(item.get("trust_score") or 0)
+                            for item in scanner_view.get("matches", [])
+                            if isinstance(item, dict)
+                        ),
+                        default=0,
+                    ),
                     "article_ids": [
                         item.get("article_id")
                         for item in scanner_view.get("matches", [])
