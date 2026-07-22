@@ -48,6 +48,7 @@ from Collaboration_brain import brain as collaboration_brain
 from Nervous_system_brain import brain as nervous_system_brain
 from Planner_brain import brain as planner_brain
 from Emotion_brain import brain as emotion_brain
+from Answer_Enrichment_brain import brain as answer_enrichment_brain
 
 from Security_brain import brain as security_brain
 from Knowledge_collector import start_background_collector
@@ -204,6 +205,11 @@ def register_all_brains():
     manager_brain.register_brain(
         "Emotion_brain",
         emotion_brain
+    )
+
+    manager_brain.register_brain(
+        "Answer_Enrichment_brain",
+        answer_enrichment_brain
     )
 
     manager_brain.register_brain(

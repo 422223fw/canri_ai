@@ -21,6 +21,7 @@ INTERNAL_BRAINS = {
     "Nervous_system_brain",
     "Response_brain",
     "Security_brain",
+    "Answer_Enrichment_brain",
 }
 
 DOMAIN_OWNERS = {

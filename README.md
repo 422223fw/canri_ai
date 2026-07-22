@@ -8,7 +8,7 @@ The project uses a shared runtime contract, isolated chat memory, indexed
 local knowledge, targeted quality retries, cross-brain neural integration,
 a request-scoped cognitive workspace, and atomic JSON storage. Normal
 requests have no thinking deadline. The release version is reported by
-`main_ai_canri/Main_brain.py` and is currently `1.1.3-alpha`.
+`main_ai_canri/Main_brain.py` and is currently `1.1.4-alpha`.
 
 ## Requirements
 
@@ -62,7 +62,16 @@ powershell -ExecutionPolicy Bypass -File .\push_canri.ps1
 - Specialist brains: code, math, science, history, geography, technology,
   story, character, world, image, vision, voice, emotion, and others.
 - `Quality_Control_brain.py`: requirement-by-requirement acceptance checks.
+- `Answer_Enrichment_brain.py`: prepares useful explanations, correction
+  summaries, verification details, and run instructions when the user's output
+  contract permits them. Strict output requests always disable these additions.
 - `Response_brain.py`: clean final user output without internal reports.
+
+`Code_brain.py` uses a multidimensional quality score. Single-file Python code
+is scored for syntax, request coverage, implementation completeness, runnable
+entry point, safety, and maintainability. Multi-file projects also score
+architecture and preservation of existing files. A high total cannot hide a
+blocking syntax error or a missing explicit requirement.
 
 Quality failures are sent back to the responsible specialist with the exact
 missing requirement. Canri can retry a specialist up to 20 times. If no

@@ -1141,6 +1141,10 @@ class ManagerBrain:
                 )
             },
             {
+                "phase": "answer_enrichment",
+                "brains": ["Answer_Enrichment_brain"]
+            },
+            {
                 "phase": "response",
                 "brains": [
                     "Response_brain"
@@ -2025,7 +2029,7 @@ class ManagerBrain:
                         phase_results.extend(final_retry_rounds)
 
                     refreshed_response = self.execute(
-                        ["Response_brain"],
+                        ["Answer_Enrichment_brain", "Response_brain"],
                         {
                             **data,
                             "results": all_results,
@@ -2696,7 +2700,7 @@ class ManagerBrain:
                         "Memory_brain", "Emotion_brain", "Security_brain",
                         "Manager_brain", "Quality_Control_brain", "Response_brain",
                         "Learning_brain", "Collaboration_brain",
-                        "Nervous_system_brain"
+                        "Nervous_system_brain", "Answer_Enrichment_brain"
                     }
                 ],
                 "collaboration_used": "Collaboration_brain" in plan,
@@ -2723,6 +2727,7 @@ class ManagerBrain:
                 "Use the cognitive workspace as the shared goal and requirement ledger.",
                 "Rank candidates by verified coverage and evidence, never by length alone.",
                 "Preserve passed requirements in every correction cycle.",
+                "Add useful context after the specialist answer only when the output contract permits it.",
                 "Keep skipped or failing brains visible instead of hiding them.",
                 "Keep the phased plan internal unless the user asks for it."
             ]

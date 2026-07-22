@@ -1606,6 +1606,18 @@ class ResponseBrain:
                     return tasks
         return tasks
 
+    def apply_answer_enrichment(self, text, results, strict_output=False):
+
+        if strict_output:
+            return text
+        enrichment = results.get("Answer_Enrichment_brain", {})
+        if not isinstance(enrichment, dict) or not enrichment.get("allowed"):
+            return text
+        suffix = str(enrichment.get("visible_suffix") or "").strip()
+        if not suffix or suffix in str(text):
+            return text
+        return f"{str(text).rstrip()}\n\n{suffix}"
+
     # ---------- statistics ----------
 
     def update_statistics(self, primary_brain, confidence, blocked):
@@ -1748,6 +1760,11 @@ class ResponseBrain:
                         primary_brain
                     )
                     display_text = self.add_source_footer(display_text, citations)
+                display_text = self.apply_answer_enrichment(
+                    display_text,
+                    results,
+                    strict_output=False
+                )
                 display_text = self.adapt_tone(display_text, results)
 
             confidence_values = [
