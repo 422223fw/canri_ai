@@ -9,6 +9,11 @@ import json
 import re
 from pathlib import Path
 
+try:
+    from Cognitive_workspace import CognitiveWorkspace
+except Exception:
+    CognitiveWorkspace = None
+
 
 DATA_DIR = Path(__file__).parent / "data"
 PROFILE_FILE = DATA_DIR / "Nervous_system_profiles.json"
@@ -18,6 +23,7 @@ class NervousSystemBrain:
 
     def __init__(self):
         self.profile = self.load_profile()
+        self.workspace_builder = CognitiveWorkspace() if CognitiveWorkspace is not None else None
         print("Nervous System Brain Loaded")
 
     def load_profile(self):
@@ -91,26 +97,36 @@ class NervousSystemBrain:
         text = self.result_text(result)
         if not text:
             return -1000
-        score = min(len(text) / 120.0, 25.0)
+        # Length is not intelligence. A usable output receives a small fixed
+        # score; most points come from ownership, verification, and evidence.
+        score = 10.0
         confidence = result.get("confidence")
         if isinstance(confidence, (int, float)):
-            score += float(confidence) * 0.55
+            normalized = float(confidence) * (100 if 0 <= confidence <= 1 else 1)
+            score += max(0.0, min(100.0, normalized)) * 0.10
         if brain_name in owners:
-            score += 35 - owners.index(brain_name) * 4
+            score += 30 - owners.index(brain_name) * 4
         if brain_name in set(self.profile.get("internal_brains", [])):
-            score -= 50
+            score -= 100
         if result.get("self_review", {}).get("ready") is True:
-            score += 20
+            score += 15
         elif result.get("self_review", {}).get("ready") is False:
-            score -= 35
+            score -= 30
         alignment = result.get("self_review", {}).get("request_alignment", {})
         if isinstance(alignment.get("coverage"), (int, float)):
-            score += float(alignment["coverage"]) * 0.15
+            coverage = float(alignment["coverage"])
+            coverage = coverage * 100 if 0 <= coverage <= 1 else coverage
+            score += max(0.0, min(100.0, coverage)) * 0.30
         scanner_context = result.get("scanner_context", {})
         if isinstance(scanner_context, dict) and scanner_context.get("received"):
-            score += 5
+            score += 4
         if result.get("source_citations") or result.get("strongest_sources"):
-            score += 6
+            score += 10
+        lowered = text.lower()
+        if "the current draft did not pass canri's quality check" in lowered:
+            score -= 100
+        if "here is the useful conclusion:" in lowered:
+            score -= 80
         return round(score, 3)
 
     def best_candidate(self, results, owners):
@@ -371,9 +387,41 @@ class NervousSystemBrain:
     def process(self, data):
         report = self.understanding(data)
         results = self.results(data)
-        owners = self.owner_brains(report)
-        best, ranked = self.best_candidate(results, owners)
-        requirement_states = self.requirement_state(report, results, owners)
+        workspace = data.get("cognitive_workspace", {}) if isinstance(data, dict) else {}
+        if self.workspace_builder is not None:
+            workspace = self.workspace_builder.refresh(
+                workspace,
+                report,
+                data.get("memory", {}) if isinstance(data, dict) else {},
+                results,
+                {
+                    "knowledge": data.get("knowledge", {}),
+                    "scanner_knowledge": data.get("scanner_knowledge", {}),
+                    "dictionary": data.get("dictionary", {}),
+                    "data_context": data.get("full_data_context") or data.get("data_context", {}),
+                } if isinstance(data, dict) else {},
+                request_id=workspace.get("request_id") if isinstance(workspace, dict) else None,
+            )
+        owners = workspace.get("owner_brains", []) or self.owner_brains(report)
+        workspace_ranked = workspace.get("candidates", []) if isinstance(workspace, dict) else []
+        if workspace_ranked:
+            ranked = workspace_ranked[:8]
+            best = workspace.get("selected_candidate") or ranked[0]
+        else:
+            best, ranked = self.best_candidate(results, owners)
+        if isinstance(workspace, dict) and workspace.get("requirements") is not None:
+            requirement_states = [
+                {
+                    **item,
+                    "covered": item.get("status") == "passed",
+                    "coverage_source": item.get("verification_source") or "unverified",
+                    "suggested_owners": item.get("owners", owners[:4]),
+                }
+                for item in workspace.get("requirements", [])
+                if isinstance(item, dict)
+            ]
+        else:
+            requirement_states = self.requirement_state(report, results, owners)
         unresolved = [item for item in requirement_states if item.get("checkable") and not item.get("covered")]
         active_states = self.active_brain_states(results)
         manager_context = data.get("manager_context", {}) if isinstance(data, dict) else {}
@@ -429,13 +477,22 @@ class NervousSystemBrain:
                 unresolved,
                 best,
             ),
-            "correction_packets": self.correction_packets(results, unresolved, owners),
+            "correction_packets": (
+                workspace.get("correction_packets", [])
+                if isinstance(workspace, dict) and workspace.get("correction_packets") is not None
+                else self.correction_packets(results, unresolved, owners)
+            ),
             "memory_state": memory_state,
             "scanner_state": scanner_state,
             "correction_cycle": int(data.get("quality_retry_attempt", 0)) if isinstance(data, dict) else 0,
             "max_correction_cycles": int(self.profile.get("max_correction_cycles", 20)),
             "data_sources_used": self.compact_data_sources(data),
             "scanner_evidence_available": scanner_state["available"],
+            "cognitive_workspace": {
+                "summary": workspace.get("summary", {}) if isinstance(workspace, dict) else {},
+                "decision": workspace.get("decision", {}) if isinstance(workspace, dict) else {},
+                "evidence_summary": workspace.get("evidence_summary", {}) if isinstance(workspace, dict) else {},
+            },
             "suggested_next_brains": list(dict.fromkeys(
                 brain_name
                 for item in unresolved[:5]

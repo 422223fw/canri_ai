@@ -6,8 +6,9 @@ memory, media, security, quality control, and final response formatting.
 
 The project uses a shared runtime contract, isolated chat memory, indexed
 local knowledge, targeted quality retries, cross-brain neural integration,
-and atomic JSON storage. Normal requests have no thinking deadline. The
-release version is reported by `main_ai_canri/Main_brain.py`.
+a request-scoped cognitive workspace, and atomic JSON storage. Normal
+requests have no thinking deadline. The release version is reported by
+`main_ai_canri/Main_brain.py` and is currently `1.1.3-alpha`.
 
 ## Requirements
 
@@ -45,6 +46,9 @@ powershell -ExecutionPolicy Bypass -File .\push_canri.ps1
 
 - `main.py`: application startup, request budget, brain registration, and GUI.
 - `Manager_brain.py`: domain routing, execution phases, and targeted retries.
+- `Cognitive_workspace.py`: one internal request ledger for the user goal,
+  exact requirements, evidence, conflicts, candidate ranking, and correction
+  packets. It scores verified coverage instead of answer length.
 - `Nervous_system_brain.py`: internal requirement state, candidate ranking,
   and correction routing across specialist brains. It never writes the final
   user-facing answer.
@@ -64,6 +68,8 @@ Quality failures are sent back to the responsible specialist with the exact
 missing requirement. Canri can retry a specialist up to 20 times. If no
 candidate reaches every advisory quality check, `Response_brain` still returns
 the strongest usable result while keeping diagnostics in Thinking details.
+Passed requirements are carried into later attempts so a correction should
+not remove behavior that already worked.
 
 ## Data
 

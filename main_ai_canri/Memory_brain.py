@@ -735,6 +735,33 @@ class MemoryBrain:
                     for check in quality.get("requirement_checks", [])
                     if isinstance(check, dict) and check.get("passed") is False
                 ][:30]
+            cognitive = manager_result.get("cognitive_workspace", {})
+            if isinstance(cognitive, dict):
+                target["cognitive_state"] = {
+                    "summary": cognitive.get("summary", {}),
+                    "decision": cognitive.get("decision", {}),
+                    "passed_requirement_ids": cognitive.get(
+                        "passed_requirement_ids",
+                        [],
+                    )[:80],
+                    "unresolved_requirements": cognitive.get(
+                        "unresolved_requirements",
+                        [],
+                    )[:30],
+                    "correction_packets": cognitive.get("correction_packets", [])[:8],
+                }
+                unresolved = cognitive.get("unresolved_requirements", [])
+                if isinstance(unresolved, list) and unresolved:
+                    target["failed_requirements"] = list(dict.fromkeys([
+                        *target.get("failed_requirements", []),
+                        *[
+                            item.get("id") or item.get("text")
+                            for item in unresolved
+                            if isinstance(item, dict)
+                            and item.get("status") == "failed"
+                            and (item.get("id") or item.get("text"))
+                        ],
+                    ]))[:30]
 
         bucket["turns"] = turns[-MAX_TURNS_PER_SESSION:]
         bucket["updated_utc"] = now
@@ -770,12 +797,10 @@ class MemoryBrain:
             "תתקן",
             "תשפר",
             "אותו קוד",
+            "אותה תוכנה",
             "אותו סיפור",
             "התשובה הקודמת",
-            "מהקוד הקודם",
-            "תמשיך",
-            "תתקן",
-            "תשפר"
+            "מהקוד הקודם"
         ]
 
         return any(marker in lowered for marker in markers)
@@ -789,11 +814,13 @@ class MemoryBrain:
         ]):
             return "code"
         if any(marker in lowered for marker in [
-            "story", "chapter", "character", "plot", "סיפור", "פרק", "דמות",
+            "story", "chapter", "character", "plot",
+            "סיפור", "פרק", "דמות", "עלילה",
         ]):
             return "story"
         if any(marker in lowered for marker in [
-            "source", "fact", "explanation", "answer", "מקור", "עובדה", "הסבר", "תשובה",
+            "source", "fact", "explanation", "answer",
+            "מקור", "עובדה", "הסבר", "תשובה",
         ]):
             return "answer"
         return "general"
@@ -953,6 +980,48 @@ class MemoryBrain:
             and current_topic != last_topic
             and len(overlap) < 3
         )
+        topic_stack = []
+        for turn in completed_turns[-30:]:
+            cognitive_state = turn.get("cognitive_state", {})
+            cognitive_summary = (
+                cognitive_state.get("summary", {})
+                if isinstance(cognitive_state, dict)
+                else {}
+            )
+            contract = turn.get("request_contract", {})
+            global_picture = (
+                contract.get("global_picture", {})
+                if isinstance(contract, dict)
+                else {}
+            )
+            topic_item = {
+                "topic": turn.get("main_topic", "unknown"),
+                "intent": turn.get("intent", "unknown"),
+                "goal": cognitive_summary.get("goal") or global_picture.get("goal"),
+                "turn_id": turn.get("id"),
+                "open_requirements": turn.get("failed_requirements", [])[:12],
+                "status": "open" if turn.get("failed_requirements") else "completed",
+            }
+            if topic_stack and (
+                topic_stack[-1].get("topic") == topic_item["topic"]
+                and topic_stack[-1].get("intent") == topic_item["intent"]
+            ):
+                topic_stack[-1] = topic_item
+            else:
+                topic_stack.append(topic_item)
+        active_turn = continuation_turn or last_turn
+        active_cognitive = active_turn.get("cognitive_state", {}) if active_turn else {}
+        active_summary = (
+            active_cognitive.get("summary", {})
+            if isinstance(active_cognitive, dict)
+            else {}
+        )
+        active_contract = active_turn.get("request_contract", {}) if active_turn else {}
+        active_global = (
+            active_contract.get("global_picture", {})
+            if isinstance(active_contract, dict)
+            else {}
+        )
 
         return {
             "session_id": session_id,
@@ -992,6 +1061,7 @@ class MemoryBrain:
                     "request_contract": continuation_turn.get("request_contract", {}),
                     "artifacts": continuation_turn.get("artifacts", [])[:8],
                     "failed_requirements": continuation_turn.get("failed_requirements", [])[:20],
+                    "cognitive_state": continuation_turn.get("cognitive_state", {}),
                 }
                 if continuation and continuation_turn
                 else None
@@ -1018,6 +1088,14 @@ class MemoryBrain:
                     if isinstance(item, dict) and item.get("type")
                 )),
                 "open_requirements": (continuation_turn or last_turn).get("failed_requirements", [])[:20],
+                "active_goal": active_summary.get("goal") or active_global.get("goal"),
+                "selected_brain": active_summary.get("selected_brain"),
+                "topic_stack": topic_stack[-12:],
+                "completed_requirement_ids": (
+                    active_cognitive.get("passed_requirement_ids", [])
+                    if isinstance(active_cognitive, dict)
+                    else []
+                ),
             },
             "session_isolation": True
         }

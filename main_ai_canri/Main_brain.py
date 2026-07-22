@@ -7,7 +7,7 @@ from Brain_runtime import brain_runtime
 
 class MainBrain:
 
-    VERSION = "1.0.0"
+    VERSION = "1.1.3-alpha"
 
     def __init__(self):
         print("Main Brain Started")

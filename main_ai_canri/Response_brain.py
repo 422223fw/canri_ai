@@ -108,6 +108,19 @@ class ResponseBrain:
 
         return {}
 
+    def get_cognitive_workspace(self, data):
+
+        if not isinstance(data, dict):
+            return {}
+        workspace = data.get("cognitive_workspace", {})
+        if isinstance(workspace, dict):
+            return workspace
+        manager_context = data.get("manager_context", {})
+        if isinstance(manager_context, dict):
+            workspace = manager_context.get("cognitive_workspace", {})
+            return workspace if isinstance(workspace, dict) else {}
+        return {}
+
     def get_dictionary_context(self, data):
 
         if not isinstance(data, dict):
@@ -587,6 +600,54 @@ class ResponseBrain:
             return None, {}
 
         return candidates[0][1], candidates[0][2]
+
+    def choose_workspace_result(self, workspace, results, report, user_text):
+
+        if not isinstance(workspace, dict):
+            return None, {}
+        topic = str(report.get("main_topic", "general")).lower()
+        intent = str(report.get("intent", "unknown")).lower()
+        allowed = {
+            "code": {"Code_brain"},
+            "math": {"Math_brain"},
+            "story": {"Story_brain", "Creative_brain"},
+            "science": {"Science_brain", "Research_brain"},
+            "knowledge": {"Research_brain", "Fact_Check_brain"},
+            "technology": {"Technology_brain", "Research_brain"},
+            "geography": {"Geography_brain", "Research_brain"},
+            "history": {"History_brain", "Research_brain"},
+            "emotion": {"Emotion_brain"},
+            "language": {"Language_brain", "Spelling_brain"},
+            "image_generation": {"Image_brain", "Creative_brain"},
+            "vision": {"Vision_brain"},
+            "voice": {"Voice_brain"},
+            "game": {"Game_brain", "Code_brain"},
+        }
+        if intent in {"code_generation", "code_analysis"}:
+            permitted = {"Code_brain"}
+        elif intent == "story_creation":
+            permitted = {"Story_brain", "Creative_brain"}
+        else:
+            permitted = allowed.get(topic)
+
+        ranked = []
+        selected = workspace.get("selected_candidate")
+        if isinstance(selected, dict):
+            ranked.append(selected)
+        ranked.extend(
+            item for item in workspace.get("candidates", [])
+            if isinstance(item, dict) and item not in ranked
+        )
+        for candidate in ranked:
+            brain_name = candidate.get("brain")
+            if not brain_name or candidate.get("usable") is False:
+                continue
+            if permitted is not None and brain_name not in permitted:
+                continue
+            result = results.get(brain_name)
+            if self.has_user_facing_output(brain_name, result):
+                return brain_name, result
+        return None, {}
 
     def choose_domain_result(self, report, results, user_text):
 
@@ -1084,7 +1145,10 @@ class ResponseBrain:
                 result.get("language")
             )
 
-        for key in ["answer", "best_answer", "response", "summary", "explanation", "translated_text"]:
+        for key in [
+            "answer", "best_answer", "response", "final_output", "summary",
+            "explanation", "translated_text"
+        ]:
             value = result.get(key)
             if value:
                 return str(value)
@@ -1111,9 +1175,6 @@ class ResponseBrain:
                 title = idea.get("title", "רעיון")
                 concept = idea.get("concept", "")
                 return f"{title}\n{concept}".strip()
-
-        if result.get("plan") or result.get("steps") or result.get("facts") or result.get("local_matches"):
-            return ""
 
         if result.get("plan"):
             return self.format_plan(result["plan"])
@@ -1565,6 +1626,7 @@ class ResponseBrain:
 
         report = self.get_understanding_report(data)
         results = self.get_results(data)
+        cognitive_workspace = self.get_cognitive_workspace(data)
         dictionary = self.get_dictionary_context(data)
         user_text = self.extract_user_text(data, report)
         self._active_focus_terms = self.user_focus_terms(user_text)
@@ -1628,11 +1690,18 @@ class ResponseBrain:
             ):
                 primary_brain, primary_result = "Code_brain", code_result
             else:
-                primary_brain, primary_result = self.choose_domain_result(
-                    report,
+                primary_brain, primary_result = self.choose_workspace_result(
+                    cognitive_workspace,
                     results,
+                    report,
                     user_text
                 )
+                if not primary_brain:
+                    primary_brain, primary_result = self.choose_domain_result(
+                        report,
+                        results,
+                        user_text
+                    )
                 if not primary_brain:
                     primary_brain, primary_result = self.choose_primary_result(results, report)
 
@@ -1659,6 +1728,13 @@ class ResponseBrain:
                 display_text = "קיבלתי את ההודעה, אבל עדיין אין לי פלט מומחה מספיק טוב להציג."
             else:
                 display_text = "אין לי עדיין מידע מספיק כדי לבנות תשובה."
+
+            if not primary_brain:
+                display_text = (
+                    "קיבלתי את הבקשה, אך עדיין אין תוצאה מקצועית מספיק להצגה."
+                    if user_text
+                    else "אין עדיין מספיק מידע כדי לבנות תשובה מדויקת."
+                )
 
             if not display_text or self.looks_like_internal_report(display_text):
                 display_text = self.user_facing_fallback(report)
@@ -1707,6 +1783,14 @@ class ResponseBrain:
             "suggested_follow_up_tasks": follow_up_tasks,
             "follow_up_tasks_visible": False,
             "source_citations": citations,
+            "cognitive_selection": {
+                "selected_candidate": cognitive_workspace.get("selected_candidate"),
+                "coverage": cognitive_workspace.get("coverage", {}),
+                "unresolved_count": len(
+                    cognitive_workspace.get("unresolved_requirements", [])
+                ),
+                "evidence_summary": cognitive_workspace.get("evidence_summary", {}),
+            },
             "rules": [
                 "Return one clear answer for the screen.",
                 "Do not invent facts that no brain provided.",

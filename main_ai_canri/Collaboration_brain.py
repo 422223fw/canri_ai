@@ -171,6 +171,11 @@ class CollaborationBrain:
         round_name = str(data.get("collaboration_round", "planning"))
         routing = data.get("routing_decision", {})
         primary_brain = routing.get("primary_brain") if isinstance(routing, dict) else None
+        workspace = data.get("cognitive_workspace", {})
+        if isinstance(workspace, dict):
+            selected = workspace.get("selected_candidate", {})
+            if isinstance(selected, dict) and selected.get("brain"):
+                primary_brain = selected["brain"]
         participants = self._participants(domains, results, primary_brain)
         if primary_brain not in participants and participants:
             primary_brain = participants[0]
@@ -184,14 +189,30 @@ class CollaborationBrain:
             })
 
         requests = []
+        unresolved = [
+            item for item in workspace.get("unresolved_requirements", [])
+            if isinstance(item, dict)
+        ] if isinstance(workspace, dict) else []
+        non_negotiables = workspace.get("non_negotiables", []) if isinstance(workspace, dict) else []
         if round_name == "planning" and len(participants) > 1:
             for name in participants:
                 peer_messages = [item for item in transcript if item["speaker"] != name]
+                assigned = [
+                    item for item in unresolved
+                    if name in item.get("owners", [])
+                ]
                 requests.append({
                     "target_brain": name,
                     "question": self._question(name, domain, primary_brain),
                     "peer_messages": peer_messages,
                     "must_preserve_user_requirements": True,
+                    "assigned_unresolved_requirements": assigned[:20],
+                    "non_negotiables": non_negotiables[:20],
+                    "instruction": (
+                        "Address assigned unresolved requirements, challenge unsupported peer claims, "
+                        "and preserve every verified requirement. Do not reward a longer answer merely "
+                        "for being longer."
+                    ),
                 })
 
         result = {
@@ -205,6 +226,9 @@ class CollaborationBrain:
             "consultation_requests": requests,
             "consensus_terms": self._keywords([item["message"] for item in transcript]),
             "preferred_brain": primary_brain,
+            "workspace_coverage": workspace.get("coverage", {}) if isinstance(workspace, dict) else {},
+            "unresolved_requirements": unresolved[:20],
+            "evidence_summary": workspace.get("evidence_summary", {}) if isinstance(workspace, dict) else {},
             "confidence": min(92, 60 + len(participants) * 9),
             "bounded": True,
             "user_visible": False,

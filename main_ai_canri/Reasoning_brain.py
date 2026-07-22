@@ -149,6 +149,55 @@ class ReasoningBrain:
 
         return {}
 
+    def get_cognitive_workspace(self, data):
+
+        workspace = self.get_context_block(data, "cognitive_workspace")
+        return workspace if isinstance(workspace, dict) else {}
+
+    def workspace_decision_options(self, workspace, domain, intent):
+
+        unresolved = workspace.get("unresolved_requirements", [])
+        evidence = workspace.get("evidence_summary", {})
+        memory = workspace.get("memory_state", {})
+        candidates = workspace.get("candidates", [])
+        try:
+            trusted_count = int(evidence.get("trusted_count", 0) or 0)
+        except (TypeError, ValueError):
+            trusted_count = 0
+        options = [
+            {
+                "strategy": "contract_first",
+                "score": 80 + min(len(unresolved), 10),
+                "reason": "Resolve exact user requirements before optional expansion.",
+            },
+            {
+                "strategy": "specialist_synthesis",
+                "score": 68 + min(len(candidates) * 3, 15),
+                "reason": "Combine compatible specialist findings and reject domain mismatches.",
+            },
+        ]
+        if domain in {"science", "knowledge", "technology", "geography", "history"}:
+            options.append({
+                "strategy": "evidence_first",
+                "score": 72 + min(trusted_count * 3, 18),
+                "reason": "Prefer supported claims and identify inferences or evidence gaps.",
+            })
+        if memory.get("continuation"):
+            options.append({
+                "strategy": "continuation_preserving",
+                "score": 90,
+                "reason": "Modify the selected previous artifact without losing working behavior.",
+            })
+        options.sort(key=lambda item: item["score"], reverse=True)
+        return {
+            "selected": options[0] if options else None,
+            "alternatives": options,
+            "rejected": [
+                {**item, "rejection_reason": "lower goal-alignment score for this request"}
+                for item in options[1:]
+            ],
+        }
+
     def extract_text(self, data, report):
 
         parts = []
@@ -386,6 +435,12 @@ class ReasoningBrain:
 
         if not text:
             return None
+
+        try:
+            confidence = float(confidence)
+        except (TypeError, ValueError):
+            confidence = 70
+        confidence = max(0, min(confidence, 100))
 
         tokens = self.tokenize(text)
 
@@ -1130,6 +1185,8 @@ class ReasoningBrain:
 
         if confidence < 55 or missing_information:
             next_brains.append("Research_brain")
+
+        if domain in {"story", "game", "creative", "image_generation"}:
             next_brains.append("Creative_brain")
 
         if contradictions:
@@ -1163,6 +1220,7 @@ class ReasoningBrain:
         report = self.get_understanding_report(data)
         memory_report = self.get_memory_report(data)
         previous_results = self.get_previous_results(data)
+        cognitive_workspace = self.get_cognitive_workspace(data)
         text = self.extract_text(data, report)
 
         terms = self.collect_terms(
@@ -1178,6 +1236,21 @@ class ReasoningBrain:
             previous_results,
             text
         )
+        known_fact_texts = {fact.get("text", "").lower() for fact in facts}
+        for item in cognitive_workspace.get("evidence", [])[:20]:
+            if not isinstance(item, dict):
+                continue
+            evidence_text = item.get("excerpt") or item.get("title")
+            if not evidence_text:
+                continue
+            normalized = self.normalize_fact(
+                evidence_text,
+                f"cognitive_workspace:{item.get('source', 'evidence')}",
+                item.get("trust_score", 70),
+            )
+            if normalized and normalized["text"].lower() not in known_fact_texts:
+                facts.append(normalized)
+                known_fact_texts.add(normalized["text"].lower())
 
         domain = self.detect_domain(
             report,
@@ -1222,6 +1295,17 @@ class ReasoningBrain:
         contradictions = self.detect_contradictions(
             facts
         )
+        for conflict in cognitive_workspace.get("conflicts", [])[:8]:
+            contradictions.append({
+                "claim_a": str(conflict.get("detail", conflict))[:500]
+                if isinstance(conflict, dict)
+                else str(conflict)[:500],
+                "claim_b": "The shared workspace marked this item as unresolved.",
+                "shared_terms": [],
+                "severity": "medium",
+                "resolution": "Resolve the conflict before selecting the final answer.",
+            })
+        contradictions = contradictions[:20]
 
         evidence = self.evaluate_evidence(
             facts,
@@ -1252,6 +1336,19 @@ class ReasoningBrain:
             report,
             terms
         )
+        existing_constraints = {item.get("constraint") for item in constraints}
+        for item in cognitive_workspace.get("non_negotiables", [])[:40]:
+            if not isinstance(item, dict):
+                continue
+            constraint_text = str(item.get("text", "")).strip()
+            if constraint_text and constraint_text not in existing_constraints:
+                constraints.append({
+                    "constraint": constraint_text,
+                    "source": "cognitive_workspace",
+                    "importance": "high",
+                    "requirement_id": item.get("id"),
+                })
+                existing_constraints.add(constraint_text)
 
         conclusions = self.generate_conclusions(
             facts,
@@ -1287,6 +1384,19 @@ class ReasoningBrain:
             constraints,
             missing_information
         )
+        decision_options = self.workspace_decision_options(
+            cognitive_workspace,
+            domain,
+            intent,
+        )
+        if decision_options.get("selected"):
+            decision_summary["workspace_strategy"] = decision_options["selected"]
+        decision_summary["shared_goal"] = cognitive_workspace.get("goal", {})
+        decision_summary["unresolved_requirement_ids"] = [
+            item.get("id")
+            for item in cognitive_workspace.get("unresolved_requirements", [])[:30]
+            if isinstance(item, dict)
+        ]
 
         confidence = self.calculate_confidence(
             facts,
@@ -1308,6 +1418,7 @@ class ReasoningBrain:
             "used_understanding_report": bool(report),
             "used_memory_report": bool(memory_report),
             "used_previous_results": bool(previous_results),
+            "used_cognitive_workspace": bool(cognitive_workspace),
             "main_topic": domain,
             "intent": intent,
             "reasoning_mode": mode,
@@ -1331,6 +1442,14 @@ class ReasoningBrain:
             "reasoning_chain": reasoning_chain,
             "conclusions": conclusions,
             "decision_summary": decision_summary,
+            "decision_options": decision_options,
+            "workspace_alignment": {
+                "goal": cognitive_workspace.get("goal", {}),
+                "coverage": cognitive_workspace.get("coverage", {}),
+                "selected_candidate": cognitive_workspace.get("selected_candidate"),
+                "unresolved_requirements": cognitive_workspace.get("unresolved_requirements", [])[:20],
+                "evidence_summary": cognitive_workspace.get("evidence_summary", {}),
+            },
             "solutions": solutions,
             "missing_information": missing_information,
             "pattern_used": {
