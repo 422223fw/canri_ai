@@ -741,6 +741,11 @@ class LearningBrain:
         report = self.get_understanding_report(data)
         memory_report = self.get_memory_report(data)
         results = self.get_results(data)
+        cognitive_workspace = (
+            data.get("cognitive_workspace", {})
+            if isinstance(data, dict)
+            else {}
+        )
         chat_id = self.get_chat_id(data, memory_report)
         user_text = self.get_user_text(data, report)
 
@@ -753,6 +758,29 @@ class LearningBrain:
             lessons,
             failure_patterns
         ) = self.analyze_results(results, report)
+
+        unresolved = [
+            item for item in cognitive_workspace.get("unresolved_requirements", [])
+            if isinstance(item, dict)
+        ] if isinstance(cognitive_workspace, dict) else []
+        selected_candidate = (
+            cognitive_workspace.get("selected_candidate", {})
+            if isinstance(cognitive_workspace, dict)
+            else {}
+        )
+        if unresolved:
+            selected_brain = selected_candidate.get("brain") if isinstance(selected_candidate, dict) else None
+            lessons = [
+                lesson for lesson in lessons
+                if not selected_brain or lesson.get("brain") != selected_brain
+            ]
+            weaknesses.append(
+                f"The shared workspace still has {len(unresolved)} unresolved request requirements."
+            )
+            improvements.extend(
+                f"Resolve and verify requirement {item.get('id')}: {item.get('text')}"
+                for item in unresolved[:8]
+            )
 
         if not results:
             weaknesses.append("No brain results were provided to Learning_brain.")
@@ -812,6 +840,8 @@ class LearningBrain:
             "lessons": lessons,
             "failure_patterns": failure_patterns,
             "learning_guidance": guidance,
+            "cognitive_workspace_used": bool(cognitive_workspace),
+            "unresolved_requirements_not_learned": len(unresolved),
             "reliability": reliability,
             "creative_help": creative_help,
             "updated_statistics": True,

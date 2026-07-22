@@ -888,6 +888,29 @@ class ResearchBrain:
             understanding_report,
             text
         )
+        cognitive_view = (
+            data.get("cognitive_view", {})
+            if isinstance(data, dict)
+            else {}
+        )
+        if isinstance(cognitive_view, dict):
+            goal = cognitive_view.get("goal", {})
+            goal = goal if isinstance(goal, dict) else {}
+            unresolved = [
+                item.get("text")
+                for item in cognitive_view.get("unresolved_requirements", [])[:3]
+                if isinstance(item, dict)
+                and item.get("text")
+                and (
+                    not item.get("owners")
+                    or "Research_brain" in item.get("owners", [])
+                )
+            ]
+            query = self.normalize_query(" ".join(filter(None, [
+                query,
+                str(goal.get("target") or ""),
+                *unresolved,
+            ])))
 
         category = (
             self.detect_category_from_understanding(
@@ -1103,6 +1126,7 @@ class ResearchBrain:
             "local_knowledge": local_knowledge,
             "scanner_evidence": indexed_scanner_evidence,
             "scanner_evidence_used": bool(indexed_scanner_evidence),
+            "cognitive_workspace_used": bool(cognitive_view),
             "fetched_sources": fetched_sources,
             "approved_research_links": research_links,
             "warnings": list(

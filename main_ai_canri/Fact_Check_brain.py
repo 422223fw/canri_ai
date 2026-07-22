@@ -507,6 +507,46 @@ class FactCheckBrain:
             "notes": source.get("notes", "")
         }
 
+    def workspace_evidence(self, data):
+        if not isinstance(data, dict):
+            return []
+        workspace = data.get("cognitive_workspace", {})
+        if not isinstance(workspace, dict):
+            return []
+        normalized = []
+        for item in workspace.get("evidence", [])[:40]:
+            if not isinstance(item, dict):
+                continue
+            normalized.append(self.normalize_source(
+                "Cognitive_workspace",
+                {
+                    "name": item.get("title") or item.get("id"),
+                    "url": item.get("url"),
+                    "source_type": item.get("collection") or "indexed_local_evidence",
+                    "trust_score": item.get("trust_score"),
+                    "supports": sorted(self.claim_terms(item.get("excerpt", "")))[:20],
+                    "notes": item.get("excerpt", ""),
+                },
+            ))
+        return normalized
+
+    def dedupe_evidence(self, evidence):
+        unique = []
+        seen = set()
+        for item in evidence:
+            if not isinstance(item, dict):
+                continue
+            identity = (
+                str(item.get("url") or "").strip().lower(),
+                str(item.get("name") or "").strip().lower(),
+                str(item.get("source_type") or "").strip().lower(),
+            )
+            if identity in seen:
+                continue
+            seen.add(identity)
+            unique.append(item)
+        return unique
+
     def evidence_score(self, evidence):
 
         if not evidence:
@@ -901,8 +941,10 @@ class FactCheckBrain:
         verifiable_claims = [claim for claim in claims if claim.get("verifiable")]
         evidence = self.collect_evidence(data, results)
         evidence.extend(self.collect_context_evidence(data))
+        evidence.extend(self.workspace_evidence(data))
         local_data_evidence = self.collect_local_data_evidence(text, report, claims)
         evidence.extend(local_data_evidence)
+        evidence = self.dedupe_evidence(evidence)
         conflicts = self.detect_conflicts(claims)
         topic_risk = self.detect_topic_risk(text, report)
         claim_evidence_links = self.link_claims_to_evidence(verifiable_claims, evidence)
@@ -956,6 +998,9 @@ class FactCheckBrain:
             "evidence_count": len(evidence),
             "evidence_score": self.evidence_score(evidence),
             "evidence_coverage": coverage,
+            "cognitive_workspace_used": bool(
+                isinstance(data, dict) and data.get("cognitive_workspace")
+            ),
             "local_data_evidence": local_data_evidence,
             "claim_evidence_links": claim_evidence_links,
             "strongest_sources": sorted(

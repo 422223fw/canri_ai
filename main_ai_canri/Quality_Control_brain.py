@@ -125,6 +125,12 @@ class QualityControlBrain:
 
         return {}
 
+    def get_cognitive_workspace(self, data):
+        if not isinstance(data, dict):
+            return {}
+        workspace = data.get("cognitive_workspace", {})
+        return workspace if isinstance(workspace, dict) else {}
+
     def extract_text(self, data, report):
         if isinstance(data, str):
             return data
@@ -866,6 +872,13 @@ class QualityControlBrain:
     # ---------- checks ----------
 
     def add_issue(self, issues, target_brain, severity, problem, instruction, evidence=None):
+        identity = (str(target_brain), str(problem).strip().lower())
+        if any(
+            (str(item.get("target_brain")), str(item.get("problem", "")).strip().lower()) == identity
+            for item in issues
+            if isinstance(item, dict)
+        ):
+            return
         issues.append({
             "target_brain": target_brain,
             "severity": severity,
@@ -2007,6 +2020,7 @@ class QualityControlBrain:
     def process(self, data):
         report = self.get_understanding_report(data)
         results = self.get_results(data)
+        cognitive_workspace = self.get_cognitive_workspace(data)
         text = self.extract_text(data, report)
         requirements = self.request_requirements(text, report)
         issues = []
@@ -2026,12 +2040,41 @@ class QualityControlBrain:
 
         score = self.quality_score(issues)
         requirement_checks = self.build_requirement_checks(results, requirements)
+        existing_check_ids = {
+            str(check.get("requirement"))
+            for check in requirement_checks
+            if isinstance(check, dict)
+        }
+        for item in cognitive_workspace.get("requirements", [])[:80]:
+            if not isinstance(item, dict) or item.get("status") != "passed":
+                continue
+            requirement_id = str(item.get("id") or item.get("text"))
+            if requirement_id in existing_check_ids:
+                continue
+            requirement_checks.append({
+                "requirement": requirement_id,
+                "description": item.get("text", ""),
+                "passed": item.get("status") == "passed",
+                "evidence": item.get("evidence"),
+                "target_brain": (item.get("owners") or ["Manager_brain"])[0],
+                "source": item.get("verification_source"),
+            })
         retry_requests = self.build_retry_requests(
             issues,
             requirements,
             requirement_checks,
             score,
         )
+        passed_requirement_ids = list(dict.fromkeys([
+            *cognitive_workspace.get("passed_requirement_ids", []),
+            *[
+                check.get("requirement")
+                for check in requirement_checks
+                if isinstance(check, dict) and check.get("passed") is True
+            ],
+        ]))
+        for request in retry_requests:
+            request["preserve_requirement_ids"] = passed_requirement_ids[:80]
         blocking_issues = [
             issue
             for issue in issues
@@ -2057,6 +2100,8 @@ class QualityControlBrain:
             "advisory_issues": advisory_issues[:20],
             "requirement_checks": requirement_checks[:40],
             "requirements": requirements,
+            "cognitive_workspace_used": bool(cognitive_workspace),
+            "workspace_decision": cognitive_workspace.get("decision", {}),
             "checked_brains": sorted(results.keys()),
             "confidence": score,
             "suggested_next_brains": [

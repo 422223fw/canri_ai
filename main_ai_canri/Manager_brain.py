@@ -20,6 +20,11 @@ from Brain_runtime import brain_runtime
 from Brain_storage import load_json_resilient
 
 try:
+    from Cognitive_workspace import CognitiveWorkspace
+except Exception:
+    CognitiveWorkspace = None
+
+try:
     from Data_context import (
         build_shared_data_context,
         context_view_for_brain,
@@ -96,11 +101,48 @@ class ManagerBrain:
         self._request_id = None
         self.registry_health = {}
         self.company_products = self.load_json(COMPANY_PRODUCTS_FILE, {})
+        self.cognitive_workspace = (
+            CognitiveWorkspace()
+            if CognitiveWorkspace is not None
+            else None
+        )
 
         print("Manager Brain Loaded")
 
     def load_json(self, path, default):
         return load_json_resilient(path, default=default)
+
+    def refresh_cognitive_workspace(
+        self,
+        data,
+        report,
+        memory_report,
+        results=None,
+        contexts=None
+    ):
+        """Refresh the shared request state without exposing it to the user."""
+
+        if self.cognitive_workspace is None:
+            return {}
+        data = data if isinstance(data, dict) else {}
+        merged_contexts = {
+            "knowledge": data.get("knowledge", {}),
+            "scanner_knowledge": data.get("scanner_knowledge", {}),
+            "dictionary": data.get("dictionary", {}),
+            "data_context": data.get("full_data_context") or data.get("data_context", {}),
+        }
+        if isinstance(contexts, dict):
+            merged_contexts.update(contexts)
+        workspace = self.cognitive_workspace.refresh(
+            data.get("cognitive_workspace", {}),
+            report,
+            memory_report,
+            results or data.get("results", {}),
+            merged_contexts,
+            request_id=self._request_id,
+        )
+        data["cognitive_workspace"] = workspace
+        return workspace
 
     # ---------- registration ----------
 
@@ -1352,6 +1394,24 @@ class ManagerBrain:
             context["data_context"],
             context["knowledge"]
         )
+        workspace = self.refresh_cognitive_workspace(
+            context,
+            report,
+            memory_report,
+            combined_results,
+            {
+                "knowledge": context["knowledge"],
+                "scanner_knowledge": context["scanner_knowledge"],
+                "dictionary": context["dictionary"],
+                "data_context": context["full_data_context"],
+            }
+        )
+        context["cognitive_workspace"] = workspace
+        context["cognitive_view"] = (
+            self.cognitive_workspace.view_for_brain(workspace, brain_name)
+            if self.cognitive_workspace is not None and brain_name
+            else workspace
+        )
         context["manager_context"] = {
             "phase": phase,
             "target_brain": brain_name,
@@ -1369,6 +1429,7 @@ class ManagerBrain:
             ),
             "execution_contract": context["execution_contract"],
             "brain_dialogue": context.get("brain_dialogue", {}),
+            "cognitive_view": context["cognitive_view"],
             "performance_budget": {
                 "request_budget_seconds": REQUEST_TIME_BUDGET_SECONDS,
                 "brain_soft_timeout_seconds": DEFAULT_BRAIN_SOFT_TIMEOUT_SECONDS,
@@ -1613,6 +1674,25 @@ class ManagerBrain:
                     "runtime_contract": execution.telemetry.get("contract_version")
                 }
                 results[brain_name] = result
+                combined_workspace_results = dict(context.get("results", {}))
+                combined_workspace_results.update(results)
+                workspace = self.refresh_cognitive_workspace(
+                    data,
+                    report,
+                    memory_report,
+                    combined_workspace_results,
+                    {
+                        "knowledge": context.get("knowledge", {}),
+                        "scanner_knowledge": context.get("scanner_knowledge", {}),
+                        "dictionary": context.get("dictionary", {}),
+                        "data_context": context.get("full_data_context", {}),
+                    }
+                )
+                if self.cognitive_workspace is not None:
+                    result["cognitive_receipt"] = self.cognitive_workspace.receipt(
+                        workspace,
+                        brain_name,
+                    )
                 self.emit_progress(
                     data,
                     "brain_done" if execution.ok else "brain_error",
@@ -1833,6 +1913,19 @@ class ManagerBrain:
             )
 
             all_results.update(results)
+            workspace = self.refresh_cognitive_workspace(
+                phase_context if isinstance(phase_context, dict) else {},
+                report,
+                memory_report,
+                all_results,
+                {
+                    "knowledge": shared_knowledge,
+                    "dictionary": shared_dictionary,
+                    "data_context": shared_data_context,
+                }
+            )
+            if isinstance(data, dict):
+                data["cognitive_workspace"] = workspace
 
             if phase_name == "brain_collaboration":
                 collaboration_result = results.get("Collaboration_brain")
@@ -1858,6 +1951,19 @@ class ManagerBrain:
                         "brains": ["Collaboration_brain"],
                         "results": {"Collaboration_brain": consensus}
                     })
+                workspace = self.refresh_cognitive_workspace(
+                    data if isinstance(data, dict) else {},
+                    report,
+                    memory_report,
+                    all_results,
+                    {
+                        "knowledge": shared_knowledge,
+                        "dictionary": shared_dictionary,
+                        "data_context": shared_data_context,
+                    }
+                )
+                if isinstance(data, dict):
+                    data["cognitive_workspace"] = workspace
 
             phase_results.append({
                 "phase": phase_name,
@@ -1992,6 +2098,17 @@ class ManagerBrain:
         retry_context["dictionary"] = shared_dictionary
         retry_context["data_context"] = shared_data_context
         retry_context["full_data_context"] = shared_data_context
+        retry_context["cognitive_workspace"] = self.refresh_cognitive_workspace(
+            retry_context,
+            self.get_understanding_report(retry_context),
+            self.get_memory_report(retry_context),
+            all_results,
+            {
+                "knowledge": shared_knowledge,
+                "dictionary": shared_dictionary,
+                "data_context": shared_data_context,
+            }
+        )
         retry_context["quality_feedback"] = quality_result
         retry_context["nervous_system"] = all_results.get(
             "Nervous_system_brain",
@@ -2046,6 +2163,23 @@ class ManagerBrain:
                 or "wrong program kind" in str(request_data.get("problem", "")).lower()
             ),
         }
+        if self.cognitive_workspace is not None and target_brain:
+            cognitive_view = self.cognitive_workspace.view_for_brain(
+                retry_context["cognitive_workspace"],
+                target_brain,
+            )
+            retry_context["cognitive_view"] = cognitive_view
+            workspace_packets = cognitive_view.get("correction_packets", [])
+            if workspace_packets:
+                packet = workspace_packets[0]
+                retry_context["quality_correction"]["failed_requirements"] = list(dict.fromkeys([
+                    *retry_context["quality_correction"].get("failed_requirements", []),
+                    *packet.get("failed_requirements", []),
+                ]))
+                retry_context["quality_correction"]["preserve_requirement_ids"] = packet.get(
+                    "preserve_requirement_ids",
+                    [],
+                )
         if target_brain:
             retry_context["previous_attempt"] = all_results.get(target_brain)
 
@@ -2362,6 +2496,24 @@ class ManagerBrain:
             shared_knowledge
         )
 
+        initial_workspace_data = dict(data) if isinstance(data, dict) else {}
+        initial_workspace_data.update({
+            "knowledge": shared_knowledge,
+            "dictionary": shared_dictionary,
+            "data_context": shared_data_context,
+        })
+        cognitive_workspace = self.refresh_cognitive_workspace(
+            initial_workspace_data,
+            report,
+            memory_report,
+            {},
+            {
+                "knowledge": shared_knowledge,
+                "dictionary": shared_dictionary,
+                "data_context": shared_data_context,
+            }
+        )
+
         if isinstance(data, dict):
             data = dict(data)
             data["_request_id"] = self._request_id
@@ -2370,6 +2522,7 @@ class ManagerBrain:
             data["data_context"] = shared_data_context
             data["shared_context"] = shared_brain_context
             data["routing_decision"] = self.routing_decision(report, memory_report)
+            data["cognitive_workspace"] = cognitive_workspace
 
         phases = self.build_plan(report, memory_report)
         plan = self.flatten_plan(phases)
@@ -2380,6 +2533,18 @@ class ManagerBrain:
             report,
             memory_report
         )
+        if isinstance(data, dict):
+            data["cognitive_workspace"] = self.refresh_cognitive_workspace(
+                data,
+                report,
+                memory_report,
+                results,
+                {
+                    "knowledge": shared_knowledge,
+                    "dictionary": shared_dictionary,
+                    "data_context": shared_data_context,
+                }
+            )
 
         runtime_events = brain_runtime.events_for_request(self._request_id)
         manager_report = {
@@ -2452,6 +2617,26 @@ class ManagerBrain:
                 else {}
             ),
             "shared_context": shared_brain_context,
+            "cognitive_workspace": {
+                "summary": data.get("cognitive_workspace", {}).get("summary", {})
+                if isinstance(data, dict)
+                else {},
+                "decision": data.get("cognitive_workspace", {}).get("decision", {})
+                if isinstance(data, dict)
+                else {},
+                "passed_requirement_ids": data.get("cognitive_workspace", {}).get(
+                    "passed_requirement_ids",
+                    [],
+                )[:80] if isinstance(data, dict) else [],
+                "unresolved_requirements": data.get("cognitive_workspace", {}).get(
+                    "unresolved_requirements",
+                    [],
+                )[:20] if isinstance(data, dict) else [],
+                "correction_packets": data.get("cognitive_workspace", {}).get(
+                    "correction_packets",
+                    [],
+                )[:8] if isinstance(data, dict) else [],
+            },
             "quality_control": (
                 {
                     "passed": results.get("Quality_Control_brain", {}).get("passed"),
@@ -2535,8 +2720,11 @@ class ManagerBrain:
                 "Use Understanding_brain and Memory_brain context as the base.",
                 "Run safety/context brains before domain experts.",
                 "Route each topic to the strongest registered expert brain.",
+                "Use the cognitive workspace as the shared goal and requirement ledger.",
+                "Rank candidates by verified coverage and evidence, never by length alone.",
+                "Preserve passed requirements in every correction cycle.",
                 "Keep skipped or failing brains visible instead of hiding them.",
-                "Return a phased plan so Canri can explain how it worked."
+                "Keep the phased plan internal unless the user asks for it."
             ]
         }
 

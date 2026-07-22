@@ -6277,7 +6277,20 @@ if __name__ == "__main__":
 
     def quality_correction_contract(self, data):
 
-        if not isinstance(data, dict) or data.get("retry_target") != "Code_brain":
+        if not isinstance(data, dict):
+            return {}
+        cognitive_view = data.get("cognitive_view", {})
+        cognitive_view = cognitive_view if isinstance(cognitive_view, dict) else {}
+        cognitive_requirements = [
+            item for item in cognitive_view.get("unresolved_requirements", [])
+            if isinstance(item, dict)
+        ]
+        cognitive_packets = [
+            item for item in cognitive_view.get("correction_packets", [])
+            if isinstance(item, dict) and item.get("target_brain") == "Code_brain"
+        ]
+        is_retry = data.get("retry_target") == "Code_brain"
+        if not is_retry and not cognitive_requirements:
             return {}
         direct = data.get("quality_correction", {})
         feedback = data.get("quality_feedback", {})
@@ -6294,17 +6307,47 @@ if __name__ == "__main__":
         )
         contract.setdefault(
             "required_features",
-            request.get("required_features") or requirements.get("requested_code_features", []),
+            request.get("required_features")
+            or requirements.get("requested_code_features", [])
+            or [
+                item.get("feature")
+                for item in cognitive_requirements
+                if item.get("feature")
+            ],
         )
         contract.setdefault(
             "failed_requirements",
-            request.get("failed_requirement_checks") or data.get("failed_requirements", []),
+            request.get("failed_requirement_checks")
+            or data.get("failed_requirements", [])
+            or [
+                item.get("text") or item.get("id")
+                for item in cognitive_requirements
+                if item.get("text") or item.get("id")
+            ],
         )
+        if cognitive_packets:
+            packet = cognitive_packets[0]
+            contract["failed_requirements"] = list(dict.fromkeys([
+                *contract.get("failed_requirements", []),
+                *packet.get("failed_requirements", []),
+            ]))
+            contract["preserve_requirement_ids"] = packet.get(
+                "preserve_requirement_ids",
+                cognitive_view.get("passed_requirement_ids", []),
+            )
+            if not contract.get("expected_program_kind") and packet.get("expected_program_kind"):
+                contract["expected_program_kind"] = packet.get("expected_program_kind")
+        else:
+            contract["preserve_requirement_ids"] = cognitive_view.get(
+                "passed_requirement_ids",
+                [],
+            )
         contract["force_regeneration"] = bool(
             contract.get("force_regeneration")
             or contract.get("quality_score") == 0
             or "wrong program kind" in str(request.get("problem", "")).lower()
         )
+        contract["workspace_guided"] = bool(cognitive_view)
         return contract
 
     def select_program_functions(self, program_kind, code, text="", correction_contract=None):
