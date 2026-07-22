@@ -46,6 +46,176 @@ GENERIC_CODE_TERMS = {
 }
 
 
+class CodeQualityScorer:
+    """Score generated code across independent, explainable dimensions."""
+
+    WEIGHTS = {
+        "syntax": 25,
+        "requirements": 30,
+        "completeness": 15,
+        "runtime": 10,
+        "safety": 10,
+        "maintainability": 10,
+    }
+
+    def score(self, code, review, alignment, request_text="", program_kind=None):
+        code = str(code or "")
+        lowered = code.lower()
+        request = str(request_text or "").lower()
+        review = review if isinstance(review, dict) else {}
+        alignment = alignment if isinstance(alignment, dict) else {}
+        errors = list(review.get("errors", []))
+        warnings = list(review.get("warnings", []))
+        blockers = []
+        dimensions = {}
+
+        syntax_valid = bool(code.strip()) and bool(review.get("valid"))
+        syntax_score = self.WEIGHTS["syntax"] if syntax_valid else 0
+        dimensions["syntax"] = {
+            "earned": syntax_score,
+            "maximum": self.WEIGHTS["syntax"],
+            "passed": syntax_valid,
+            "reason": "Python syntax parsed successfully." if syntax_valid else "Syntax validation failed.",
+        }
+        if not syntax_valid:
+            blockers.append("syntax_invalid")
+
+        coverage = float(alignment.get("coverage", 100) or 0)
+        coverage = max(0.0, min(100.0, coverage))
+        requirement_score = round(self.WEIGHTS["requirements"] * coverage / 100.0, 2)
+        dimensions["requirements"] = {
+            "earned": requirement_score,
+            "maximum": self.WEIGHTS["requirements"],
+            "passed": coverage == 100.0,
+            "coverage_percent": coverage,
+            "failed": [
+                item.get("requirement")
+                for item in alignment.get("failed", [])
+                if isinstance(item, dict)
+            ],
+            "reason": f"{coverage}% of extracted request requirements passed.",
+        }
+        if coverage < 100.0:
+            blockers.append("request_requirements_missing")
+
+        blocking_markers = [
+            "only contains pass", "looks like a stub", "has no real body",
+            "possible placeholder code detected",
+        ]
+        incomplete = [
+            warning for warning in warnings
+            if any(marker in str(warning).lower() for marker in blocking_markers)
+        ]
+        completeness_score = max(0, self.WEIGHTS["completeness"] - len(incomplete) * 5)
+        dimensions["completeness"] = {
+            "earned": completeness_score,
+            "maximum": self.WEIGHTS["completeness"],
+            "passed": not incomplete,
+            "issues": incomplete,
+            "reason": "No placeholders or empty implementations were found." if not incomplete else "Incomplete implementations were detected.",
+        }
+        if incomplete:
+            blockers.append("incomplete_implementation")
+
+        runnable_requested = bool(
+            program_kind
+            or any(marker in request for marker in [
+                "runnable", "terminal", "command line", "keep running", "program",
+            ])
+        )
+        has_main = re.search(r"^def\s+main\s*\(", code, re.MULTILINE) is not None
+        has_guard = 'if __name__ == "__main__"' in code or "if __name__ == '__main__'" in code
+        runtime_score = self.WEIGHTS["runtime"]
+        if runnable_requested:
+            runtime_score = (5 if has_main else 0) + (5 if has_guard else 0)
+        dimensions["runtime"] = {
+            "earned": runtime_score,
+            "maximum": self.WEIGHTS["runtime"],
+            "passed": not runnable_requested or (has_main and has_guard),
+            "main_function": has_main,
+            "main_guard": has_guard,
+            "reason": "The runnable entry point is complete." if not runnable_requested or (has_main and has_guard) else "The requested runnable entry point is incomplete.",
+        }
+        if runnable_requested and not (has_main and has_guard):
+            blockers.append("runnable_entry_point_missing")
+
+        unsafe_markers = {
+            "eval(": "eval_usage",
+            "exec(": "exec_usage",
+            "shell=true": "shell_true_usage",
+            "pickle.loads": "unsafe_pickle_deserialization",
+        }
+        safety_issues = [name for marker, name in unsafe_markers.items() if marker in lowered]
+        if re.search(r"(?:api_key|secret|password)\s*=\s*['\"][^'\"]{6,}['\"]", code, re.I):
+            safety_issues.append("hard_coded_secret")
+        safety_score = max(0, self.WEIGHTS["safety"] - len(safety_issues) * 5)
+        dimensions["safety"] = {
+            "earned": safety_score,
+            "maximum": self.WEIGHTS["safety"],
+            "passed": not safety_issues,
+            "issues": safety_issues,
+            "reason": "No high-risk code pattern was found." if not safety_issues else "High-risk code patterns were found.",
+        }
+        if safety_issues:
+            blockers.append("unsafe_code_pattern")
+
+        maintainability_score = 2
+        maintainability_notes = []
+        try:
+            tree = ast.parse(code)
+            functions = [
+                node for node in ast.walk(tree)
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            ]
+            classes = [node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)]
+            if functions or classes:
+                maintainability_score += 4
+                maintainability_notes.append("logic is divided into named units")
+            if has_main:
+                maintainability_score += 2
+                maintainability_notes.append("command flow is isolated in main")
+            oversized = [
+                node.name for node in functions
+                if sum(1 for _ in ast.walk(node)) > 180
+            ]
+            if not oversized:
+                maintainability_score += 2
+            else:
+                maintainability_notes.append("large functions: " + ", ".join(oversized[:5]))
+        except (SyntaxError, ValueError):
+            maintainability_score = 0
+        maintainability_score = min(self.WEIGHTS["maintainability"], maintainability_score)
+        dimensions["maintainability"] = {
+            "earned": maintainability_score,
+            "maximum": self.WEIGHTS["maintainability"],
+            "passed": maintainability_score >= 7,
+            "notes": maintainability_notes,
+            "reason": "Structure was evaluated from the Python syntax tree.",
+        }
+
+        overall = round(sum(item["earned"] for item in dimensions.values()), 2)
+        unique_blockers = list(dict.fromkeys(blockers))
+        if overall >= 95:
+            grade = "excellent"
+        elif overall >= 85:
+            grade = "ready"
+        elif overall >= 70:
+            grade = "needs_improvement"
+        else:
+            grade = "not_ready"
+        return {
+            "overall_score": overall,
+            "grade": grade,
+            "ready": overall >= 85 and not unique_blockers,
+            "dimensions": dimensions,
+            "blockers": unique_blockers,
+            "errors": errors,
+            "warnings": warnings,
+            "program_kind": program_kind,
+            "scoring_model": "code_quality_v2",
+        }
+
+
 class CodeSelfReviewer:
 
     OPERATION_PATTERNS = {
@@ -132,6 +302,20 @@ class CodeSelfReviewer:
 
         if "json" in lowered and any(marker in lowered for marker in ["save", "load", "persist"]):
             add("json_persistence", "persistence", ["json.loads", "json.dumps"])
+        if "invalid json" in lowered or "corrupt json" in lowered:
+            add("invalid_json_handling", "invalid_json_handling", [])
+        if any(marker in lowered for marker in [
+            "older json", "old json", "older file", "old file", "backward compatible",
+            "compatible with older", "compatibility with older",
+        ]):
+            add("old_json_compatibility", "old_json_compatibility", [])
+        if re.search(r"\bsearch\b.*\bby\s+name\s+only\b", lowered, re.DOTALL):
+            add("search_by_name_only", "search_by_name_only", [])
+        if "keep running" in lowered and "exit" in lowered:
+            add("repeat_until_exit", "repeat_until_exit", [])
+            add("exit_command", "exit_command", [])
+        if "invalid input" in lowered or "invalid numbers" in lowered:
+            add("retry_invalid_input", "retry_invalid_input", [])
         if any(marker in lowered for marker in ["do not use external", "no external", "standard library only"]):
             add("standard_library_only", "negative_constraint", [])
         if "only output" in lowered and "code" in lowered:
@@ -235,6 +419,17 @@ class CodeSelfReviewer:
             return []
         return [item for item in questions if isinstance(item, dict)]
 
+    def function_source(self, code, function_name):
+
+        try:
+            tree = ast.parse(str(code or ""))
+        except (SyntaxError, ValueError):
+            return ""
+        for node in tree.body:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == function_name:
+                return ast.get_source_segment(str(code), node) or ""
+        return ""
+
     def requirement_passed(self, requirement, code):
 
         lowered_code = str(code or "").lower()
@@ -293,6 +488,31 @@ class CodeSelfReviewer:
             return c_to_f and f_to_c
         if kind == "repeat_until_exit":
             return all(marker in lowered_code for marker in ["while true", "input(", "exit", "break"])
+        if kind == "exit_command":
+            return bool(re.search(r"(?:==|\bin\s*\{)[^\n]{0,80}['\"]exit['\"]", lowered_code))
+        if kind == "invalid_json_handling":
+            return "jsondecodeerror" in lowered_code and "except" in lowered_code
+        if kind == "old_json_compatibility":
+            return (
+                "isinstance(data, list)" in lowered_code
+                and (
+                    "isinstance(data, dict)" in lowered_code
+                    or ".get(" in self.function_source(code, "load_contacts").lower()
+                    or ".get(" in self.function_source(code, "load_books").lower()
+                    or ".get(" in self.function_source(code, "load_notes").lower()
+                )
+            )
+        if kind == "search_by_name_only":
+            search_source = "\n".join(
+                self.function_source(code, name)
+                for name in ["search_contacts", "search_by_name", "search_records"]
+            ).lower()
+            return (
+                bool(search_source)
+                and 'get("name"' in search_source
+                and 'get("phone"' not in search_source
+                and 'get("email"' not in search_source
+            )
 
         if requirement["kind"] == "negative_constraint":
             external_imports = [
@@ -513,6 +733,13 @@ class CodeSelfReviewer:
             for warning in final_review.get("warnings", [])
             if any(marker in warning.lower() for marker in blocking_warning_markers)
         ]
+        scorecard = CodeQualityScorer().score(
+            improved_code,
+            final_review,
+            request_alignment,
+            request_text,
+            program_kind,
+        )
 
         return {
             "code": improved_code,
@@ -520,12 +747,10 @@ class CodeSelfReviewer:
             "after": final_review,
             "changes": changes,
             "improved": bool(changes),
-            "ready": final_review.get("valid", False)
-                and final_review.get("quality_score", 0) >= 70
-                and request_alignment.get("passed", True)
-                and not blocking_warnings,
+            "ready": scorecard.get("ready", False),
             "request_alignment": request_alignment,
-            "blocking_warnings": blocking_warnings
+            "blocking_warnings": blocking_warnings,
+            "scorecard": scorecard,
         }
 
 
@@ -1016,10 +1241,93 @@ class CodeProjectReviewer:
             if capability_checks
             else 100.0
         )
-        score = max(0, 100 - len(errors) * 14 - len(warnings) * 3)
+        syntax_errors = [error for error in errors if "syntax error" in error.lower()]
+        completeness_errors = [
+            error for error in errors
+            if any(marker in error.lower() for marker in [
+                "empty", "placeholder", "not implemented",
+            ])
+        ]
+        safety_errors = [
+            error for error in errors
+            if any(marker in error.lower() for marker in [
+                "eval()", "exec()", "shell=true", "pickle", "credential", "secret",
+            ])
+        ]
+        preservation_passed = all(
+            item.get("preserved") for item in preservation_checks
+        ) if preservation_checks else True
+        architecture_score = 10
+        if len(files) > 1:
+            architecture_score = 0
+            architecture_score += 3 if "README.md" in files else 0
+            architecture_score += 3 if any(
+                path in files for path in ["pyproject.toml", "requirements.txt"]
+            ) else 0
+            architecture_score += 2 if any("/" in path and path.endswith(".py") for path in files) else 0
+            architecture_score += 2 if any(
+                "test" in path.lower() and path.endswith(".py") for path in files
+            ) else 0
+        dimensions = {
+            "syntax": {
+                "earned": 25 if not syntax_errors else 0,
+                "maximum": 25,
+                "passed": not syntax_errors,
+            },
+            "requirements": {
+                "earned": round(30 * coverage / 100.0, 2),
+                "maximum": 30,
+                "passed": coverage == 100.0,
+                "coverage_percent": coverage,
+            },
+            "completeness": {
+                "earned": max(0, 15 - len(completeness_errors) * 5),
+                "maximum": 15,
+                "passed": not completeness_errors,
+                "issues": completeness_errors,
+            },
+            "safety": {
+                "earned": 10 if not safety_errors else 0,
+                "maximum": 10,
+                "passed": not safety_errors,
+                "issues": safety_errors,
+            },
+            "architecture": {
+                "earned": architecture_score,
+                "maximum": 10,
+                "passed": architecture_score >= 7,
+            },
+            "regression_preservation": {
+                "earned": 10 if preservation_passed else 0,
+                "maximum": 10,
+                "passed": preservation_passed,
+            },
+        }
+        score = round(sum(item["earned"] for item in dimensions.values()), 2)
+        blockers = list(dict.fromkeys([
+            *("syntax_invalid" for _ in syntax_errors[:1]),
+            *("requested_capability_missing" for _ in [0] if coverage < 100.0),
+            *("incomplete_implementation" for _ in completeness_errors[:1]),
+            *("unsafe_code_pattern" for _ in safety_errors[:1]),
+            *("existing_behavior_not_preserved" for _ in [0] if not preservation_passed),
+        ]))
+        scorecard = {
+            "overall_score": score,
+            "grade": (
+                "excellent" if score >= 95 else
+                "ready" if score >= 85 else
+                "needs_improvement" if score >= 70 else
+                "not_ready"
+            ),
+            "ready": score >= 85 and not blockers and not errors,
+            "dimensions": dimensions,
+            "blockers": blockers,
+            "scoring_model": "code_project_quality_v2",
+        }
         return {
-            "ready": not errors and score >= 90 and coverage == 100.0,
+            "ready": scorecard["ready"],
             "quality_score": score,
+            "scorecard": scorecard,
             "capability_coverage": coverage,
             "errors": errors,
             "warnings": warnings,
@@ -2288,6 +2596,8 @@ class CodeBrain:
                     "checks": project_review.get("capability_checks", []),
                 },
             }
+            result["code_quality_scorecard"] = project_review.get("scorecard", {})
+            result["confidence"] = project_review.get("quality_score", result.get("confidence", 0))
             result["code_metrics"] = {
                 "files": len(project_files),
                 "python_files": project_review.get("python_files_reviewed", 0),
@@ -2327,6 +2637,12 @@ class CodeBrain:
             "request_alignment",
             {}
         )
+        result["code_quality_scorecard"] = review.get("scorecard", {})
+        if result["code_quality_scorecard"]:
+            result["confidence"] = result["code_quality_scorecard"].get(
+                "overall_score",
+                result.get("confidence", 0),
+            )
         result["self_reviewed"] = True
         result["self_improved"] = review.get(
             "improved",
@@ -5338,17 +5654,38 @@ def load_contacts():
 
     try:
         data = json.loads(CONTACTS_FILE.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
+    except (OSError, json.JSONDecodeError) as error:
+        print(f"Could not load contacts: {error}")
         return []
 
-    return data if isinstance(data, list) else []
+    if isinstance(data, dict):
+        data = data.get("contacts", [])
+    if not isinstance(data, list):
+        return []
+
+    contacts = []
+    for item in data:
+        if isinstance(item, str) and item.strip():
+            contacts.append({"name": item.strip(), "phone": "", "email": ""})
+        elif isinstance(item, dict) and str(item.get("name", "")).strip():
+            contacts.append({
+                "name": str(item.get("name", "")).strip(),
+                "phone": str(item.get("phone", "")).strip(),
+                "email": str(item.get("email", "")).strip()
+            })
+    return contacts
 
 
 def save_contacts(contacts):
-    CONTACTS_FILE.write_text(
-        json.dumps(contacts, indent=2, ensure_ascii=False),
-        encoding="utf-8"
-    )
+    try:
+        CONTACTS_FILE.write_text(
+            json.dumps(contacts, indent=2, ensure_ascii=False),
+            encoding="utf-8"
+        )
+        return True
+    except OSError as error:
+        print(f"Could not save contacts: {error}")
+        return False
 
 
 def add_contact(contacts):
@@ -5365,8 +5702,8 @@ def add_contact(contacts):
         "phone": phone,
         "email": email
     })
-    save_contacts(contacts)
-    print("Contact saved.")
+    if save_contacts(contacts):
+        print("Contact saved.")
 
 
 def list_contacts(contacts):
@@ -5379,24 +5716,88 @@ def list_contacts(contacts):
 
 
 def search_contacts(contacts, query):
-    query = query.lower()
+    query = query.strip().lower()
+    if not query:
+        print("Search text cannot be empty.")
+        return
+
     matches = [
         contact
         for contact in contacts
         if query in contact.get("name", "").lower()
-        or query in contact.get("phone", "").lower()
-        or query in contact.get("email", "").lower()
     ]
     list_contacts(matches)
+
+
+def get_contact_index(contacts, raw_index):
+    try:
+        index = int(raw_index) - 1
+    except ValueError:
+        print("Enter a valid contact number.")
+        return None
+
+    if index < 0 or index >= len(contacts):
+        print("Contact number is out of range.")
+        return None
+    return index
+
+
+def edit_contact(contacts):
+    list_contacts(contacts)
+    if not contacts:
+        return
+
+    index = get_contact_index(contacts, input("Contact number to edit: ").strip())
+    if index is None:
+        return
+
+    contact = contacts[index]
+    name = input(f"Name [{contact['name']}]: ").strip()
+    phone = input(f"Phone [{contact.get('phone', '')}]: ").strip()
+    email = input(f"Email [{contact.get('email', '')}]: ").strip()
+
+    if name:
+        contact["name"] = name
+    if phone:
+        contact["phone"] = phone
+    if email:
+        contact["email"] = email
+
+    if not contact["name"].strip():
+        print("Name cannot be empty.")
+        return
+    if save_contacts(contacts):
+        print("Contact updated.")
+
+
+def delete_contact(contacts):
+    list_contacts(contacts)
+    if not contacts:
+        return
+
+    index = get_contact_index(contacts, input("Contact number to delete: ").strip())
+    if index is None:
+        return
+    removed = contacts.pop(index)
+    if save_contacts(contacts):
+        print(f"Deleted: {removed['name']}")
+
+
+def print_help():
+    print("Commands: add, list, search, edit, delete, help, exit")
 
 
 def main():
     contacts = load_contacts()
     print("Contact Book")
-    print("Commands: add, list, search, quit")
+    print_help()
 
     while True:
-        command = input("> ").strip().lower()
+        try:
+            command = input("> ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print("\\nGoodbye.")
+            break
 
         if command == "add":
             add_contact(contacts)
@@ -5404,11 +5805,18 @@ def main():
             list_contacts(contacts)
         elif command == "search":
             search_contacts(contacts, input("Search: ").strip())
-        elif command == "quit":
+        elif command == "edit":
+            edit_contact(contacts)
+        elif command == "delete":
+            delete_contact(contacts)
+        elif command == "help":
+            print_help()
+        elif command in {"exit", "quit"}:
             save_contacts(contacts)
+            print("Goodbye.")
             break
         else:
-            print("Unknown command.")
+            print("Unknown command. Type 'help' for commands.")
 
 
 if __name__ == "__main__":
@@ -6388,6 +6796,10 @@ if __name__ == "__main__":
         except (SyntaxError, ValueError):
             defined = set()
         names_in_order = [node.name for node in function_nodes]
+        called_by = {name: [] for name in defined}
+        for caller, dependencies in call_graph.items():
+            for dependency in dependencies:
+                called_by.setdefault(dependency, []).append(caller)
         required_candidates = {
             name: [name] + function_aliases.get(name, [])
             for name in required
@@ -6400,16 +6812,26 @@ if __name__ == "__main__":
             for name, candidates in required_candidates.items()
         }
         function_scores = {}
+        function_scorecards = {}
         for name in defined:
             name_terms = set(name.lower().split("_"))
-            score = len(name_terms.intersection(request_terms)) * 15
-            if name == "main":
-                score += 100
-            if name in required or name in resolved_required.values():
-                score += 120
-            if call_graph.get(name):
-                score += min(20, len(call_graph[name]) * 4)
+            components = {
+                "request_relevance": min(30, len(name_terms.intersection(request_terms)) * 10),
+                "required_by_profile": 35 if name in required or name in resolved_required.values() else 0,
+                "entry_point": 15 if name == "main" else 0,
+                "dependencies_owned": min(10, len(call_graph.get(name, [])) * 3),
+                "used_by_other_functions": min(10, len(called_by.get(name, [])) * 3),
+            }
+            score = sum(components.values())
             function_scores[name] = score
+            function_scorecards[name] = {
+                "score": score,
+                "maximum": 100,
+                "components": components,
+                "required": name in required or name in resolved_required.values(),
+                "calls": call_graph.get(name, []),
+                "called_by": called_by.get(name, []),
+            }
 
         selected = [name for name in resolved_required.values() if name]
         if not required:
@@ -6428,9 +6850,23 @@ if __name__ == "__main__":
                 if dependency not in selected:
                     selected.append(dependency)
                     dependency_queue.append(dependency)
+        if "main" in defined and "main" not in selected:
+            selected.append("main")
+            dependency_queue = ["main"]
+            while dependency_queue:
+                current = dependency_queue.pop(0)
+                for dependency in call_graph.get(current, []):
+                    if dependency not in selected:
+                        selected.append(dependency)
+                        dependency_queue.append(dependency)
         selected_names = set(selected)
         selected = [name for name in names_in_order if name in selected_names]
         missing = [name for name, resolved in resolved_required.items() if not resolved]
+        required_coverage = round(
+            (len(required) - len(missing)) / max(len(required), 1) * 100,
+            2,
+        ) if required else 100.0
+        forbidden_present = []
         return {
             "program_kind": program_kind,
             "purpose": profile.get("purpose", "Fulfil the request contract."),
@@ -6440,6 +6876,7 @@ if __name__ == "__main__":
             "missing_functions": missing,
             "available_functions": sorted(defined),
             "function_scores": function_scores,
+            "function_scorecards": function_scorecards,
             "call_graph": call_graph,
             "selection_basis": [
                 "program function profile",
@@ -6448,7 +6885,19 @@ if __name__ == "__main__":
                 "runnable entry point",
             ],
             "forbidden_substitutes": profile.get("forbidden_substitutes", []),
-            "complete": bool(selected) and not missing,
+            "selection_quality": {
+                "required_coverage_percent": required_coverage,
+                "required_total": len(required),
+                "required_resolved": len(required) - len(missing),
+                "selected_total": len(selected),
+                "forbidden_substitutes_detected": forbidden_present,
+                "score": round(
+                    required_coverage * 0.7
+                    + (30 if selected and "main" in selected else 0),
+                    2,
+                ),
+            },
+            "complete": bool(selected) and not missing and not forbidden_present,
         }
 
     def build_direct_python_program_result(
