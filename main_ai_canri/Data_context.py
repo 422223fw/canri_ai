@@ -556,18 +556,26 @@ def context_view_for_brain(context, brain_name, max_sources=6):
                 "summary": str(item.get("summary", ""))[:700],
                 "content_excerpt": str(item.get("content_excerpt", ""))[:1200],
                 "trust_score": item.get("trust_score", 0),
-                "sources": item.get("sources", [])[:3]
+                "score": item.get("score", 0),
+                "url": item.get("url"),
+                "source_type": item.get("source_type"),
+                "source_count": item.get("source_count", len(item.get("sources", []))),
+                "sources": item.get("sources", [])[:3],
+                "metadata": item.get("metadata", {}),
+                "source_quality_policy": item.get("source_quality_policy", {}),
             }
             for item in context.get("scanner_matches", [])[:max_sources]
             if isinstance(item, dict)
         ],
         "scanner_usage_contract": {
+            "received_by_every_brain": True,
             "must_consider_relevant_matches": True,
             "must_ignore_irrelevant_matches": True,
             "must_preserve_source_metadata": True,
             "must_fact_check_high_stakes_claims": True,
             "retrieval_mode": "indexed_relevant_excerpts_only"
         },
+        "scanner_context_received": True,
         "profiled_files": context.get("profiled_files", 0),
         "total_profiled_bytes": context.get("total_profiled_bytes", 0),
         "selection_policy": "domain_filtered_lazy_context",

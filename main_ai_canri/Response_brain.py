@@ -1162,7 +1162,10 @@ class ResponseBrain:
             "implement and verify:",
             "verify every requirement",
             "quality correction requirements",
-            "here is the useful conclusion:"
+            "here is the useful conclusion:",
+            "the current draft did not pass canri's quality check",
+            "problem: requested feature is missing",
+            "fix needed: implement this exact requirement"
         ]
         return (
             sum(1 for marker in markers if marker in lowered) >= 2
@@ -1216,6 +1219,62 @@ class ResponseBrain:
             topic,
             "I could not produce a useful final answer yet. Please send the request again in one sentence."
         )
+
+    def source_citations(self, results, limit=5):
+
+        citations = []
+        seen = set()
+        fact_check = results.get("Fact_Check_brain", {})
+        research = results.get("Research_brain", {})
+        candidates = []
+        if isinstance(fact_check, dict):
+            candidates.extend(fact_check.get("strongest_sources", []))
+        if isinstance(research, dict):
+            candidates.extend(research.get("fetched_sources", []))
+            candidates.extend(research.get("approved_research_links", []))
+            for evidence in research.get("scanner_evidence", []):
+                if not isinstance(evidence, dict):
+                    continue
+                candidates.extend(evidence.get("sources", []))
+                if evidence.get("url"):
+                    candidates.append(evidence)
+
+        for source in candidates:
+            if not isinstance(source, dict):
+                continue
+            name = str(source.get("name") or source.get("title") or "").strip()
+            url = str(
+                source.get("url")
+                or source.get("link")
+                or source.get("search_url")
+                or ""
+            ).strip()
+            if not name or not url or not url.startswith(("https://", "http://")):
+                continue
+            identity = (name.lower(), url.lower())
+            if identity in seen:
+                continue
+            seen.add(identity)
+            citations.append({
+                "name": name,
+                "url": url,
+                "trust_score": source.get("trust_score") or source.get("reliability_score"),
+                "source_type": source.get("source_type"),
+            })
+            if len(citations) >= max(1, int(limit)):
+                break
+        return citations
+
+    def add_source_footer(self, text, citations):
+
+        if not citations:
+            return text
+        lines = ["Sources:"]
+        for source in citations:
+            score = source.get("trust_score")
+            suffix = f" (trust {score}/100)" if isinstance(score, (int, float)) else ""
+            lines.append(f"- {source['name']}: {source['url']}{suffix}")
+        return f"{text}\n\n" + "\n".join(lines)
 
     def format_plan(self, plan):
 
@@ -1511,6 +1570,7 @@ class ResponseBrain:
         self._active_focus_terms = self.user_focus_terms(user_text)
         safety = self.safety_status(results)
         strict_output = self.strict_output_request(report, user_text)
+        citations = self.source_citations(results)
 
         if safety["blocked"]:
             display_text = BLOCKED_SAFETY_HINTS.get(
@@ -1611,6 +1671,7 @@ class ResponseBrain:
                         report,
                         primary_brain
                     )
+                    display_text = self.add_source_footer(display_text, citations)
                 display_text = self.adapt_tone(display_text, results)
 
             confidence_values = [
@@ -1645,6 +1706,7 @@ class ResponseBrain:
             "strict_output": strict_output,
             "suggested_follow_up_tasks": follow_up_tasks,
             "follow_up_tasks_visible": False,
+            "source_citations": citations,
             "rules": [
                 "Return one clear answer for the screen.",
                 "Do not invent facts that no brain provided.",

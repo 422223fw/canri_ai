@@ -590,6 +590,9 @@ class MemoryBrain:
             "main_topic": understanding_report.get("main_topic", "unknown"),
             "intent": understanding_report.get("intent", "unknown"),
             "keywords": self.extract_keywords(understanding_report, user_text)[:30],
+            "request_contract": understanding_report.get("request_contract", {}),
+            "entities": understanding_report.get("entities", [])[:30],
+            "artifacts": [],
             "quality": {}
         }
 
@@ -599,6 +602,82 @@ class MemoryBrain:
         bucket["summary"] = self.summarize_conversation(bucket["turns"])
         bucket["keywords"] = self.conversation_keywords(bucket["turns"])
         return turn
+
+    def response_artifacts(self, canri_text, response_result=None, manager_result=None):
+
+        artifacts = []
+        response_result = response_result if isinstance(response_result, dict) else {}
+        manager_result = manager_result if isinstance(manager_result, dict) else {}
+        results = manager_result.get("results", {})
+        results = results if isinstance(results, dict) else {}
+        code_result = results.get("Code_brain", {})
+        if isinstance(code_result, dict):
+            generated = str(code_result.get("generated_code") or "").strip()
+            if generated:
+                artifacts.append({
+                    "type": "code",
+                    "language": code_result.get("language", "python"),
+                    "program_kind": code_result.get("program_kind"),
+                    "content": generated[:50000],
+                    "selected_functions": code_result.get("function_selection", {}).get(
+                        "selected_functions", []
+                    )[:30],
+                })
+            project_files = code_result.get("project_files", {})
+            if isinstance(project_files, dict) and project_files:
+                artifacts.append({
+                    "type": "code_project",
+                    "program_kind": code_result.get("program_kind"),
+                    "files": {
+                        str(path): str(content)[:30000]
+                        for path, content in list(project_files.items())[:30]
+                    },
+                })
+
+        for language, content in re.findall(
+            r"```([a-zA-Z0-9_+\-.#]*)\s*(.*?)```",
+            str(canri_text or ""),
+            re.DOTALL,
+        ):
+            content = content.strip()
+            if content and not any(
+                item.get("type") == "code" and item.get("content") == content
+                for item in artifacts
+            ):
+                artifacts.append({
+                    "type": "code",
+                    "language": (language or "text").lower(),
+                    "content": content[:50000],
+                })
+
+        primary_brain = response_result.get("primary_brain")
+        if primary_brain in {"Story_brain", "Creative_brain"} and canri_text:
+            artifacts.append({"type": "story", "content": str(canri_text)[:20000]})
+
+        source_refs = []
+        for result in results.values():
+            if not isinstance(result, dict):
+                continue
+            candidates = [
+                *result.get("strongest_sources", [])[:8],
+                *result.get("fetched_sources", [])[:8],
+                *result.get("approved_research_links", [])[:8],
+            ]
+            for source in candidates:
+                if not isinstance(source, dict):
+                    continue
+                reference = {
+                    "name": source.get("name") or source.get("title"),
+                    "url": source.get("url") or source.get("search_url"),
+                    "trust_score": source.get("trust_score") or source.get("reliability_score"),
+                    "source_type": source.get("source_type"),
+                }
+                if reference["name"] and reference not in source_refs:
+                    source_refs.append(reference)
+        if source_refs:
+            artifacts.append({"type": "sources", "items": source_refs[:20]})
+
+        return artifacts[:12]
 
     def store_response(self, session_id, user_text, canri_text, response_result=None, manager_result=None):
 
@@ -630,6 +709,11 @@ class MemoryBrain:
 
         target["canri"] = str(canri_text or "")
         target["updated_utc"] = now
+        target["artifacts"] = self.response_artifacts(
+            canri_text,
+            response_result,
+            manager_result,
+        )
 
         if isinstance(response_result, dict):
             target["response"] = {
@@ -646,6 +730,11 @@ class MemoryBrain:
                     "quality_score": quality.get("quality_score"),
                     "needs_retry": quality.get("needs_retry")
                 }
+                target["failed_requirements"] = [
+                    check.get("requirement")
+                    for check in quality.get("requirement_checks", [])
+                    if isinstance(check, dict) and check.get("passed") is False
+                ][:30]
 
         bucket["turns"] = turns[-MAX_TURNS_PER_SESSION:]
         bucket["updated_utc"] = now
@@ -671,6 +760,18 @@ class MemoryBrain:
             "improve the same",
             "add these features",
             "from the code",
+            "continue the code",
+            "continue the story",
+            "continue the answer",
+            "use the previous",
+            "based on the previous",
+            "המשך",
+            "תמשיך",
+            "תתקן",
+            "תשפר",
+            "אותו קוד",
+            "אותו סיפור",
+            "התשובה הקודמת",
             "מהקוד הקודם",
             "תמשיך",
             "תתקן",
@@ -678,6 +779,51 @@ class MemoryBrain:
         ]
 
         return any(marker in lowered for marker in markers)
+
+    def continuation_kind(self, text):
+
+        lowered = str(text or "").lower()
+        if any(marker in lowered for marker in [
+            "code", "program", "function", "python", "app", "project",
+            "קוד", "תוכנה", "פונקציה", "פרויקט",
+        ]):
+            return "code"
+        if any(marker in lowered for marker in [
+            "story", "chapter", "character", "plot", "סיפור", "פרק", "דמות",
+        ]):
+            return "story"
+        if any(marker in lowered for marker in [
+            "source", "fact", "explanation", "answer", "מקור", "עובדה", "הסבר", "תשובה",
+        ]):
+            return "answer"
+        return "general"
+
+    def turn_matches_continuation_kind(self, turn, kind):
+
+        artifacts = turn.get("artifacts", []) if isinstance(turn, dict) else []
+        artifact_types = {
+            item.get("type")
+            for item in artifacts
+            if isinstance(item, dict)
+        }
+        topic = str(turn.get("main_topic", "")).lower()
+        if kind == "code":
+            return bool(artifact_types.intersection({"code", "code_project"}) or topic == "code")
+        if kind == "story":
+            return "story" in artifact_types or topic in {"story", "creative"}
+        if kind == "answer":
+            return bool(str(turn.get("canri", "")).strip())
+        return True
+
+    def select_continuation_turn(self, turns, current_text):
+
+        if not turns:
+            return {}, "none"
+        kind = self.continuation_kind(current_text)
+        for turn in reversed(turns):
+            if self.turn_matches_continuation_kind(turn, kind):
+                return turn, kind
+        return turns[-1], kind
 
     def relevant_conversation_turns(
         self,
@@ -753,10 +899,28 @@ class MemoryBrain:
                 if not code:
                     continue
                 code_blocks.append({
+                    "turn_id": turn.get("id"),
                     "language": (match.group(1) or "text").strip().lower(),
                     "code": code[:30000],
                     "turn_user": str(turn.get("user", ""))[:300],
                     "created_utc": turn.get("created_utc")
+                })
+            for artifact in turn.get("artifacts", []):
+                if not isinstance(artifact, dict) or artifact.get("type") != "code":
+                    continue
+                code = str(artifact.get("content", "")).strip()
+                if not code or any(
+                    item.get("turn_id") == turn.get("id") and item.get("code") == code[:30000]
+                    for item in code_blocks
+                ):
+                    continue
+                code_blocks.append({
+                    "turn_id": turn.get("id"),
+                    "language": artifact.get("language", "python"),
+                    "code": code[:30000],
+                    "program_kind": artifact.get("program_kind"),
+                    "turn_user": str(turn.get("user", ""))[:300],
+                    "created_utc": turn.get("created_utc"),
                 })
 
         completed_turns = [
@@ -770,6 +934,10 @@ class MemoryBrain:
         last_keywords = set(last_turn.get("keywords", []))
         overlap = sorted(current_keywords & last_keywords)[:12]
         continuation = self.is_continuation_request(current_text)
+        continuation_turn, continuation_kind = self.select_continuation_turn(
+            completed_turns,
+            current_text,
+        ) if continuation else ({}, "none")
         relevant_turns = self.relevant_conversation_turns(
             completed_turns,
             current_topic,
@@ -812,23 +980,45 @@ class MemoryBrain:
                 "created_utc": last_turn.get("created_utc")
             } if last_turn else {},
             "continuation_request": continuation,
+            "continuation_kind": continuation_kind,
             "continuation_source": (
                 {
-                    "turn_id": last_turn.get("id"),
-                    "user": str(last_turn.get("user", ""))[:1000],
-                    "canri": str(last_turn.get("canri", ""))[:12000],
-                    "main_topic": last_topic,
-                    "intent": last_intent,
-                    "quality": last_turn.get("quality", {})
+                    "turn_id": continuation_turn.get("id"),
+                    "user": str(continuation_turn.get("user", ""))[:1000],
+                    "canri": str(continuation_turn.get("canri", ""))[:12000],
+                    "main_topic": continuation_turn.get("main_topic"),
+                    "intent": continuation_turn.get("intent"),
+                    "quality": continuation_turn.get("quality", {}),
+                    "request_contract": continuation_turn.get("request_contract", {}),
+                    "artifacts": continuation_turn.get("artifacts", [])[:8],
+                    "failed_requirements": continuation_turn.get("failed_requirements", [])[:20],
                 }
-                if continuation and last_turn
+                if continuation and continuation_turn
                 else None
             ),
             "relevant_turns": relevant_turns,
             "relevant_turn_ids": [turn.get("id") for turn in relevant_turns],
             "topic_shift_from_previous": topic_shift,
             "keyword_overlap_with_previous": overlap,
-            "usable_previous_code": code_blocks[-1] if code_blocks else None,
+            "usable_previous_code": next(
+                (
+                    item
+                    for item in reversed(code_blocks)
+                    if not continuation_turn or item.get("turn_id") == continuation_turn.get("id")
+                ),
+                code_blocks[-1] if code_blocks else None,
+            ),
+            "thread_state": {
+                "active_topic": continuation_turn.get("main_topic") if continuation_turn else last_topic,
+                "active_intent": continuation_turn.get("intent") if continuation_turn else last_intent,
+                "active_turn_id": continuation_turn.get("id") if continuation_turn else last_turn.get("id"),
+                "artifact_types": list(dict.fromkeys(
+                    item.get("type")
+                    for item in (continuation_turn or last_turn).get("artifacts", [])
+                    if isinstance(item, dict) and item.get("type")
+                )),
+                "open_requirements": (continuation_turn or last_turn).get("failed_requirements", [])[:20],
+            },
             "session_isolation": True
         }
 

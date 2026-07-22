@@ -28,6 +28,7 @@ from Memory_brain import MemoryBrain  # noqa: E402
 from Nervous_system_brain import NervousSystemBrain  # noqa: E402
 from Quality_Control_brain import QualityControlBrain  # noqa: E402
 from Reasoning_brain import ReasoningBrain  # noqa: E402
+from Research_brain import ResearchBrain  # noqa: E402
 from Response_brain import ResponseBrain  # noqa: E402
 from Science_brain import ScienceBrain  # noqa: E402
 from Spelling_brain import SpellingBrain  # noqa: E402
@@ -331,6 +332,27 @@ def test_quality_treats_code_analysis_as_explanation():
     assert_true(quality.get("passed"), f"A valid code explanation failed quality control: {quality.get('issues')}")
     checks = {item.get("requirement"): item.get("passed") for item in quality.get("requirement_checks", [])}
     assert_true(checks.get("code_explained") is True, "Quality control did not record code-analysis coverage.")
+
+
+def test_simple_code_analysis_avoids_unrelated_expensive_brains():
+    prompt = (
+        "Explain what this Python code does and state its output:\n"
+        "```python\nvalues = [2, 4]\nprint(sum(values))\n```"
+    )
+    report = UnderstandingBrain().process(prompt)
+    domains = [
+        item.get("domain") if isinstance(item, dict) else item
+        for item in report.get("central_domains", [])
+    ]
+    manager = ManagerBrain()
+    plan = manager.flatten_plan(manager.build_plan(report, {}))
+
+    assert_true(report.get("intent") == "code_analysis", "Code-analysis intent was not detected.")
+    assert_true(domains == ["code"], f"Incidental code syntax created unrelated domains: {domains}")
+    assert_true("Code_brain" in plan, "Code analysis did not route to Code_brain.")
+    assert_true("Quality_Control_brain" in plan, "Code analysis lost quality verification.")
+    for brain_name in ["Math_brain", "Technology_brain", "Reasoning_brain", "Planner_brain", "Collaboration_brain"]:
+        assert_true(brain_name not in plan, f"Simple code analysis unnecessarily routed to {brain_name}.")
 
 
 def test_understanding_preserves_original_file_names():
@@ -1873,6 +1895,168 @@ def test_quality_zero_rebuilds_wrong_program_with_selected_functions():
     assert_true(namespace["verify_solutions"](coefficients, solved["solutions"]), "Solutions were not verified.")
 
 
+def test_memory_continuation_selects_latest_matching_artifact():
+    memory = MemoryBrain()
+    memory.save_memory = lambda: None
+    memory.save_statistics = lambda: None
+    session = "regression_artifact_continuation"
+    memory.delete_session(session)
+    memory.deleted_sessions.discard(session)
+
+    code_prompt = "Build a Python calculator."
+    code_report = {
+        "original_text": code_prompt,
+        "main_topic": "code",
+        "intent": "code_generation",
+        "keywords": ["python", "calculator"],
+        "request_contract": {"requirements": [{"id": "calculate", "text": "calculate values"}]},
+    }
+    memory.add_user_turn(session, code_prompt, code_report, "episode_code")
+    memory.store_response(
+        session,
+        code_prompt,
+        "```python\ndef calculate(a, b):\n    return a + b\n```",
+        {"primary_brain": "Code_brain"},
+        {"results": {"Code_brain": {
+            "generated_code": "def calculate(a, b):\n    return a + b\n",
+            "language": "python",
+            "program_kind": "calculator",
+            "function_selection": {"selected_functions": ["calculate"]},
+        }}},
+    )
+
+    story_prompt = "Write a story about a lighthouse."
+    story_report = {
+        "original_text": story_prompt,
+        "main_topic": "story",
+        "intent": "story_creation",
+        "keywords": ["story", "lighthouse"],
+        "request_contract": {"requirements": []},
+    }
+    memory.add_user_turn(session, story_prompt, story_report, "episode_story")
+    memory.store_response(
+        session,
+        story_prompt,
+        "Maya reached the lighthouse before sunset.",
+        {"primary_brain": "Story_brain"},
+        {"results": {"Story_brain": {"story": "Maya reached the lighthouse before sunset."}}},
+    )
+
+    report = memory.build_conversation_report(
+        session,
+        {"main_topic": "code", "intent": "code_generation", "keywords": ["calculator"]},
+        "Continue the code and add subtraction.",
+    )
+    assert_true(report.get("continuation_kind") == "code", "Memory did not classify code continuation.")
+    assert_true(report.get("continuation_source", {}).get("main_topic") == "code", "Memory selected the unrelated last story turn.")
+    assert_true("def calculate" in report.get("usable_previous_code", {}).get("code", ""), "Previous code artifact was not restored.")
+    memory.delete_session(session)
+
+
+def test_research_uses_indexed_scanner_evidence_and_sources():
+    result = ResearchBrain().process({
+        "original_text": "Explain gravity and give reliable sources.",
+        "understanding": {
+            "original_text": "Explain gravity and give reliable sources.",
+            "main_topic": "science",
+            "intent": "research",
+            "keywords": ["gravity", "science"],
+        },
+        "scanner_knowledge": {
+            "available": True,
+            "matches": [{
+                "article_id": "gravity_official_1",
+                "collection": "general",
+                "title": "Gravity overview",
+                "summary": "Gravity is an interaction associated with mass and energy.",
+                "content_excerpt": "Gravity attracts objects with mass and shapes orbital motion.",
+                "trust_score": 94,
+                "source_type": "official_science_agency",
+                "url": "https://science.nasa.gov/",
+                "sources": [{
+                    "source_id": "nasa",
+                    "name": "NASA",
+                    "url": "https://science.nasa.gov/",
+                    "trust_score": 97,
+                }],
+            }],
+        },
+    })
+    assert_true(result.get("scanner_evidence_used"), "Research ignored indexed scanner evidence.")
+    assert_true(any("Gravity" in fact for fact in result.get("facts", [])), "Scanner fact was not used.")
+    assert_true(result.get("verified"), "Strong indexed evidence was not treated as grounded evidence.")
+
+
+def test_response_adds_requested_source_citations_without_internal_reports():
+    response = ResponseBrain().process({
+        "original_text": "Explain gravity and include reliable sources.",
+        "understanding": {"main_topic": "science", "intent": "question"},
+        "results": {
+            "Science_brain": {"answer": "Gravity is an interaction associated with mass and energy.", "confidence": 90},
+            "Fact_Check_brain": {
+                "verdict": "likely_true",
+                "confidence": 92,
+                "strongest_sources": [{
+                    "name": "NASA Science",
+                    "url": "https://science.nasa.gov/",
+                    "trust_score": 97,
+                    "source_type": "official_science_agency",
+                }],
+            },
+            "Quality_Control_brain": {"passed": True, "quality_score": 100},
+        },
+    })
+    text = response.get("display_text", "")
+    assert_true("Sources:" in text and "https://science.nasa.gov/" in text, "Requested source citation was not shown.")
+    assert_true("quality correction" not in text.lower(), "Internal quality text leaked into final output.")
+    assert_true(response.get("source_citations"), "Structured citations were not returned.")
+
+
+def test_nervous_system_combines_memory_scanner_and_quality_correction():
+    result = NervousSystemBrain().process({
+        "understanding": {
+            "main_topic": "code",
+            "request_contract": {"requirements": [{"id": "solver", "kind": "feature", "text": "solve equations"}]},
+        },
+        "memory": {
+            "session_id": "nervous_test",
+            "session_isolation": True,
+            "conversation": {
+                "continuation_request": True,
+                "continuation_kind": "code",
+                "continuation_source": {"turn_id": "turn_code"},
+                "thread_state": {"artifact_types": ["code"]},
+            },
+        },
+        "scanner_knowledge": {
+            "available": True,
+            "retrieval": "indexed_jsonl_excerpt",
+            "matches": [{
+                "collection": "code",
+                "trust_score": 96,
+                "sources": [{"source_id": "python_docs"}],
+            }],
+        },
+        "results": {
+            "Code_brain": {"generated_code": "def main():\n    pass\n", "confidence": 50},
+            "Quality_Control_brain": {
+                "requirement_checks": [{"requirement": "solver", "passed": False}],
+                "retry_requests": [{
+                    "target_brain": "Code_brain",
+                    "problem": "Equation solver is missing.",
+                    "instruction": "Add and verify solve_equation.",
+                    "failed_requirement_checks": ["solver"],
+                    "force_regeneration": True,
+                }],
+            },
+        },
+    })
+    assert_true(result.get("memory_state", {}).get("continuation_kind") == "code", "Nervous system lost continuation state.")
+    assert_true(result.get("scanner_state", {}).get("maximum_trust") == 96, "Nervous system lost scanner trust.")
+    assert_true(result.get("correction_packets", [{}])[0].get("target_brain") == "Code_brain", "Correction was not routed to Code_brain.")
+    assert_true(any(item.get("from") == "Scanner_knowledge" for item in result.get("brain_connections", [])), "Scanner was not connected to the owner brain.")
+
+
 def main():
     tests = [
         test_expense_tracker_code_and_quality,
@@ -1885,6 +2069,7 @@ def main():
         test_math_ignores_request_words_around_expression,
         test_science_prefers_the_exact_user_topic,
         test_quality_treats_code_analysis_as_explanation,
+        test_simple_code_analysis_avoids_unrelated_expensive_brains,
         test_understanding_preserves_original_file_names,
         test_spelling_preserves_valid_program_terms_and_file_names,
         test_standard_library_does_not_mean_book_library,
@@ -1945,6 +2130,10 @@ def main():
         test_understanding_and_language_preserve_small_request_details,
         test_nervous_system_prefers_exact_requirement_evidence,
         test_quality_zero_rebuilds_wrong_program_with_selected_functions,
+        test_memory_continuation_selects_latest_matching_artifact,
+        test_research_uses_indexed_scanner_evidence_and_sources,
+        test_response_adds_requested_source_citations_without_internal_reports,
+        test_nervous_system_combines_memory_scanner_and_quality_correction,
     ]
 
     for test in tests:

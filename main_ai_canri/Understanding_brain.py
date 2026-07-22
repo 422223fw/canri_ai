@@ -1178,6 +1178,14 @@ class UnderstandingBrain:
             scores.setdefault(main_topic, 100.0 if not scores else max(scores.values()))
         if intent in {"code_generation", "code_analysis"}:
             scores["code"] = max(float(scores.get("code", 0)), 25.0)
+        if intent == "code_analysis":
+            math_evidence = set((topic_hits or {}).get("math", []))
+            incidental_math_evidence = {
+                "math_expression",
+                "simple_arithmetic_expression",
+            }
+            if math_evidence and math_evidence.issubset(incidental_math_evidence):
+                scores.pop("math", None)
         if intent == "math":
             scores["math"] = max(float(scores.get("math", 0)), 25.0)
         if intent == "story_creation":

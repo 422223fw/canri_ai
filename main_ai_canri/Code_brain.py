@@ -2563,6 +2563,13 @@ class CodeBrain:
             "not a new project",
             "keep the same",
             "add these features",
+            "continue the code",
+            "use the previous code",
+            "המשך",
+            "תמשיך",
+            "אותו קוד",
+            "אותה תוכנה",
+            "שפר את אותו",
             "תמשיך",
             "אותו קוד",
             "אותה תוכנה",
@@ -2574,6 +2581,14 @@ class CodeBrain:
             if isinstance(memory, dict):
                 conversation = memory.get("conversation", {})
                 if isinstance(conversation, dict):
+                    usable = conversation.get("usable_previous_code")
+                    if isinstance(usable, dict) and usable.get("code"):
+                        return str(usable["code"])
+                    source = conversation.get("continuation_source", {})
+                    if isinstance(source, dict):
+                        for artifact in source.get("artifacts", []):
+                            if isinstance(artifact, dict) and artifact.get("type") == "code" and artifact.get("content"):
+                                return str(artifact["content"])
                     code_blocks = conversation.get("recent_code_blocks", [])
                     if isinstance(code_blocks, list):
                         for block in reversed(code_blocks):
@@ -6292,29 +6307,105 @@ if __name__ == "__main__":
         )
         return contract
 
-    def select_program_functions(self, program_kind, code):
+    def select_program_functions(self, program_kind, code, text="", correction_contract=None):
 
         profile = self.function_selection_profiles.get(program_kind, {})
         required = list(profile.get("required_functions", []))
+        function_aliases = {
+            str(name): [str(alias) for alias in aliases]
+            for name, aliases in profile.get("function_aliases", {}).items()
+            if isinstance(aliases, list)
+        }
+        correction_contract = correction_contract or {}
+        request_terms = set(re.findall(
+            r"[a-z][a-z0-9_]{2,}",
+            " ".join([
+                str(text or ""),
+                " ".join(str(item) for item in correction_contract.get("required_features", [])),
+                " ".join(str(item) for item in correction_contract.get("failed_requirements", [])),
+            ]).lower(),
+        ))
+        function_nodes = []
+        call_graph = {}
         try:
             tree = ast.parse(code)
-            defined = {
-                node.name
+            function_nodes = [
+                node
                 for node in ast.walk(tree)
                 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-            }
+            ]
+            defined = {node.name for node in function_nodes}
+            for node in function_nodes:
+                calls = []
+                for child in ast.walk(node):
+                    if isinstance(child, ast.Call) and isinstance(child.func, ast.Name):
+                        if child.func.id in defined and child.func.id != node.name:
+                            calls.append(child.func.id)
+                call_graph[node.name] = list(dict.fromkeys(calls))
         except (SyntaxError, ValueError):
             defined = set()
-        selected = [name for name in required if name in defined]
-        missing = [name for name in required if name not in defined]
+        names_in_order = [node.name for node in function_nodes]
+        required_candidates = {
+            name: [name] + function_aliases.get(name, [])
+            for name in required
+        }
+        resolved_required = {
+            name: next(
+                (candidate for candidate in candidates if candidate in defined),
+                None,
+            )
+            for name, candidates in required_candidates.items()
+        }
+        function_scores = {}
+        for name in defined:
+            name_terms = set(name.lower().split("_"))
+            score = len(name_terms.intersection(request_terms)) * 15
+            if name == "main":
+                score += 100
+            if name in required or name in resolved_required.values():
+                score += 120
+            if call_graph.get(name):
+                score += min(20, len(call_graph[name]) * 4)
+            function_scores[name] = score
+
+        selected = [name for name in resolved_required.values() if name]
+        if not required:
+            selected = [
+                name
+                for name, _ in sorted(
+                    function_scores.items(),
+                    key=lambda item: (item[1], item[0] == "main"),
+                    reverse=True,
+                )
+            ]
+        dependency_queue = list(selected)
+        while dependency_queue:
+            current = dependency_queue.pop(0)
+            for dependency in call_graph.get(current, []):
+                if dependency not in selected:
+                    selected.append(dependency)
+                    dependency_queue.append(dependency)
+        selected_names = set(selected)
+        selected = [name for name in names_in_order if name in selected_names]
+        missing = [name for name, resolved in resolved_required.items() if not resolved]
         return {
             "program_kind": program_kind,
             "purpose": profile.get("purpose", "Fulfil the request contract."),
             "required_functions": required,
+            "resolved_required_functions": resolved_required,
             "selected_functions": selected,
             "missing_functions": missing,
+            "available_functions": sorted(defined),
+            "function_scores": function_scores,
+            "call_graph": call_graph,
+            "selection_basis": [
+                "program function profile",
+                "request and failed-requirement terms",
+                "AST call dependencies",
+                "runnable entry point",
+            ],
             "forbidden_substitutes": profile.get("forbidden_substitutes", []),
-            "complete": not missing,
+            "complete": bool(selected) and not missing,
         }
 
     def build_direct_python_program_result(
@@ -6362,7 +6453,12 @@ if __name__ == "__main__":
             program_kind,
             code,
         )
-        function_selection = self.select_program_functions(program_kind, code)
+        function_selection = self.select_program_functions(
+            program_kind,
+            code,
+            text,
+            correction_contract,
+        )
 
         return {
             "brain": "Code_brain",

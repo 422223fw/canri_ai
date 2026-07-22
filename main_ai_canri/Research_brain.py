@@ -16,9 +16,15 @@ try:
 except Exception:
     search_knowledge = None
 
+try:
+    from Scanner_knowledge import scanner_evidence
+except Exception:
+    scanner_evidence = None
+
 
 DATA_DIR = Path(__file__).parent / "data"
 SOURCES_FILE = DATA_DIR / "research_sources.json"
+SOURCE_QUALITY_FILE = DATA_DIR / "Source_quality_profiles.json"
 
 
 class ResearchBrain:
@@ -26,6 +32,7 @@ class ResearchBrain:
     def __init__(self):
 
         self.sources = []
+        self.source_quality = {}
 
         self.load_sources()
 
@@ -42,6 +49,27 @@ class ResearchBrain:
             ) as f:
 
                 self.sources = json.load(f)
+
+        if SOURCE_QUALITY_FILE.exists():
+            try:
+                with SOURCE_QUALITY_FILE.open("r", encoding="utf-8") as file:
+                    loaded = json.load(file)
+                self.source_quality = loaded if isinstance(loaded, dict) else {}
+            except (OSError, json.JSONDecodeError):
+                self.source_quality = {}
+
+    def source_quality_profile(self, source):
+
+        default = dict(self.source_quality.get("default", {}))
+        category = self.source_quality.get("categories", {}).get(
+            source.get("category"), {}
+        )
+        source_type = self.source_quality.get("source_types", {}).get(
+            source.get("source_type"), {}
+        )
+        default.update(category)
+        default.update(source_type)
+        return default
 
     def extract_text(
         self,
@@ -526,7 +554,8 @@ class ResearchBrain:
 
     def choose_sources(
         self,
-        category
+        category,
+        query=""
     ):
 
         selected = []
@@ -567,10 +596,18 @@ class ResearchBrain:
                 ) >= 94
             ]
 
+        query_terms = set(re.findall(r"[a-z][a-z0-9_-]{2,}", str(query).lower()))
         selected.sort(
-            key=lambda source: self.get_source_domain_score(
-                source,
-                category
+            key=lambda source: (
+                self.get_source_domain_score(source, category)
+                + min(
+                    18,
+                    len(query_terms.intersection({
+                        str(term).lower()
+                        for term in source.get("strengths", [])
+                    })) * 6,
+                ),
+                source.get("trust_score", 0),
             ),
             reverse=True
         )
@@ -625,6 +662,8 @@ class ResearchBrain:
 
         for source in sources:
 
+            quality_profile = self.source_quality_profile(source)
+
             search_url = source.get(
                 "search_url",
                 source.get(
@@ -664,7 +703,19 @@ class ResearchBrain:
                     "strengths": source.get(
                         "strengths",
                         []
-                    )
+                    ),
+                    "freshness_policy": source.get(
+                        "freshness_policy",
+                        "check publication or update date before using time-sensitive claims"
+                    ),
+                    "verification_policy": source.get(
+                        "verification_policy",
+                        "confirm that the retrieved page directly supports the claim"
+                    ),
+                    "freshness_days": quality_profile.get("freshness_days"),
+                    "minimum_cross_checks": quality_profile.get("minimum_cross_checks", 1),
+                    "background_only": bool(quality_profile.get("background_only")),
+                    "direct_support_required": quality_profile.get("direct_support_required", True),
                 }
             )
 
@@ -856,6 +907,7 @@ class ResearchBrain:
         warnings = []
         fetched_sources = []
         local_knowledge = []
+        indexed_scanner_evidence = []
 
         if search_knowledge:
 
@@ -883,6 +935,23 @@ class ResearchBrain:
                 facts.append(
                     summary
                 )
+
+        if scanner_evidence is not None:
+            try:
+                indexed_scanner_evidence = scanner_evidence(data, limit=8)
+            except Exception as error:
+                warnings.append(f"Indexed scanner search failed: {error}")
+
+        for item in indexed_scanner_evidence:
+            if not isinstance(item, dict):
+                continue
+            trust_score = int(item.get("trust_score") or 0)
+            collection = item.get("collection", "trusted_knowledge")
+            if collection == "code" and category not in {"technology", "academic"}:
+                continue
+            excerpt = str(item.get("text") or item.get("summary") or "").strip()
+            if excerpt and trust_score >= 70 and excerpt not in facts:
+                facts.append(excerpt[:1800])
 
         if direct_url:
 
@@ -925,7 +994,8 @@ class ResearchBrain:
                 )
 
         sources = self.choose_sources(
-            category
+            category,
+            query,
         )
 
         research_links = self.build_research_links(
@@ -940,10 +1010,10 @@ class ResearchBrain:
                 "No verified facts returned yet. Use the approved source links and verify before answering."
             )
 
-        source_count = len(
-            fetched_sources
-        ) or len(
-            research_links
+        source_count = (
+            len(fetched_sources)
+            + len(indexed_scanner_evidence)
+            + len(research_links)
         )
 
         verified = (
@@ -951,6 +1021,7 @@ class ResearchBrain:
             and (
                 len(fetched_sources) > 0
                 or len(local_knowledge) > 0
+                or any(int(item.get("trust_score") or 0) >= 80 for item in indexed_scanner_evidence)
             )
         )
 
@@ -992,6 +1063,12 @@ class ResearchBrain:
                 86
             )
 
+        elif indexed_scanner_evidence:
+            confidence = min(
+                max(int(item.get("trust_score") or 0) for item in indexed_scanner_evidence),
+                90,
+            )
+
         elif research_links:
 
             confidence = min(
@@ -1024,6 +1101,8 @@ class ResearchBrain:
             "source_count": source_count,
             "facts": facts,
             "local_knowledge": local_knowledge,
+            "scanner_evidence": indexed_scanner_evidence,
+            "scanner_evidence_used": bool(indexed_scanner_evidence),
             "fetched_sources": fetched_sources,
             "approved_research_links": research_links,
             "warnings": list(

@@ -106,6 +106,11 @@ class NervousSystemBrain:
         alignment = result.get("self_review", {}).get("request_alignment", {})
         if isinstance(alignment.get("coverage"), (int, float)):
             score += float(alignment["coverage"]) * 0.15
+        scanner_context = result.get("scanner_context", {})
+        if isinstance(scanner_context, dict) and scanner_context.get("received"):
+            score += 5
+        if result.get("source_citations") or result.get("strongest_sources"):
+            score += 6
         return round(score, 3)
 
     def best_candidate(self, results, owners):
@@ -251,6 +256,78 @@ class NervousSystemBrain:
                 })
         return connections[:40]
 
+    def scanner_state(self, data):
+
+        scanner = data.get("scanner_knowledge", {}) if isinstance(data, dict) else {}
+        matches = scanner.get("matches", []) if isinstance(scanner, dict) else []
+        matches = [item for item in matches if isinstance(item, dict)]
+        trust_scores = [
+            float(item.get("trust_score") or 0)
+            for item in matches
+            if isinstance(item.get("trust_score"), (int, float))
+        ]
+        source_ids = list(dict.fromkeys(
+            source.get("source_id")
+            for item in matches
+            for source in item.get("sources", [])
+            if isinstance(source, dict) and source.get("source_id")
+        ))
+        return {
+            "available": bool(matches),
+            "matches": len(matches),
+            "collections": sorted({item.get("collection", "trusted_knowledge") for item in matches}),
+            "source_ids": source_ids[:20],
+            "average_trust": round(sum(trust_scores) / len(trust_scores), 2) if trust_scores else 0,
+            "maximum_trust": max(trust_scores, default=0),
+            "retrieval": scanner.get("retrieval"),
+        }
+
+    def memory_state(self, data):
+
+        memory = data.get("memory", {}) if isinstance(data, dict) else {}
+        conversation = memory.get("conversation", {}) if isinstance(memory, dict) else {}
+        return {
+            "session_id": memory.get("session_id") if isinstance(memory, dict) else None,
+            "session_isolation": memory.get("session_isolation") is True if isinstance(memory, dict) else False,
+            "continuation": bool(conversation.get("continuation_request")),
+            "continuation_kind": conversation.get("continuation_kind", "none"),
+            "continuation_turn_id": (
+                conversation.get("continuation_source", {}).get("turn_id")
+                if isinstance(conversation.get("continuation_source"), dict)
+                else None
+            ),
+            "thread_state": conversation.get("thread_state", {}),
+        }
+
+    def correction_packets(self, results, unresolved, owners):
+
+        quality = results.get("Quality_Control_brain", {})
+        requests = quality.get("retry_requests", []) if isinstance(quality, dict) else []
+        packets = []
+        for request in requests[:8]:
+            if not isinstance(request, dict) or not request.get("target_brain"):
+                continue
+            packets.append({
+                "target_brain": request.get("target_brain"),
+                "problem": request.get("problem"),
+                "instruction": request.get("instruction"),
+                "expected_program_kind": request.get("expected_program_kind"),
+                "failed_requirements": request.get("failed_requirement_checks") or request.get("failed_requirements", []),
+                "required_features": request.get("required_features", []),
+                "force_regeneration": bool(request.get("force_regeneration")),
+                "preserve_passed_requirements": True,
+            })
+        if not packets:
+            for item in unresolved[:8]:
+                packets.append({
+                    "target_brain": (item.get("suggested_owners") or owners or ["Reasoning_brain"])[0],
+                    "problem": f"Unresolved requirement: {item.get('text', '')}",
+                    "instruction": f"Complete and verify: {item.get('text', '')}",
+                    "failed_requirements": [item.get("id") or item.get("text")],
+                    "preserve_passed_requirements": True,
+                })
+        return packets[:10]
+
     def improvement_opportunities(self, report, unresolved, best):
 
         contract = report.get("request_contract", {})
@@ -305,6 +382,25 @@ class NervousSystemBrain:
             if item.get("coverage_source") != "semantic_term_estimate" and item.get("covered")
         )
         total_covered = sum(1 for item in requirement_states if item.get("covered"))
+        scanner_state = self.scanner_state(data)
+        memory_state = self.memory_state(data)
+        brain_connections = self.build_connections(active_states, owners)
+        if scanner_state["available"]:
+            for owner in owners[:4]:
+                brain_connections.append({
+                    "from": "Scanner_knowledge",
+                    "to": owner,
+                    "signal": "indexed_source_evidence",
+                    "strength": "high" if scanner_state["maximum_trust"] >= 80 else "medium",
+                })
+        if memory_state["continuation"]:
+            for owner in owners[:4]:
+                brain_connections.append({
+                    "from": "Memory_brain",
+                    "to": owner,
+                    "signal": f"continuation_{memory_state['continuation_kind']}",
+                    "strength": "high",
+                })
 
         return {
             "brain": "Nervous_system_brain",
@@ -314,7 +410,7 @@ class NervousSystemBrain:
             "owner_brains": owners,
             "integration_stage": manager_context.get("phase", "neural_integration"),
             "active_brains": active_states,
-            "brain_connections": self.build_connections(active_states, owners),
+            "brain_connections": brain_connections[:50],
             "best_candidate": best,
             "ranked_candidates": ranked,
             "requirements": requirement_states,
@@ -333,13 +429,13 @@ class NervousSystemBrain:
                 unresolved,
                 best,
             ),
+            "correction_packets": self.correction_packets(results, unresolved, owners),
+            "memory_state": memory_state,
+            "scanner_state": scanner_state,
             "correction_cycle": int(data.get("quality_retry_attempt", 0)) if isinstance(data, dict) else 0,
             "max_correction_cycles": int(self.profile.get("max_correction_cycles", 20)),
             "data_sources_used": self.compact_data_sources(data),
-            "scanner_evidence_available": bool(
-                isinstance(data, dict)
-                and data.get("scanner_knowledge", {}).get("available")
-            ),
+            "scanner_evidence_available": scanner_state["available"],
             "suggested_next_brains": list(dict.fromkeys(
                 brain_name
                 for item in unresolved[:5]

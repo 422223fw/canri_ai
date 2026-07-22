@@ -200,6 +200,7 @@ def scanner_status() -> dict:
             "database_bytes": store.database_bytes() if store else 0,
             "records_indexed": store.count() if store else 0,
             "max_database_bytes": spec["max_bytes"],
+            "source_quality_policy": source_config.get("source_quality_policy", {}),
         }
     return {"collections": collections, "indexed_retrieval": True}
 

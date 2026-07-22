@@ -1006,6 +1006,28 @@ class QualityControlBrain:
                 "Select the dedicated complete program template for the user's requested app type."
             )
 
+        function_selection = result.get("function_selection", {})
+        if isinstance(function_selection, dict) and function_selection:
+            if function_selection.get("missing_functions"):
+                self.add_issue(
+                    issues,
+                    "Code_brain",
+                    "critical",
+                    "The selected program is missing required functions: "
+                    + ", ".join(function_selection.get("missing_functions", [])[:12]) + ".",
+                    "Regenerate the requested program with every required function and its call dependencies.",
+                    function_selection,
+                )
+            elif not function_selection.get("complete"):
+                self.add_issue(
+                    issues,
+                    "Code_brain",
+                    "high",
+                    "Code function selection did not produce a complete executable function set.",
+                    "Select the request-specific entry point and every function it depends on.",
+                    function_selection,
+                )
+
         if expected_kind == "quiz_game":
             questions = self.quiz_records(code)
             expected_questions = requirements.get("requested_question_count")
