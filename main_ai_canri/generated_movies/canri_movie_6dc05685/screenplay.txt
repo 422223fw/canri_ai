@@ -1,0 +1,395 @@
+תכין לי סרט
+
+Genre: drama | Tone: cinematic | Target: 90 minutes
+
+
+
+INT./EXT. SURFACE BOUNDARY EFFECTS ON THE GENERAL CIRCULATION AND MACROCLIMATE: A REVIEW OF THE THEORY OF THE QUASI-STATIONARY PERTURBATIONS IN THE ATMOSPHERE - DAWN
+
+The characters pursue the scene objective in Surface Boundary Effects on the General Circulation and Macroclimate: A Review of the Theory of the Quasi-Stationary Perturbations in the Atmosphere. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to understand what changed, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_2
+
+INT./EXT. SPACE WEATHER GENERAL CONCEPTS - DAY
+
+The characters pursue the scene objective in Space Weather General Concepts. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to understand what changed, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_3
+
+INT./EXT. GENERAL QUESTIONS ABOUT ELECTROCHEMISTRY - LATE AFTERNOON
+
+The characters pursue the scene objective in General Questions about Electrochemistry. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to understand what changed, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_4
+
+INT./EXT. THE SIMULATION EXTRAPOLATION TECHNIQUE MEETS ECOLOGY AND EVOLUTION: A GENERAL AND INTUITIVE METHOD TO ACCOUNT FOR MEASUREMENT ERROR - NIGHT
+
+The characters pursue the scene objective in The simulation extrapolation technique meets ecology and evolution: A general and intuitive method to account for measurement error. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to understand what changed, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_5
+
+INT./EXT. EINSTEIN’S LIFE-LONG DOUBTS ON THE PHYSICAL FOUNDATIONS OF THE GENERAL RELATIVITY AND UNIFIED FIELD THEORIES - DAWN
+
+The characters pursue the scene objective in Einstein’s Life-Long Doubts on the Physical Foundations of the General Relativity and Unified Field Theories. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to understand what changed, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: A disruption makes inaction costly.
+CONTINUITY OUT: decision_pressure_for_scene_6
+
+INT./EXT. SINGULARITY THEOREMS IN GENERAL RELATIVITY: ACHIEVEMENTS AND OPEN QUESTIONS - DAY
+
+The characters pursue the scene objective in Singularity Theorems in General Relativity: Achievements and Open Questions. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to understand what changed, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_7
+
+INT./EXT. CAUSES AND CURES FOR THE INFINITIES IN SLOW-MOTION EXPANSIONS IN GENERAL RELATIVITY - LATE AFTERNOON
+
+The characters pursue the scene objective in Causes and cures for the infinities in slow-motion expansions in general relativity. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to understand what changed, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_8
+
+INT./EXT. CAUSALITY AND THE CAUCHY PROBLEM IN GENERAL RELATIVITY - NIGHT
+
+The characters pursue the scene objective in Causality and the Cauchy problem in general relativity. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to understand what changed, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_9
+
+INT./EXT. SURFACE BOUNDARY EFFECTS ON THE GENERAL CIRCULATION AND MACROCLIMATE: A REVIEW OF THE THEORY OF THE QUASI-STATIONARY PERTURBATIONS IN THE ATMOSPHERE - DAWN
+
+The characters pursue the scene objective in Surface Boundary Effects on the General Circulation and Macroclimate: A Review of the Theory of the Quasi-Stationary Perturbations in the Atmosphere. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to understand what changed, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_10
+
+INT./EXT. SPACE WEATHER GENERAL CONCEPTS - DAY
+
+The characters pursue the scene objective in Space Weather General Concepts. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to understand what changed, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The first irreversible choice closes the easy exit.
+CONTINUITY OUT: decision_pressure_for_scene_11
+
+INT./EXT. GENERAL QUESTIONS ABOUT ELECTROCHEMISTRY - LATE AFTERNOON
+
+The characters pursue the scene objective in General Questions about Electrochemistry. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to understand what changed, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_12
+
+INT./EXT. THE SIMULATION EXTRAPOLATION TECHNIQUE MEETS ECOLOGY AND EVOLUTION: A GENERAL AND INTUITIVE METHOD TO ACCOUNT FOR MEASUREMENT ERROR - NIGHT
+
+The characters pursue the scene objective in The simulation extrapolation technique meets ecology and evolution: A general and intuitive method to account for measurement error. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to understand what changed, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_13
+
+INT./EXT. EINSTEIN’S LIFE-LONG DOUBTS ON THE PHYSICAL FOUNDATIONS OF THE GENERAL RELATIVITY AND UNIFIED FIELD THEORIES - DAWN
+
+The characters pursue the scene objective in Einstein’s Life-Long Doubts on the Physical Foundations of the General Relativity and Unified Field Theories. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to understand what changed, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_14
+
+INT./EXT. SINGULARITY THEOREMS IN GENERAL RELATIVITY: ACHIEVEMENTS AND OPEN QUESTIONS - DAY
+
+The characters pursue the scene objective in Singularity Theorems in General Relativity: Achievements and Open Questions. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to understand what changed, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_15
+
+INT./EXT. CAUSES AND CURES FOR THE INFINITIES IN SLOW-MOTION EXPANSIONS IN GENERAL RELATIVITY - LATE AFTERNOON
+
+The characters pursue the scene objective in Causes and cures for the infinities in slow-motion expansions in general relativity. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to understand what changed, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: A partial victory creates a larger problem.
+CONTINUITY OUT: decision_pressure_for_scene_16
+
+INT./EXT. CAUSALITY AND THE CAUCHY PROBLEM IN GENERAL RELATIVITY - NIGHT
+
+The characters pursue the scene objective in Causality and the Cauchy problem in general relativity. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to understand what changed, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_17
+
+INT./EXT. SURFACE BOUNDARY EFFECTS ON THE GENERAL CIRCULATION AND MACROCLIMATE: A REVIEW OF THE THEORY OF THE QUASI-STATIONARY PERTURBATIONS IN THE ATMOSPHERE - DAWN
+
+The characters pursue the scene objective in Surface Boundary Effects on the General Circulation and Macroclimate: A Review of the Theory of the Quasi-Stationary Perturbations in the Atmosphere. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to understand what changed, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_18
+
+INT./EXT. SPACE WEATHER GENERAL CONCEPTS - DAY
+
+The characters pursue the scene objective in Space Weather General Concepts. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to understand what changed, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_19
+
+INT./EXT. GENERAL QUESTIONS ABOUT ELECTROCHEMISTRY - LATE AFTERNOON
+
+The characters pursue the scene objective in General Questions about Electrochemistry. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to understand what changed, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_20
+
+INT./EXT. THE SIMULATION EXTRAPOLATION TECHNIQUE MEETS ECOLOGY AND EVOLUTION: A GENERAL AND INTUITIVE METHOD TO ACCOUNT FOR MEASUREMENT ERROR - NIGHT
+
+The characters pursue the scene objective in The simulation extrapolation technique meets ecology and evolution: A general and intuitive method to account for measurement error. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to understand what changed, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: New evidence changes what the goal means.
+CONTINUITY OUT: decision_pressure_for_scene_21
+
+INT./EXT. EINSTEIN’S LIFE-LONG DOUBTS ON THE PHYSICAL FOUNDATIONS OF THE GENERAL RELATIVITY AND UNIFIED FIELD THEORIES - DAWN
+
+The characters pursue the scene objective in Einstein’s Life-Long Doubts on the Physical Foundations of the General Relativity and Unified Field Theories. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to understand what changed, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_22
+
+INT./EXT. SINGULARITY THEOREMS IN GENERAL RELATIVITY: ACHIEVEMENTS AND OPEN QUESTIONS - DAY
+
+The characters pursue the scene objective in Singularity Theorems in General Relativity: Achievements and Open Questions. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to understand what changed, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_23
+
+INT./EXT. CAUSES AND CURES FOR THE INFINITIES IN SLOW-MOTION EXPANSIONS IN GENERAL RELATIVITY - LATE AFTERNOON
+
+The characters pursue the scene objective in Causes and cures for the infinities in slow-motion expansions in general relativity. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to understand what changed, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_24
+
+INT./EXT. CAUSALITY AND THE CAUCHY PROBLEM IN GENERAL RELATIVITY - NIGHT
+
+The characters pursue the scene objective in Causality and the Cauchy problem in general relativity. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to understand what changed, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_25
+
+INT./EXT. SURFACE BOUNDARY EFFECTS ON THE GENERAL CIRCULATION AND MACROCLIMATE: A REVIEW OF THE THEORY OF THE QUASI-STATIONARY PERTURBATIONS IN THE ATMOSPHERE - DAWN
+
+The characters pursue the scene objective in Surface Boundary Effects on the General Circulation and Macroclimate: A Review of the Theory of the Quasi-Stationary Perturbations in the Atmosphere. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to understand what changed, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The protagonist accepts responsibility.
+CONTINUITY OUT: decision_pressure_for_scene_26
+
+INT./EXT. SPACE WEATHER GENERAL CONCEPTS - DAY
+
+The characters pursue the scene objective in Space Weather General Concepts. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to understand what changed, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_27
+
+INT./EXT. GENERAL QUESTIONS ABOUT ELECTROCHEMISTRY - LATE AFTERNOON
+
+The characters pursue the scene objective in General Questions about Electrochemistry. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to understand what changed, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_28
+
+INT./EXT. THE SIMULATION EXTRAPOLATION TECHNIQUE MEETS ECOLOGY AND EVOLUTION: A GENERAL AND INTUITIVE METHOD TO ACCOUNT FOR MEASUREMENT ERROR - NIGHT
+
+The characters pursue the scene objective in The simulation extrapolation technique meets ecology and evolution: A general and intuitive method to account for measurement error. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to understand what changed, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_29
+
+INT./EXT. EINSTEIN’S LIFE-LONG DOUBTS ON THE PHYSICAL FOUNDATIONS OF THE GENERAL RELATIVITY AND UNIFIED FIELD THEORIES - DAWN
+
+The characters pursue the scene objective in Einstein’s Life-Long Doubts on the Physical Foundations of the General Relativity and Unified Field Theories. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to understand what changed, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_30
+
+INT./EXT. SINGULARITY THEOREMS IN GENERAL RELATIVITY: ACHIEVEMENTS AND OPEN QUESTIONS - DAY
+
+The characters pursue the scene objective in Singularity Theorems in General Relativity: Achievements and Open Questions. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to understand what changed, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The decisive choice resolves theme and conflict.
+CONTINUITY OUT: decision_pressure_for_scene_30

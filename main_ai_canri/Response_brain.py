@@ -1659,6 +1659,17 @@ class ResponseBrain:
         safety = self.safety_status(results)
         strict_output = self.strict_output_request(report, user_text)
         citations = self.source_citations(results)
+        agent_result = results.get("Agent_brain", {})
+        agent_status = str(agent_result.get("status", "")) if isinstance(agent_result, dict) else ""
+        agent_user_visible = bool(
+            isinstance(agent_result, dict)
+            and agent_result.get("user_visible")
+            and agent_result.get("display_text")
+            and agent_status in {
+                "completed", "partially_completed", "blocked", "approval_required",
+                "configuration_required", "rejected", "not_found"
+            }
+        )
 
         if safety["blocked"]:
             display_text = BLOCKED_SAFETY_HINTS.get(
@@ -1667,6 +1678,10 @@ class ResponseBrain:
             )
             primary_brain = "Security_brain"
             confidence = 100
+        elif agent_user_visible:
+            display_text = str(agent_result.get("display_text", "")).strip()
+            primary_brain = "Agent_brain"
+            confidence = agent_result.get("confidence", 85)
         elif self.is_greeting(user_text):
             display_text = self.greeting_answer(user_text)
             primary_brain = "Response_brain"

@@ -3,6 +3,7 @@ import shutil
 import threading
 import wave
 import json
+import os
 import time
 from datetime import datetime
 from pathlib import Path
@@ -12,6 +13,9 @@ from tkinter import simpledialog
 from tkinter.scrolledtext import ScrolledText
 
 import tkinter as tk
+
+from Agent_settings import load_agent_settings, save_agent_settings
+from Movie_settings import load_movie_settings, save_movie_settings
 
 
 DATA_DIR = Path(__file__).parent / "data"
@@ -57,6 +61,8 @@ class CanriGraphics:
         self.sample_rate = 44100
         self.thinking_traces = {}
         self.thinking_windows = {}
+        self.movie_settings = load_movie_settings()
+        self.agent_settings = load_agent_settings()
         self.trace_counter = 0
         self.latest_trace_id = None
         self.thinking_started_at = None
@@ -361,6 +367,244 @@ class CanriGraphics:
             state="disabled",
             fg=self.colors["muted"]
         )
+
+        self.settings_button = self.create_button(
+            header,
+            text="Settings",
+            command=self.show_settings,
+            bg=self.colors["panel_2"]
+        )
+        self.settings_button.grid(
+            row=0,
+            column=2,
+            rowspan=2,
+            sticky="e",
+            padx=(8, 0)
+        )
+
+    def show_settings(self):
+        window = tk.Toplevel(self.root)
+        window.title("Canri settings")
+        window.geometry("680x720")
+        window.resizable(False, False)
+        window.configure(bg=self.colors["app"])
+
+        body = tk.Frame(window, bg=self.colors["app"])
+        body.pack(fill="both", expand=True, padx=24, pady=22)
+        body.grid_columnconfigure(1, weight=1)
+
+        tk.Label(
+            body,
+            text="Movie video provider",
+            bg=self.colors["app"],
+            fg=self.colors["text"],
+            font=("Segoe UI", 12, "bold"),
+            anchor="w"
+        ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 14))
+
+        tk.Label(body, text="Provider", bg=self.colors["app"], fg=self.colors["muted"]).grid(
+            row=1, column=0, sticky="w", pady=7
+        )
+        provider = tk.StringVar(value=str(self.movie_settings.get("provider", "runway")))
+        tk.Entry(body, textvariable=provider, bg=self.colors["input"], fg=self.colors["text"], insertbackground=self.colors["text"]).grid(
+            row=1, column=1, sticky="ew", pady=7
+        )
+
+        tk.Label(body, text="Model", bg=self.colors["app"], fg=self.colors["muted"]).grid(
+            row=2, column=0, sticky="w", pady=7
+        )
+        model = tk.StringVar(value=str(self.movie_settings.get("model", "gen4.5")))
+        tk.Entry(body, textvariable=model, bg=self.colors["input"], fg=self.colors["text"], insertbackground=self.colors["text"]).grid(
+            row=2, column=1, sticky="ew", pady=7
+        )
+
+        tk.Label(body, text="API key", bg=self.colors["app"], fg=self.colors["muted"]).grid(
+            row=3, column=0, sticky="w", pady=7
+        )
+        api_key = tk.StringVar(value=os.getenv("RUNWAYML_API_SECRET", ""))
+        tk.Entry(body, textvariable=api_key, show="*", bg=self.colors["input"], fg=self.colors["text"], insertbackground=self.colors["text"]).grid(
+            row=3, column=1, sticky="ew", pady=7
+        )
+
+        tk.Label(body, text="Budget (USD)", bg=self.colors["app"], fg=self.colors["muted"]).grid(
+            row=4, column=0, sticky="w", pady=7
+        )
+        budget = tk.StringVar(value=str(self.movie_settings.get("budget_usd", 25.0)))
+        tk.Entry(body, textvariable=budget, bg=self.colors["input"], fg=self.colors["text"], insertbackground=self.colors["text"]).grid(
+            row=4, column=1, sticky="ew", pady=7
+        )
+
+        paid = tk.BooleanVar(value=bool(self.movie_settings.get("allow_paid_render", False)))
+        tk.Checkbutton(
+            body,
+            text="Allow paid movie rendering",
+            variable=paid,
+            bg=self.colors["app"],
+            fg=self.colors["text"],
+            activebackground=self.colors["app"],
+            activeforeground=self.colors["text"],
+            selectcolor=self.colors["panel_2"]
+        ).grid(row=5, column=0, columnspan=2, sticky="w", pady=(14, 4))
+
+        tk.Label(
+            body,
+            text="The API key is used for this running session only. For persistence, set RUNWAYML_API_SECRET in PowerShell.\nCanri will show a cost estimate and will not render while paid rendering is disabled.",
+            bg=self.colors["app"],
+            fg=self.colors["muted"],
+            justify="left",
+            anchor="w",
+            wraplength=500
+        ).grid(row=6, column=0, columnspan=2, sticky="w", pady=(14, 18))
+
+        tk.Frame(body, bg=self.colors["input_border"], height=1).grid(
+            row=7, column=0, columnspan=2, sticky="ew", pady=(2, 16)
+        )
+        tk.Label(
+            body,
+            text="Project Agent",
+            bg=self.colors["app"],
+            fg=self.colors["text"],
+            font=("Segoe UI", 12, "bold"),
+            anchor="w"
+        ).grid(row=8, column=0, columnspan=2, sticky="w", pady=(0, 10))
+
+        mode_labels = {
+            "No Agent": "off",
+            "Agent - Autonomous": "autonomous",
+            "Agent - Restricted": "restricted",
+            "Agent - Ask Before Changes": "approval",
+        }
+        current_mode = str(self.agent_settings.get("mode", "off"))
+        current_label = next(
+            (label for label, value in mode_labels.items() if value == current_mode),
+            "No Agent"
+        )
+        agent_mode = tk.StringVar(value=current_label)
+        tk.Label(body, text="Mode", bg=self.colors["app"], fg=self.colors["muted"]).grid(
+            row=9, column=0, sticky="w", pady=7
+        )
+        mode_menu = tk.OptionMenu(body, agent_mode, *mode_labels.keys())
+        mode_menu.configure(
+            bg=self.colors["input"],
+            fg=self.colors["text"],
+            activebackground=self.colors["panel_2"],
+            activeforeground=self.colors["text"],
+            highlightthickness=1,
+            highlightbackground=self.colors["input_border"],
+            relief="flat"
+        )
+        mode_menu["menu"].configure(bg=self.colors["panel_2"], fg=self.colors["text"])
+        mode_menu.grid(row=9, column=1, sticky="ew", pady=7)
+
+        tk.Label(body, text="Project path", bg=self.colors["app"], fg=self.colors["muted"]).grid(
+            row=10, column=0, sticky="w", pady=7
+        )
+        agent_path = tk.StringVar(value=str(self.agent_settings.get("workspace_path", "")))
+        path_row = tk.Frame(body, bg=self.colors["app"])
+        path_row.grid(row=10, column=1, sticky="ew", pady=7)
+        path_row.grid_columnconfigure(0, weight=1)
+        tk.Entry(
+            path_row,
+            textvariable=agent_path,
+            bg=self.colors["input"],
+            fg=self.colors["text"],
+            insertbackground=self.colors["text"]
+        ).grid(row=0, column=0, sticky="ew")
+
+        def choose_agent_path():
+            selected = filedialog.askdirectory(
+                parent=window,
+                title="Select the project Agent may work on",
+                initialdir=agent_path.get().strip() or str(Path.cwd())
+            )
+            if selected:
+                agent_path.set(selected)
+
+        self.create_button(
+            path_row,
+            text="Browse",
+            command=choose_agent_path,
+            bg=self.colors["panel_2"]
+        ).grid(row=0, column=1, padx=(8, 0))
+
+        agent_writes = tk.BooleanVar(value=bool(self.agent_settings.get("allow_file_writes", True)))
+        agent_terminal = tk.BooleanVar(value=bool(self.agent_settings.get("allow_terminal", True)))
+        tk.Checkbutton(
+            body,
+            text="Allow file writes inside the selected project",
+            variable=agent_writes,
+            bg=self.colors["app"],
+            fg=self.colors["text"],
+            activebackground=self.colors["app"],
+            activeforeground=self.colors["text"],
+            selectcolor=self.colors["panel_2"]
+        ).grid(row=11, column=0, columnspan=2, sticky="w", pady=(10, 2))
+        tk.Checkbutton(
+            body,
+            text="Allow approved terminal tools inside the selected project",
+            variable=agent_terminal,
+            bg=self.colors["app"],
+            fg=self.colors["text"],
+            activebackground=self.colors["app"],
+            activeforeground=self.colors["text"],
+            selectcolor=self.colors["panel_2"]
+        ).grid(row=12, column=0, columnspan=2, sticky="w", pady=2)
+
+        tk.Label(
+            body,
+            text=(
+                "Autonomous works without asking; Restricted uses a smaller tool set; "
+                "Ask Before Changes reads context but requests approval before writes or commands. "
+                "Canri's own file actions stay inside this path. Programs launched by the Agent still "
+                "run with the current Windows account's permissions, so use Autonomous only on trusted projects."
+            ),
+            bg=self.colors["app"],
+            fg=self.colors["muted"],
+            justify="left",
+            anchor="w",
+            wraplength=610
+        ).grid(row=13, column=0, columnspan=2, sticky="w", pady=(10, 14))
+
+        status = tk.Label(body, text="", bg=self.colors["app"], fg=self.colors["muted"], anchor="w")
+        status.grid(row=14, column=0, columnspan=2, sticky="w", pady=(0, 10))
+
+        def save():
+            try:
+                budget_value = max(0.0, float(budget.get().strip()))
+            except ValueError:
+                status.configure(text="Budget must be a number.", fg=self.colors["danger"])
+                return
+            selected_mode = mode_labels.get(agent_mode.get(), "off")
+            selected_path = agent_path.get().strip()
+            if selected_mode != "off":
+                candidate = Path(selected_path).expanduser()
+                if not selected_path or not candidate.exists() or not candidate.is_dir():
+                    status.configure(text="Select an existing project directory for Agent mode.", fg=self.colors["danger"])
+                    return
+            if api_key.get().strip():
+                os.environ["RUNWAYML_API_SECRET"] = api_key.get().strip()
+            else:
+                os.environ.pop("RUNWAYML_API_SECRET", None)
+            self.movie_settings = save_movie_settings({
+                "provider": provider.get().strip() or "runway",
+                "model": model.get().strip() or "gen4.5",
+                "budget_usd": budget_value,
+                "allow_paid_render": paid.get(),
+            })
+            self.agent_settings = save_agent_settings({
+                **self.agent_settings,
+                "mode": selected_mode,
+                "workspace_path": selected_path,
+                "allow_file_writes": agent_writes.get(),
+                "allow_terminal": agent_terminal.get(),
+            })
+            status.configure(text="Movie and Agent settings saved.", fg=self.colors["success"])
+            self.header_status.configure(text=f"Settings updated - Agent: {selected_mode}")
+
+        actions = tk.Frame(body, bg=self.colors["app"])
+        actions.grid(row=15, column=0, columnspan=2, sticky="e")
+        self.create_button(actions, text="Save", command=save, bg=self.colors["accent"]).pack(side="left", padx=5)
+        self.create_button(actions, text="Close", command=window.destroy, bg=self.colors["panel_2"]).pack(side="left", padx=5)
 
     def build_chat_area(self):
 
@@ -888,7 +1132,7 @@ class CanriGraphics:
 
         return " ".join(words[:6])[:48]
 
-    def append_chat_record(self, role, text, trace_id=None, chat_id=None, attachments=None):
+    def append_chat_record(self, role, text, trace_id=None, chat_id=None, attachments=None, agent_changes=None):
 
         chat = self.chat_by_id(chat_id) if chat_id else None
         if chat_id and chat is None:
@@ -914,6 +1158,8 @@ class CanriGraphics:
                 }
                 for path in attachments[:20]
             ]
+        if isinstance(agent_changes, dict):
+            record["agent_changes"] = agent_changes
         chat.setdefault("messages", []).append(record)
         chat["updated_utc"] = datetime.now().isoformat()
         self.save_chats()
@@ -961,6 +1207,9 @@ class CanriGraphics:
                     )
             if "CANRI" in message:
                 self.insert_chat_message("Canri", message.get("CANRI", ""))
+                agent_changes = message.get("agent_changes")
+                if isinstance(agent_changes, dict):
+                    self.insert_agent_change_card(agent_changes)
 
         self.chat_area.see("end")
         self.chat_area.configure(state="disabled")
@@ -1262,13 +1511,15 @@ class CanriGraphics:
                     or result.get("debug_trace")
                     or result.get("trace")
                 )
+                agent_changes = result.get("agent_changes")
             else:
                 text = str(result)
                 thinking_trace = None
+                agent_changes = None
 
             self.root.after(
                 0,
-                lambda: self.show_canri_response(text, thinking_trace, trace_id, chat_id)
+                lambda: self.show_canri_response(text, thinking_trace, trace_id, chat_id, agent_changes)
             )
 
         except Exception as error:
@@ -1291,14 +1542,14 @@ class CanriGraphics:
                 )
             )
 
-    def show_canri_response(self, text, thinking_trace=None, trace_id=None, chat_id=None):
+    def show_canri_response(self, text, thinking_trace=None, trace_id=None, chat_id=None, agent_changes=None):
 
         if thinking_trace and trace_id:
             self.finish_live_thinking_trace(trace_id, thinking_trace)
 
         if not chat_id or chat_id == self.current_chat_id:
-            self.add_chat_message("Canri", text, thinking_trace, trace_id)
-        self.append_chat_record("CANRI", text, trace_id, chat_id=chat_id)
+            self.add_chat_message("Canri", text, thinking_trace, trace_id, agent_changes)
+        self.append_chat_record("CANRI", text, trace_id, chat_id=chat_id, agent_changes=agent_changes)
         self.refresh_chat_list_titles()
         self.stop_thinking_timer()
 
@@ -1310,7 +1561,7 @@ class CanriGraphics:
         else:
             self.header_status.configure(text="Ready")
 
-    def add_chat_message(self, sender, text, thinking_trace=None, trace_id=None):
+    def add_chat_message(self, sender, text, thinking_trace=None, trace_id=None, agent_changes=None):
 
         self.chat_area.configure(state="normal")
 
@@ -1331,8 +1582,166 @@ class CanriGraphics:
                 trace_id = self.store_thinking_trace(thinking_trace)
             self.insert_thinking_button(trace_id)
 
+        if sender == "Canri" and isinstance(agent_changes, dict):
+            self.insert_agent_change_card(agent_changes)
+
         self.chat_area.see("end")
         self.chat_area.configure(state="disabled")
+
+    @staticmethod
+    def _agent_write_changes(agent_changes):
+        if not isinstance(agent_changes, dict):
+            return []
+        results = agent_changes.get("action_results", [])
+        return [
+            item for item in results
+            if isinstance(item, dict) and item.get("type") == "write_file" and item.get("path")
+        ]
+
+    def insert_agent_change_card(self, agent_changes):
+        changes = self._agent_write_changes(agent_changes)
+        if not changes:
+            return
+
+        unique_paths = {str(change.get("path")) for change in changes}
+        added = sum(int(change.get("added_lines", 0) or 0) for change in changes)
+        removed = sum(int(change.get("removed_lines", 0) or 0) for change in changes)
+
+        card = tk.Frame(
+            self.chat_area,
+            bg=self.colors["panel_2"],
+            highlightthickness=1,
+            highlightbackground=self.colors["sidebar_border"],
+            padx=14,
+            pady=12,
+        )
+        card.grid_columnconfigure(0, weight=1)
+
+        title = tk.Label(
+            card,
+            text=f"Agent edited {len(unique_paths)} file(s)",
+            bg=self.colors["panel_2"],
+            fg=self.colors["text"],
+            font=("Segoe UI", 11, "bold"),
+            anchor="w",
+        )
+        title.grid(row=0, column=0, sticky="w")
+        totals = tk.Label(
+            card,
+            text=f"+{added}  -{removed}",
+            bg=self.colors["panel_2"],
+            fg=self.colors["success"] if added else self.colors["muted"],
+            font=("Consolas", 10, "bold"),
+            anchor="e",
+        )
+        totals.grid(row=0, column=1, sticky="e", padx=(18, 0))
+
+        for row, change in enumerate(changes[:8], start=1):
+            path = str(change.get("path"))
+            details = (
+                f"+{int(change.get('added_lines', 0) or 0)} "
+                f"-{int(change.get('removed_lines', 0) or 0)}  "
+                f"{int(change.get('after_line_count', 0) or 0)} lines"
+            )
+            file_button = tk.Button(
+                card,
+                text=path,
+                command=lambda change=change, changes=agent_changes: self.show_agent_file_change(change, changes),
+                bg=self.colors["panel_2"],
+                fg=self.colors["text"],
+                activebackground=self.colors["accent_hover"],
+                activeforeground=self.colors["text"],
+                relief="flat",
+                borderwidth=0,
+                anchor="w",
+                cursor="hand2",
+                font=("Segoe UI", 10),
+                padx=0,
+                pady=4,
+            )
+            file_button.grid(row=row, column=0, sticky="w")
+            metric = tk.Label(
+                card,
+                text=details,
+                bg=self.colors["panel_2"],
+                fg=self.colors["muted"],
+                font=("Consolas", 9),
+                anchor="e",
+            )
+            metric.grid(row=row, column=1, sticky="e", padx=(18, 0))
+
+        if len(changes) > 8:
+            extra = tk.Label(
+                card,
+                text=f"And {len(changes) - 8} more file(s)",
+                bg=self.colors["panel_2"],
+                fg=self.colors["muted"],
+                font=("Segoe UI", 9),
+                anchor="w",
+            )
+            extra.grid(row=9, column=0, columnspan=2, sticky="w", pady=(5, 0))
+
+        self.chat_area.window_create("end", window=card, padx=4, pady=4)
+        self.chat_area.insert("end", "\n\n")
+
+    def show_agent_file_change(self, change, agent_changes):
+        path = str(change.get("path", "Edited file"))
+        window = tk.Toplevel(self.root)
+        window.title(f"Agent change - {path}")
+        window.geometry("1120x720")
+        window.minsize(760, 480)
+        window.configure(bg=self.colors["app"])
+        window.grid_columnconfigure(0, weight=1)
+        window.grid_columnconfigure(1, weight=1)
+        window.grid_rowconfigure(2, weight=1)
+
+        heading = tk.Label(
+            window,
+            text=path,
+            bg=self.colors["app"],
+            fg=self.colors["text"],
+            font=("Segoe UI", 16, "bold"),
+            anchor="w",
+        )
+        heading.grid(row=0, column=0, columnspan=2, sticky="ew", padx=18, pady=(16, 3))
+        summary = tk.Label(
+            window,
+            text=(
+                f"+{int(change.get('added_lines', 0) or 0)} lines added   "
+                f"-{int(change.get('removed_lines', 0) or 0)} lines removed   "
+                f"{int(change.get('before_line_count', 0) or 0)} -> "
+                f"{int(change.get('after_line_count', 0) or 0)} total lines"
+            ),
+            bg=self.colors["app"],
+            fg=self.colors["muted"],
+            font=("Consolas", 10),
+            anchor="w",
+        )
+        summary.grid(row=1, column=0, columnspan=2, sticky="ew", padx=18, pady=(0, 12))
+
+        code_label = tk.Label(window, text="Current code", bg=self.colors["app"], fg=self.colors["text"], font=("Segoe UI", 10, "bold"), anchor="w")
+        code_label.grid(row=2, column=0, sticky="new", padx=(18, 8))
+        diff_label = tk.Label(window, text="Change details", bg=self.colors["app"], fg=self.colors["text"], font=("Segoe UI", 10, "bold"), anchor="w")
+        diff_label.grid(row=2, column=1, sticky="new", padx=(8, 18))
+
+        code_box = ScrolledText(window, bg=self.colors["panel"], fg=self.colors["text"], insertbackground=self.colors["text"], relief="flat", wrap="none", font=("Consolas", 10), padx=12, pady=10)
+        diff_box = ScrolledText(window, bg=self.colors["panel"], fg=self.colors["text"], insertbackground=self.colors["text"], relief="flat", wrap="none", font=("Consolas", 10), padx=12, pady=10)
+        code_box.grid(row=3, column=0, sticky="nsew", padx=(18, 8), pady=(0, 18))
+        diff_box.grid(row=3, column=1, sticky="nsew", padx=(8, 18), pady=(0, 18))
+        window.grid_rowconfigure(3, weight=1)
+
+        content = str(change.get("after_content", ""))
+        if change.get("after_content_truncated"):
+            content += "\n\n[Preview truncated because the file is large.]"
+        diff = str(change.get("diff_preview", "No text difference was recorded."))
+        if change.get("diff_truncated"):
+            diff += "\n\n[Diff preview truncated because the change is large.]"
+        code_box.insert("1.0", content)
+        diff_box.insert("1.0", diff)
+        code_box.configure(state="disabled")
+        diff_box.configure(state="disabled")
+        self.bind_thinking_text_shortcuts(code_box)
+        self.bind_thinking_text_shortcuts(diff_box)
 
     def start_live_thinking_trace(self, message, attached_files):
 

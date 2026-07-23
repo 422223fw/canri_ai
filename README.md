@@ -150,9 +150,49 @@ After adding API credits and reviewing the estimate, authorize generation:
 python .\main_ai_canri\render_movie_runway.py ".\main_ai_canri\generated_movies\the_last_signal_9e79c057\movie_project.json" --max-cost-usd 25 --execute
 ```
 
+In the desktop app, open `Settings` to configure the movie provider, model, budget,
+and the `Allow paid movie rendering` switch. The switch is off by default, so
+creating a movie package does not start a paid render accidentally. An API key
+entered in the dialog is used only by the current Canri process and is never
+written to `Movie_settings.json`; use `setx RUNWAYML_API_SECRET "YOUR_RUNWAY_KEY"`
+when it should remain available after restarting Canri.
+
 The renderer checkpoints every downloaded clip, resumes completed work after
 failure, and refuses to begin when the estimated base cost exceeds the limit.
 Retries can increase the final provider charge.
+
+## Project Agent
+
+Open `Settings`, select one Agent mode, and choose the exact project directory:
+
+- `No Agent` keeps Canri in chat-only mode.
+- `Agent - Autonomous` may apply generated files and run allowed development tools.
+- `Agent - Restricted` uses a smaller terminal allowlist.
+- `Agent - Ask Before Changes` reads project context but asks before every write or command.
+
+The Agent indexes related files together and passes a bounded set of relevant source
+files to the specialist brains. It creates a backup before overwriting an existing
+file and records an audit entry locally. Approval mode returns commands such as
+`/agent approve 12ab34cd56ef` or `/agent reject 12ab34cd56ef` in the chat.
+
+Direct Agent commands are also available:
+
+````text
+/agent read path/to/file.py
+/agent search ContactService
+/agent run python -m pytest -q
+/agent write path/to/file.py
+```python
+print("replacement file content")
+```
+````
+
+Even Autonomous mode cannot leave the selected workspace, edit `.git`, invoke a
+shell through Canri's command interface, or run blocked destructive/system operations.
+However, project programs launched by the Agent receive the current Windows account's
+normal permissions; Agent mode is not an operating-system sandbox. Use Autonomous only
+for trusted projects. Local machine paths, pending approvals, and Agent audit records
+are excluded from Git.
 
 ## Current Limits
 

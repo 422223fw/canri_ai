@@ -26,6 +26,8 @@ class CollaborationBrain:
         "Quality_Control_brain",
         "Response_brain",
         "Learning_brain",
+        "Project_context_brain",
+        "Agent_brain",
     }
 
     DEFAULT_DOMAIN_TEAMS = {

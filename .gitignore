@@ -31,3 +31,8 @@ Canri_Tests/_runtime/
 main_ai_canri/data/*_scan_index.sqlite3
 main_ai_canri/data/*_scan_index.sqlite3-shm
 main_ai_canri/data/*_scan_index.sqlite3-wal
+
+# Local Agent settings, approvals, and execution audit contain machine-specific paths.
+main_ai_canri/data/Agent_settings.local.json
+main_ai_canri/data/Agent_pending_actions.json
+main_ai_canri/data/Agent_audit.jsonl

@@ -1029,6 +1029,10 @@ class ManagerBrain:
             ):
                 supporting.append("Creative_brain")
 
+        agent_settings = report.get("_agent_settings", {}) if isinstance(report, dict) else {}
+        if isinstance(agent_settings, dict) and str(agent_settings.get("mode", "off")).lower() != "off":
+            supporting.extend(["Project_context_brain", "Agent_brain"])
+
         return {
             "primary_domain": primary,
             "primary_brain": primary_brain,
@@ -1112,6 +1116,9 @@ class ManagerBrain:
         primary = self.primary_domain(report, memory_report)
         intent = str(report.get("intent", "")).lower()
         contract = report.get("request_contract", {})
+        agent_settings = report.get("_agent_settings", {}) if isinstance(report, dict) else {}
+        agent_mode = str(agent_settings.get("mode", "off")).lower() if isinstance(agent_settings, dict) else "off"
+        agent_enabled = agent_mode in {"autonomous", "restricted", "approval"}
         conversation = memory_report.get("conversation", {}) if isinstance(memory_report, dict) else {}
         continuation_contract = contract.get("continuation", {}) if isinstance(contract, dict) else {}
         continuation_requested = bool(
@@ -1148,6 +1155,10 @@ class ManagerBrain:
                 )
             },
             {
+                "phase": "project_context",
+                "brains": ["Project_context_brain"] if agent_enabled else []
+            },
+            {
                 "phase": "core_reasoning",
                 "brains": ["Planner_brain"] if needs_planner else []
             },
@@ -1172,6 +1183,10 @@ class ManagerBrain:
                 "brains": ["Nervous_system_brain"] if needs_collaboration else []
             },
             {
+                "phase": "agent_execution",
+                "brains": ["Agent_brain"] if agent_enabled else []
+            },
+            {
                 "phase": "verification",
                 "brains": (
                     (["Fact_Check_brain"] if needs_fact_check else [])
@@ -1191,8 +1206,8 @@ class ManagerBrain:
             }
         ]
 
-        core = phases[1]["brains"]
-        experts = phases[2]["brains"]
+        core = next(phase["brains"] for phase in phases if phase["phase"] == "core_reasoning")
+        experts = next(phase["brains"] for phase in phases if phase["phase"] == "domain_experts")
 
         if "research" in domains or "general" in domains:
             core.extend([
@@ -1400,6 +1415,10 @@ class ManagerBrain:
         if isinstance(results, dict):
             combined_results.update(results)
         context["results"] = combined_results
+        context["project_context"] = (
+            context.get("project_context")
+            or combined_results.get("Project_context_brain", {})
+        )
 
         context["understanding"] = report
         request_contract = report.get("request_contract", {}) if isinstance(report, dict) else {}
@@ -1488,6 +1507,7 @@ class ManagerBrain:
             ),
             "execution_contract": context["execution_contract"],
             "brain_dialogue": context.get("brain_dialogue", {}),
+            "project_context": context.get("project_context", {}),
             "cognitive_view": context["cognitive_view"],
             "performance_budget": {
                 "request_budget_seconds": REQUEST_TIME_BUDGET_SECONDS,
@@ -1802,7 +1822,9 @@ class ManagerBrain:
             "Response_brain",
             "Fact_Check_brain",
             "Quality_Control_brain",
-            "Learning_brain"
+            "Learning_brain",
+            "Project_context_brain",
+            "Agent_brain"
         ]:
             return False
 
@@ -1972,6 +1994,17 @@ class ManagerBrain:
             )
 
             all_results.update(results)
+            if phase_name == "project_context" and isinstance(data, dict):
+                project_context = results.get("Project_context_brain", {})
+                if isinstance(project_context, dict):
+                    selected_files = project_context.get("selected_files", {})
+                    if isinstance(selected_files, dict) and selected_files:
+                        explicit_files = data.get("existing_project_files", {})
+                        merged_files = dict(selected_files)
+                        if isinstance(explicit_files, dict):
+                            merged_files.update(explicit_files)
+                        data["existing_project_files"] = merged_files
+                    data["project_context"] = project_context
             workspace = self.refresh_cognitive_workspace(
                 phase_context if isinstance(phase_context, dict) else {},
                 report,
@@ -2125,7 +2158,9 @@ class ManagerBrain:
                     "Response_brain",
                     "Security_brain",
                     "Learning_brain",
-                    "Nervous_system_brain"
+                    "Nervous_system_brain",
+                    "Project_context_brain",
+                    "Agent_brain"
                 }
                 and brain_name not in retry_brains
             ):
@@ -2530,6 +2565,11 @@ class ManagerBrain:
         )
 
         report = self.get_understanding_report(data)
+        if isinstance(report, dict):
+            report = dict(report)
+            agent_settings = data.get("agent_settings", {}) if isinstance(data, dict) else {}
+            if isinstance(agent_settings, dict):
+                report["_agent_settings"] = dict(agent_settings)
         memory_report = self.get_memory_report(data)
         shared_knowledge = self.build_knowledge_context(
             data,
@@ -2755,7 +2795,8 @@ class ManagerBrain:
                         "Memory_brain", "Emotion_brain", "Security_brain",
                         "Manager_brain", "Quality_Control_brain", "Response_brain",
                         "Learning_brain", "Collaboration_brain",
-                        "Nervous_system_brain", "Answer_Enrichment_brain"
+                        "Nervous_system_brain", "Answer_Enrichment_brain",
+                        "Project_context_brain"
                     }
                 ],
                 "collaboration_used": "Collaboration_brain" in plan,

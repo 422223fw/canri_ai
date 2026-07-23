@@ -9,6 +9,8 @@ from uuid import uuid4
 
 from Brain_runtime import brain_runtime
 from Graphics import start_graphics
+from Agent_settings import load_agent_settings
+from brains import BRAIN_MODULES
 
 from Main_brain import brain as main_brain
 from Manager_brain import brain as manager_brain
@@ -39,6 +41,7 @@ from Character_brain import brain as character_brain
 from World_brain import brain as world_brain
 from Image_brain import brain as image_brain
 from Movie_brain import brain as movie_brain
+from Movie_settings import load_movie_settings
 from Vision_brain import brain as vision_brain
 from Voice_brain import brain as voice_brain
 
@@ -50,6 +53,8 @@ from Nervous_system_brain import brain as nervous_system_brain
 from Planner_brain import brain as planner_brain
 from Emotion_brain import brain as emotion_brain
 from Answer_Enrichment_brain import brain as answer_enrichment_brain
+from Project_context_brain import brain as project_context_brain
+from Agent_brain import brain as agent_brain
 
 from Security_brain import brain as security_brain
 from Knowledge_collector import start_background_collector
@@ -66,7 +71,7 @@ def remaining_request_timeout(deadline, cap):
     return max(0.05, min(float(cap), deadline - time.perf_counter()))
 
 
-def register_all_brains():
+def _register_all_brains_legacy():
 
     manager_brain.register_brain(
         "Spelling_brain",
@@ -219,9 +224,38 @@ def register_all_brains():
     )
 
     manager_brain.register_brain(
+        "Project_context_brain",
+        project_context_brain
+    )
+
+    manager_brain.register_brain(
+        "Agent_brain",
+        agent_brain
+    )
+
+    manager_brain.register_brain(
         "Security_brain",
         security_brain
     )
+
+
+def register_all_brains():
+    """Register every specialist through the organized brains catalog."""
+
+    missing = []
+    for name in BRAIN_MODULES:
+        if name in {"Main_brain", "Manager_brain"}:
+            continue
+        brain_object = globals().get(name.lower())
+        if brain_object is None:
+            missing.append(name)
+            continue
+        manager_brain.register_brain(name, brain_object)
+
+    if missing:
+        # Preserve startup compatibility while the remaining legacy modules
+        # are migrated physically into the brains package.
+        _register_all_brains_legacy()
 
 
 def build_basic_understanding(message, corrected_text):
@@ -430,6 +464,12 @@ def process_user_message(message, attached_files=None, progress_callback=None, s
         "spelling": spelling_report,
         "understanding": understanding_report
     }
+    context["agent_settings"] = load_agent_settings()
+    movie_settings = load_movie_settings()
+    context["movie_render_settings"] = movie_settings
+    context["execute_movie_render"] = bool(movie_settings.get("allow_paid_render"))
+    context["movie_render_model"] = movie_settings.get("model", "gen4.5")
+    context["movie_render_budget_usd"] = movie_settings.get("budget_usd", 25.0)
     if request_deadline is not None:
         context["_request_deadline_monotonic"] = request_deadline
 
@@ -470,6 +510,11 @@ def process_user_message(message, attached_files=None, progress_callback=None, s
     response_result = manager_result.get("results", {}).get("Response_brain")
 
     if isinstance(response_result, dict):
+        agent_result = manager_result.get("results", {}).get("Agent_brain", {})
+        if isinstance(agent_result, dict) and agent_result.get("action_results"):
+            # The GUI uses this structured result to show a review card with
+            # file-level additions, removals, and a code preview.
+            response_result["agent_changes"] = agent_result
         response_result["thinking_trace"] = build_thinking_trace(
             spelling_report,
             understanding_report,

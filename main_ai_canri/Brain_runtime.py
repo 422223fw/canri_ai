@@ -57,6 +57,8 @@ DEFAULT_PROFILES = {
     "Creative_brain": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": False},
     "Image_brain": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": False},
     "Movie_brain": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": False},
+    "Project_context_brain": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": False},
+    "Agent_brain": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": True},
     "Vision_brain": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": False},
     "Voice_brain": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": False},
     "Fact_Check_brain": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": True},
