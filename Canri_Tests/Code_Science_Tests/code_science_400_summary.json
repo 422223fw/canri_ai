@@ -1,0 +1,45 @@
+{
+  "title": "Canri AI Code and Science 400-Task Benchmark",
+  "generated_utc": "2026-07-22T16:27:56.866358+00:00",
+  "total_planned": 400,
+  "total_completed": 400,
+  "total_passed": 358,
+  "total_failed": 42,
+  "pass_rate_percent": 89.5,
+  "category_summary": {
+    "code_explanation": {
+      "planned": 80,
+      "completed": 80,
+      "passed": 80,
+      "failed": 0,
+      "pass_rate_percent": 100.0,
+      "average_elapsed_seconds": 16.6
+    },
+    "code_generation": {
+      "planned": 120,
+      "completed": 120,
+      "passed": 120,
+      "failed": 0,
+      "pass_rate_percent": 100.0,
+      "average_elapsed_seconds": 25.646
+    },
+    "science": {
+      "planned": 200,
+      "completed": 200,
+      "passed": 158,
+      "failed": 42,
+      "pass_rate_percent": 79.0,
+      "average_elapsed_seconds": 15.25
+    }
+  },
+  "primary_brains": {
+    "Code_brain": 200,
+    "Research_brain": 100,
+    "Dictionary_context": 40,
+    "Science_brain": 40,
+    "unknown": 2,
+    "Vision_brain": 10,
+    "Creative_brain": 8
+  },
+  "run_elapsed_seconds": 13.414
+}

@@ -1,0 +1,1304 @@
+{
+  "project_id": "movie_d1429e79c057",
+  "request": {
+    "prompt": "Create a complete 3-minute photorealistic science-fiction movie called \"The Last Signal\".\n\nThe story follows a radio engineer named Nora who receives a warning from the future through an abandoned satellite. She has only three minutes to decide whether to trust the message and shut down the city's power grid.\n\nUse Creative_brain to improve the original concept. Include:\n- A complete beginning, conflict, climax, and ending.\n- Consistent characters and locations.\n- A full scene timeline and screenplay.\n- A detailed cinematic shot list.\n- Camera, lighting, sound, music, and visual-effects plans.\n- Character, location, and prop assets.\n- Continuity checks between every scene.\n- A production schedule, estimated budget, and render manifest.\n- Photorealistic high-budget cinematic quality.\n\nIf a real video backend is available, render the movie. Otherwise, create and save the complete production package and clearly state what is required for rendering.",
+    "title": "The Last Signal",
+    "duration_seconds": 180,
+    "genre": "science fiction",
+    "tone": "realistic",
+    "language": "English",
+    "audience_rating": "PG-13",
+    "realism": "photorealistic",
+    "render_profile": {
+      "resolution": "3840x2160",
+      "frame_rate": 24.0,
+      "aspect_ratio": "2.39:1",
+      "color_space": "ACEScg",
+      "delivery_codec": "ProRes 422 HQ",
+      "audio_layout": "5.1"
+    },
+    "render_requested": true,
+    "save_project": true,
+    "requirements": []
+  },
+  "creative_brief": {
+    "title": "The Last Signal",
+    "premise": "Goal: Create a complete 3-minute photorealistic science-fiction movie called \"The Last Signal\".",
+    "logline": "In a realistic science fiction world, a determined protagonist must confront the central promise of: Goal: Create a complete 3-minute photorealistic science-fiction movie called \"The Last Signal\"",
+    "genre": "science fiction",
+    "tone": "realistic",
+    "audience_rating": "PG-13",
+    "themes": [
+      "choice",
+      "consequence",
+      "human connection"
+    ],
+    "visual_motifs": [
+      "recurring practical light",
+      "environmental transformation",
+      "visual contrast"
+    ],
+    "emotional_promise": "Escalating pressure leads to earned transformation.",
+    "ending_direction": "The final choice resolves the external conflict and changes the protagonist.",
+    "creative_brain_used": true,
+    "creative_source": "Creative_brain",
+    "creative_confidence": 90,
+    "specialist_insights": [
+      {
+        "brain": "Creative_brain",
+        "insight": "Goal: Create a complete 3-minute photorealistic science-fiction movie called \"The Last Signal\".",
+        "confidence": 90
+      }
+    ]
+  },
+  "story": {
+    "logline": "In a realistic science fiction world, a determined protagonist must confront the central promise of: Goal: Create a complete 3-minute photorealistic science-fiction movie called \"The Last Signal\"",
+    "synopsis": "Goal: Create a complete 3-minute photorealistic science-fiction movie called \"The Last Signal\".",
+    "structure": "three_act_sequence_structure",
+    "acts": [
+      {
+        "act": 1,
+        "name": "Setup",
+        "duration_seconds": 45
+      },
+      {
+        "act": 2,
+        "name": "Confrontation",
+        "duration_seconds": 90
+      },
+      {
+        "act": 3,
+        "name": "Resolution",
+        "duration_seconds": 45
+      }
+    ],
+    "sequences": [
+      {
+        "sequence_id": "sequence_bbdc11a8edc9",
+        "number": 1,
+        "act": 1,
+        "purpose": "Establish ordinary life and the dramatic question.",
+        "turn": "A disruption makes inaction costly.",
+        "theme": "choice"
+      },
+      {
+        "sequence_id": "sequence_05524276312a",
+        "number": 2,
+        "act": 2,
+        "purpose": "Deliver progress while revealing a deeper cost.",
+        "turn": "A partial victory creates a larger problem.",
+        "theme": "consequence"
+      },
+      {
+        "sequence_id": "sequence_6edee9dd6566",
+        "number": 3,
+        "act": 3,
+        "purpose": "Force the lowest point and a truthful reassessment.",
+        "turn": "The protagonist accepts responsibility.",
+        "theme": "human connection"
+      }
+    ],
+    "ending": "The final choice resolves the external conflict and changes the protagonist.",
+    "screenplay": {
+      "format": "structured_screenplay_draft",
+      "scene_count": 4,
+      "target_duration_seconds": 180,
+      "document": "THE LAST SIGNAL\n\nGenre: science fiction | Tone: realistic | Target: 3 minutes\n\n\n\nINT./EXT. PRIMARY LIVED-IN LOCATION - DAWN\n\nThe characters pursue the scene objective in Primary lived-in location. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.\n\nALEX MORGAN\nWe need to goal: create a complete 3-minute photorealistic science-fiction movie called \"the last signal\", but not at the cost we keep ignoring.\n\nMARA VALE\nThen make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.\n\nACTION BEAT: A disruption makes inaction costly.\nCONTINUITY OUT: decision_pressure_for_scene_2\n\nINT./EXT. CONTRASTING PUBLIC LOCATION - DAY\n\nThe characters pursue the scene objective in Contrasting public location. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.\n\nALEX MORGAN\nWe need to goal: create a complete 3-minute photorealistic science-fiction movie called \"the last signal\", but not at the cost we keep ignoring.\n\nMARA VALE\nThen make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.\n\nACTION BEAT: A disruption makes inaction costly.\nCONTINUITY OUT: decision_pressure_for_scene_3\n\nINT./EXT. FINAL CONFRONTATION LOCATION - LATE AFTERNOON\n\nThe characters pursue the scene objective in Final confrontation location. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.\n\nALEX MORGAN\nWe need to goal: create a complete 3-minute photorealistic science-fiction movie called \"the last signal\", but not at the cost we keep ignoring.\n\nMARA VALE\nThen make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.\n\nACTION BEAT: A partial victory creates a larger problem.\nCONTINUITY OUT: decision_pressure_for_scene_4\n\nINT./EXT. PRIMARY LIVED-IN LOCATION - NIGHT\n\nThe characters pursue the scene objective in Primary lived-in location. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.\n\nALEX MORGAN\nWe need to goal: create a complete 3-minute photorealistic science-fiction movie called \"the last signal\", but not at the cost we keep ignoring.\n\nMARA VALE\nThen make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.\n\nACTION BEAT: The protagonist accepts responsibility.\nCONTINUITY OUT: decision_pressure_for_scene_4",
+      "note": "This is a complete scene-level production screenplay. Dialogue remains intentionally editable during performance development while every scene and turning point is scheduled."
+    }
+  },
+  "characters": [
+    {
+      "character_id": "character_5b14dca52b63",
+      "name": "Alex Morgan",
+      "role": "protagonist",
+      "goal": "Goal: Create a complete 3-minute photorealistic science-fiction movie called \"The Last Signal\".",
+      "conflict": "The safest choice conflicts with the necessary choice.",
+      "arc": "Learns to act with courage without losing empathy.",
+      "appearance": "Distinct naturalistic wardrobe and silhouette.",
+      "voice": "Grounded, character-specific delivery.",
+      "continuity": {}
+    },
+    {
+      "character_id": "character_6127a131710c",
+      "name": "Mara Vale",
+      "role": "ally",
+      "goal": "Protect the people affected by the central conflict.",
+      "conflict": "Trust must be earned under pressure.",
+      "arc": "Moves from guarded independence to collaboration.",
+      "appearance": "Distinct naturalistic wardrobe and silhouette.",
+      "voice": "Grounded, character-specific delivery.",
+      "continuity": {}
+    },
+    {
+      "character_id": "character_a8f72ef0f924",
+      "name": "Director Rowan",
+      "role": "opposing force",
+      "goal": "Preserve control at any human cost.",
+      "conflict": "Control creates the instability it was meant to prevent.",
+      "arc": "Escalation exposes the cost of refusing change.",
+      "appearance": "Distinct naturalistic wardrobe and silhouette.",
+      "voice": "Grounded, character-specific delivery.",
+      "continuity": {}
+    }
+  ],
+  "world": {
+    "name": "The world of The Last Signal",
+    "description": "Goal: Create a complete 3-minute photorealistic science-fiction movie called \"The Last Signal\".",
+    "period": "contemporary",
+    "locations": [
+      "Primary lived-in location",
+      "Contrasting public location",
+      "Final confrontation location"
+    ],
+    "physical_rules": [
+      "Physical behavior remains realistic and consistent.",
+      "Weather, light, damage, wardrobe, and props persist between connected scenes."
+    ],
+    "production_design": "Layered practical sets, motivated lighting, physically plausible materials, and lived-in detail.",
+    "cultural_notes": [],
+    "world_brain_used": false
+  },
+  "scenes": [
+    {
+      "scene_id": "scene_bbdc11a8edc9",
+      "sequence_id": "sequence_bbdc11a8edc9",
+      "act": 1,
+      "number": 1,
+      "heading": "INT./EXT. PRIMARY LIVED-IN LOCATION - DAWN",
+      "location": "Primary lived-in location",
+      "time_of_day": "DAWN",
+      "duration_seconds": 45,
+      "purpose": "Establish the sequence objective: Establish ordinary life and the dramatic question.",
+      "conflict": "The immediate objective is blocked by a concrete opposing action.",
+      "turning_point": "A disruption makes inaction costly.",
+      "action": "The characters pursue the scene objective in Primary lived-in location. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.",
+      "dialogue_beats": [
+        "State the immediate need without explaining the entire plot.",
+        "Let resistance expose character and subtext.",
+        "End on a choice, discovery, reversal, or unanswered pressure."
+      ],
+      "character_ids": [
+        "character_5b14dca52b63",
+        "character_6127a131710c"
+      ],
+      "continuity_in": [
+        "emotional_state_from_scene_1"
+      ],
+      "continuity_out": [
+        "decision_pressure_for_scene_2"
+      ]
+    },
+    {
+      "scene_id": "scene_05524276312a",
+      "sequence_id": "sequence_bbdc11a8edc9",
+      "act": 1,
+      "number": 2,
+      "heading": "INT./EXT. CONTRASTING PUBLIC LOCATION - DAY",
+      "location": "Contrasting public location",
+      "time_of_day": "DAY",
+      "duration_seconds": 45,
+      "purpose": "Investigate the sequence objective: Establish ordinary life and the dramatic question.",
+      "conflict": "The immediate objective is blocked by a concrete opposing action.",
+      "turning_point": "A disruption makes inaction costly.",
+      "action": "The characters pursue the scene objective in Contrasting public location. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.",
+      "dialogue_beats": [
+        "State the immediate need without explaining the entire plot.",
+        "Let resistance expose character and subtext.",
+        "End on a choice, discovery, reversal, or unanswered pressure."
+      ],
+      "character_ids": [
+        "character_5b14dca52b63",
+        "character_6127a131710c"
+      ],
+      "continuity_in": [
+        "emotional_state_from_scene_1"
+      ],
+      "continuity_out": [
+        "decision_pressure_for_scene_3"
+      ]
+    },
+    {
+      "scene_id": "scene_6edee9dd6566",
+      "sequence_id": "sequence_05524276312a",
+      "act": 2,
+      "number": 3,
+      "heading": "INT./EXT. FINAL CONFRONTATION LOCATION - LATE AFTERNOON",
+      "location": "Final confrontation location",
+      "time_of_day": "LATE AFTERNOON",
+      "duration_seconds": 45,
+      "purpose": "Complicate the sequence objective: Deliver progress while revealing a deeper cost.",
+      "conflict": "The immediate objective is blocked by a concrete opposing action.",
+      "turning_point": "A partial victory creates a larger problem.",
+      "action": "The characters pursue the scene objective in Final confrontation location. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.",
+      "dialogue_beats": [
+        "State the immediate need without explaining the entire plot.",
+        "Let resistance expose character and subtext.",
+        "End on a choice, discovery, reversal, or unanswered pressure."
+      ],
+      "character_ids": [
+        "character_5b14dca52b63",
+        "character_6127a131710c",
+        "character_a8f72ef0f924"
+      ],
+      "continuity_in": [
+        "emotional_state_from_scene_2"
+      ],
+      "continuity_out": [
+        "decision_pressure_for_scene_4"
+      ]
+    },
+    {
+      "scene_id": "scene_475fc82d5f96",
+      "sequence_id": "sequence_6edee9dd6566",
+      "act": 3,
+      "number": 4,
+      "heading": "INT./EXT. PRIMARY LIVED-IN LOCATION - NIGHT",
+      "location": "Primary lived-in location",
+      "time_of_day": "NIGHT",
+      "duration_seconds": 45,
+      "purpose": "Reveal the sequence objective: Force the lowest point and a truthful reassessment.",
+      "conflict": "The immediate objective is blocked by a concrete opposing action.",
+      "turning_point": "The protagonist accepts responsibility.",
+      "action": "The characters pursue the scene objective in Primary lived-in location. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.",
+      "dialogue_beats": [
+        "State the immediate need without explaining the entire plot.",
+        "Let resistance expose character and subtext.",
+        "End on a choice, discovery, reversal, or unanswered pressure."
+      ],
+      "character_ids": [
+        "character_5b14dca52b63",
+        "character_6127a131710c"
+      ],
+      "continuity_in": [
+        "emotional_state_from_scene_3"
+      ],
+      "continuity_out": [
+        "decision_pressure_for_scene_4"
+      ]
+    }
+  ],
+  "shots": [
+    {
+      "shot_id": "shot_e64e1e262f3c",
+      "scene_id": "scene_bbdc11a8edc9",
+      "number": 1,
+      "duration_seconds": 12,
+      "framing": "wide master",
+      "lens_mm": 24,
+      "camera_move": "dolly",
+      "subject": "Alex Morgan and Mara Vale",
+      "action": "Cover beat 1 of scene 1: Establish the sequence objective: Establish ordinary life and the dramatic question.",
+      "lighting": "sculpted motivated lighting",
+      "audio_cue": "production dialogue, room tone, controlled Foley, and score transition",
+      "vfx_notes": "Invisible cleanup and continuity support only unless the VFX plan marks the scene.",
+      "asset_ids": [
+        "asset_location_dcb2158580dd",
+        "asset_character_cb07f0f10ac8",
+        "asset_character_8cbe3fcf4f4e"
+      ]
+    },
+    {
+      "shot_id": "shot_faa15288f858",
+      "scene_id": "scene_bbdc11a8edc9",
+      "number": 2,
+      "duration_seconds": 11,
+      "framing": "medium two-shot",
+      "lens_mm": 40,
+      "camera_move": "crane",
+      "subject": "Alex Morgan and Mara Vale",
+      "action": "Cover beat 2 of scene 1: Establish the sequence objective: Establish ordinary life and the dramatic question.",
+      "lighting": "sculpted motivated lighting",
+      "audio_cue": "production dialogue, room tone, controlled Foley, and score transition",
+      "vfx_notes": "Invisible cleanup and continuity support only unless the VFX plan marks the scene.",
+      "asset_ids": [
+        "asset_location_dcb2158580dd",
+        "asset_character_cb07f0f10ac8",
+        "asset_character_8cbe3fcf4f4e"
+      ]
+    },
+    {
+      "shot_id": "shot_6f1986486edf",
+      "scene_id": "scene_bbdc11a8edc9",
+      "number": 3,
+      "duration_seconds": 11,
+      "framing": "medium close-up",
+      "lens_mm": 75,
+      "camera_move": "orbital",
+      "subject": "Alex Morgan and Mara Vale",
+      "action": "Cover beat 3 of scene 1: Establish the sequence objective: Establish ordinary life and the dramatic question.",
+      "lighting": "sculpted motivated lighting",
+      "audio_cue": "production dialogue, room tone, controlled Foley, and score transition",
+      "vfx_notes": "Invisible cleanup and continuity support only unless the VFX plan marks the scene.",
+      "asset_ids": [
+        "asset_location_dcb2158580dd",
+        "asset_character_cb07f0f10ac8",
+        "asset_character_8cbe3fcf4f4e"
+      ]
+    },
+    {
+      "shot_id": "shot_d34155d81429",
+      "scene_id": "scene_bbdc11a8edc9",
+      "number": 4,
+      "duration_seconds": 11,
+      "framing": "close-up",
+      "lens_mm": 24,
+      "camera_move": "dolly",
+      "subject": "Alex Morgan and Mara Vale",
+      "action": "Cover beat 4 of scene 1: Establish the sequence objective: Establish ordinary life and the dramatic question.",
+      "lighting": "sculpted motivated lighting",
+      "audio_cue": "production dialogue, room tone, controlled Foley, and score transition",
+      "vfx_notes": "Invisible cleanup and continuity support only unless the VFX plan marks the scene.",
+      "asset_ids": [
+        "asset_location_dcb2158580dd",
+        "asset_character_cb07f0f10ac8",
+        "asset_character_8cbe3fcf4f4e"
+      ]
+    },
+    {
+      "shot_id": "shot_dcdc04d30ea8",
+      "scene_id": "scene_05524276312a",
+      "number": 1,
+      "duration_seconds": 12,
+      "framing": "insert",
+      "lens_mm": 40,
+      "camera_move": "crane",
+      "subject": "Alex Morgan and Mara Vale",
+      "action": "Cover beat 1 of scene 2: Investigate the sequence objective: Establish ordinary life and the dramatic question.",
+      "lighting": "sculpted motivated lighting",
+      "audio_cue": "production dialogue, room tone, controlled Foley, and score transition",
+      "vfx_notes": "Invisible cleanup and continuity support only unless the VFX plan marks the scene.",
+      "asset_ids": [
+        "asset_location_97ad66a446a6",
+        "asset_character_cb07f0f10ac8",
+        "asset_character_8cbe3fcf4f4e"
+      ]
+    },
+    {
+      "shot_id": "shot_e7b0d4747446",
+      "scene_id": "scene_05524276312a",
+      "number": 2,
+      "duration_seconds": 11,
+      "framing": "reaction",
+      "lens_mm": 75,
+      "camera_move": "orbital",
+      "subject": "Alex Morgan and Mara Vale",
+      "action": "Cover beat 2 of scene 2: Investigate the sequence objective: Establish ordinary life and the dramatic question.",
+      "lighting": "sculpted motivated lighting",
+      "audio_cue": "production dialogue, room tone, controlled Foley, and score transition",
+      "vfx_notes": "Invisible cleanup and continuity support only unless the VFX plan marks the scene.",
+      "asset_ids": [
+        "asset_location_97ad66a446a6",
+        "asset_character_cb07f0f10ac8",
+        "asset_character_8cbe3fcf4f4e"
+      ]
+    },
+    {
+      "shot_id": "shot_14c516616001",
+      "scene_id": "scene_05524276312a",
+      "number": 3,
+      "duration_seconds": 11,
+      "framing": "wide master",
+      "lens_mm": 24,
+      "camera_move": "dolly",
+      "subject": "Alex Morgan and Mara Vale",
+      "action": "Cover beat 3 of scene 2: Investigate the sequence objective: Establish ordinary life and the dramatic question.",
+      "lighting": "sculpted motivated lighting",
+      "audio_cue": "production dialogue, room tone, controlled Foley, and score transition",
+      "vfx_notes": "Invisible cleanup and continuity support only unless the VFX plan marks the scene.",
+      "asset_ids": [
+        "asset_location_97ad66a446a6",
+        "asset_character_cb07f0f10ac8",
+        "asset_character_8cbe3fcf4f4e"
+      ]
+    },
+    {
+      "shot_id": "shot_fe9ad55e00e2",
+      "scene_id": "scene_05524276312a",
+      "number": 4,
+      "duration_seconds": 11,
+      "framing": "medium two-shot",
+      "lens_mm": 40,
+      "camera_move": "crane",
+      "subject": "Alex Morgan and Mara Vale",
+      "action": "Cover beat 4 of scene 2: Investigate the sequence objective: Establish ordinary life and the dramatic question.",
+      "lighting": "sculpted motivated lighting",
+      "audio_cue": "production dialogue, room tone, controlled Foley, and score transition",
+      "vfx_notes": "Invisible cleanup and continuity support only unless the VFX plan marks the scene.",
+      "asset_ids": [
+        "asset_location_97ad66a446a6",
+        "asset_character_cb07f0f10ac8",
+        "asset_character_8cbe3fcf4f4e"
+      ]
+    },
+    {
+      "shot_id": "shot_160112990457",
+      "scene_id": "scene_6edee9dd6566",
+      "number": 1,
+      "duration_seconds": 12,
+      "framing": "medium close-up",
+      "lens_mm": 75,
+      "camera_move": "orbital",
+      "subject": "Alex Morgan and Mara Vale",
+      "action": "Cover beat 1 of scene 3: Complicate the sequence objective: Deliver progress while revealing a deeper cost.",
+      "lighting": "sculpted motivated lighting",
+      "audio_cue": "production dialogue, room tone, controlled Foley, and score transition",
+      "vfx_notes": "Invisible cleanup and continuity support only unless the VFX plan marks the scene.",
+      "asset_ids": [
+        "asset_location_23517bb3598a",
+        "asset_character_cb07f0f10ac8",
+        "asset_character_8cbe3fcf4f4e",
+        "asset_character_100711bd3c42"
+      ]
+    },
+    {
+      "shot_id": "shot_7f2cce6d7c22",
+      "scene_id": "scene_6edee9dd6566",
+      "number": 2,
+      "duration_seconds": 11,
+      "framing": "close-up",
+      "lens_mm": 24,
+      "camera_move": "dolly",
+      "subject": "Alex Morgan and Mara Vale",
+      "action": "Cover beat 2 of scene 3: Complicate the sequence objective: Deliver progress while revealing a deeper cost.",
+      "lighting": "sculpted motivated lighting",
+      "audio_cue": "production dialogue, room tone, controlled Foley, and score transition",
+      "vfx_notes": "Invisible cleanup and continuity support only unless the VFX plan marks the scene.",
+      "asset_ids": [
+        "asset_location_23517bb3598a",
+        "asset_character_cb07f0f10ac8",
+        "asset_character_8cbe3fcf4f4e",
+        "asset_character_100711bd3c42"
+      ]
+    },
+    {
+      "shot_id": "shot_94b5c6b664d3",
+      "scene_id": "scene_6edee9dd6566",
+      "number": 3,
+      "duration_seconds": 11,
+      "framing": "insert",
+      "lens_mm": 40,
+      "camera_move": "crane",
+      "subject": "Alex Morgan and Mara Vale",
+      "action": "Cover beat 3 of scene 3: Complicate the sequence objective: Deliver progress while revealing a deeper cost.",
+      "lighting": "sculpted motivated lighting",
+      "audio_cue": "production dialogue, room tone, controlled Foley, and score transition",
+      "vfx_notes": "Invisible cleanup and continuity support only unless the VFX plan marks the scene.",
+      "asset_ids": [
+        "asset_location_23517bb3598a",
+        "asset_character_cb07f0f10ac8",
+        "asset_character_8cbe3fcf4f4e",
+        "asset_character_100711bd3c42"
+      ]
+    },
+    {
+      "shot_id": "shot_a25abfeb226a",
+      "scene_id": "scene_6edee9dd6566",
+      "number": 4,
+      "duration_seconds": 11,
+      "framing": "reaction",
+      "lens_mm": 75,
+      "camera_move": "orbital",
+      "subject": "Alex Morgan and Mara Vale",
+      "action": "Cover beat 4 of scene 3: Complicate the sequence objective: Deliver progress while revealing a deeper cost.",
+      "lighting": "sculpted motivated lighting",
+      "audio_cue": "production dialogue, room tone, controlled Foley, and score transition",
+      "vfx_notes": "Invisible cleanup and continuity support only unless the VFX plan marks the scene.",
+      "asset_ids": [
+        "asset_location_23517bb3598a",
+        "asset_character_cb07f0f10ac8",
+        "asset_character_8cbe3fcf4f4e",
+        "asset_character_100711bd3c42"
+      ]
+    },
+    {
+      "shot_id": "shot_7ed1d9bcdfdb",
+      "scene_id": "scene_475fc82d5f96",
+      "number": 1,
+      "duration_seconds": 12,
+      "framing": "wide master",
+      "lens_mm": 24,
+      "camera_move": "dolly",
+      "subject": "Alex Morgan and Mara Vale",
+      "action": "Cover beat 1 of scene 4: Reveal the sequence objective: Force the lowest point and a truthful reassessment.",
+      "lighting": "sculpted motivated lighting",
+      "audio_cue": "production dialogue, room tone, controlled Foley, and score transition",
+      "vfx_notes": "Invisible cleanup and continuity support only unless the VFX plan marks the scene.",
+      "asset_ids": [
+        "asset_location_dcb2158580dd",
+        "asset_character_cb07f0f10ac8",
+        "asset_character_8cbe3fcf4f4e"
+      ]
+    },
+    {
+      "shot_id": "shot_db652b8ff9e9",
+      "scene_id": "scene_475fc82d5f96",
+      "number": 2,
+      "duration_seconds": 11,
+      "framing": "medium two-shot",
+      "lens_mm": 40,
+      "camera_move": "crane",
+      "subject": "Alex Morgan and Mara Vale",
+      "action": "Cover beat 2 of scene 4: Reveal the sequence objective: Force the lowest point and a truthful reassessment.",
+      "lighting": "sculpted motivated lighting",
+      "audio_cue": "production dialogue, room tone, controlled Foley, and score transition",
+      "vfx_notes": "Invisible cleanup and continuity support only unless the VFX plan marks the scene.",
+      "asset_ids": [
+        "asset_location_dcb2158580dd",
+        "asset_character_cb07f0f10ac8",
+        "asset_character_8cbe3fcf4f4e"
+      ]
+    },
+    {
+      "shot_id": "shot_948fcc20e7c2",
+      "scene_id": "scene_475fc82d5f96",
+      "number": 3,
+      "duration_seconds": 11,
+      "framing": "medium close-up",
+      "lens_mm": 75,
+      "camera_move": "orbital",
+      "subject": "Alex Morgan and Mara Vale",
+      "action": "Cover beat 3 of scene 4: Reveal the sequence objective: Force the lowest point and a truthful reassessment.",
+      "lighting": "sculpted motivated lighting",
+      "audio_cue": "production dialogue, room tone, controlled Foley, and score transition",
+      "vfx_notes": "Invisible cleanup and continuity support only unless the VFX plan marks the scene.",
+      "asset_ids": [
+        "asset_location_dcb2158580dd",
+        "asset_character_cb07f0f10ac8",
+        "asset_character_8cbe3fcf4f4e"
+      ]
+    },
+    {
+      "shot_id": "shot_664a22a15c79",
+      "scene_id": "scene_475fc82d5f96",
+      "number": 4,
+      "duration_seconds": 11,
+      "framing": "close-up",
+      "lens_mm": 24,
+      "camera_move": "dolly",
+      "subject": "Alex Morgan and Mara Vale",
+      "action": "Cover beat 4 of scene 4: Reveal the sequence objective: Force the lowest point and a truthful reassessment.",
+      "lighting": "sculpted motivated lighting",
+      "audio_cue": "production dialogue, room tone, controlled Foley, and score transition",
+      "vfx_notes": "Invisible cleanup and continuity support only unless the VFX plan marks the scene.",
+      "asset_ids": [
+        "asset_location_dcb2158580dd",
+        "asset_character_cb07f0f10ac8",
+        "asset_character_8cbe3fcf4f4e"
+      ]
+    }
+  ],
+  "assets": [
+    {
+      "asset_id": "asset_character_cb07f0f10ac8",
+      "asset_type": "character_reference",
+      "name": "Alex Morgan",
+      "description": "Identity-locked reference for Alex Morgan: Distinct naturalistic wardrobe and silhouette.; voice and performance: Grounded, character-specific delivery.",
+      "source": "Character_brain_and_casting",
+      "status": "required",
+      "scenes": []
+    },
+    {
+      "asset_id": "asset_character_8cbe3fcf4f4e",
+      "asset_type": "character_reference",
+      "name": "Mara Vale",
+      "description": "Identity-locked reference for Mara Vale: Distinct naturalistic wardrobe and silhouette.; voice and performance: Grounded, character-specific delivery.",
+      "source": "Character_brain_and_casting",
+      "status": "required",
+      "scenes": []
+    },
+    {
+      "asset_id": "asset_character_100711bd3c42",
+      "asset_type": "character_reference",
+      "name": "Director Rowan",
+      "description": "Identity-locked reference for Director Rowan: Distinct naturalistic wardrobe and silhouette.; voice and performance: Grounded, character-specific delivery.",
+      "source": "Character_brain_and_casting",
+      "status": "required",
+      "scenes": []
+    },
+    {
+      "asset_id": "asset_location_dcb2158580dd",
+      "asset_type": "environment",
+      "name": "Primary lived-in location",
+      "description": "Photorealistic, production-designed environment with day/night and weather continuity for Primary lived-in location.",
+      "source": "World_brain_and_art_department",
+      "status": "required",
+      "scenes": [
+        "scene_bbdc11a8edc9",
+        "scene_475fc82d5f96"
+      ]
+    },
+    {
+      "asset_id": "asset_location_97ad66a446a6",
+      "asset_type": "environment",
+      "name": "Contrasting public location",
+      "description": "Photorealistic, production-designed environment with day/night and weather continuity for Contrasting public location.",
+      "source": "World_brain_and_art_department",
+      "status": "required",
+      "scenes": [
+        "scene_05524276312a"
+      ]
+    },
+    {
+      "asset_id": "asset_location_23517bb3598a",
+      "asset_type": "environment",
+      "name": "Final confrontation location",
+      "description": "Photorealistic, production-designed environment with day/night and weather continuity for Final confrontation location.",
+      "source": "World_brain_and_art_department",
+      "status": "required",
+      "scenes": [
+        "scene_6edee9dd6566"
+      ]
+    },
+    {
+      "asset_id": "asset_global_color_pipeline",
+      "asset_type": "look_development",
+      "name": "Show LUT and color pipeline",
+      "description": "ACES-managed look development, camera transform, grain, halation, and delivery trims.",
+      "source": "cinematography_department",
+      "status": "required",
+      "scenes": [
+        "scene_bbdc11a8edc9",
+        "scene_05524276312a",
+        "scene_6edee9dd6566",
+        "scene_475fc82d5f96"
+      ]
+    },
+    {
+      "asset_id": "asset_global_audio_package",
+      "asset_type": "audio",
+      "name": "Production audio and score package",
+      "description": "Dialogue, ADR, room tone, ambience, Foley, sound design, score, and final stems.",
+      "source": "sound_department",
+      "status": "required",
+      "scenes": [
+        "scene_bbdc11a8edc9",
+        "scene_05524276312a",
+        "scene_6edee9dd6566",
+        "scene_475fc82d5f96"
+      ]
+    }
+  ],
+  "audio_plan": {
+    "language": "English",
+    "delivery_layout": "5.1",
+    "dialogue": {
+      "capture": "isolated production dialogue plus room tone and controlled ADR",
+      "cast_voices": {
+        "character_5b14dca52b63": "Grounded, character-specific delivery.",
+        "character_6127a131710c": "Grounded, character-specific delivery.",
+        "character_a8f72ef0f924": "Grounded, character-specific delivery."
+      },
+      "voice_brain_used": false
+    },
+    "ambience": [
+      {
+        "scene_id": "scene_bbdc11a8edc9",
+        "bed": "continuous ambience for Primary lived-in location"
+      },
+      {
+        "scene_id": "scene_05524276312a",
+        "bed": "continuous ambience for Contrasting public location"
+      },
+      {
+        "scene_id": "scene_6edee9dd6566",
+        "bed": "continuous ambience for Final confrontation location"
+      },
+      {
+        "scene_id": "scene_475fc82d5f96",
+        "bed": "continuous ambience for Primary lived-in location"
+      }
+    ],
+    "foley": "Footsteps, cloth, handled props, impacts, and environmental interaction remain perspective-correct.",
+    "score": {
+      "approach": "Original realistic score with thematic development across three acts.",
+      "themes": [
+        "protagonist motif",
+        "conflict motif",
+        "transformation motif"
+      ],
+      "rule": "Music supports subtext and transitions; it does not mask unclear storytelling."
+    },
+    "mix": {
+      "dialogue_target_lufs": -24,
+      "true_peak_dbtp": -2,
+      "deliverables": [
+        "5.1 full mix",
+        "stereo fold-down",
+        "M&E",
+        "dialogue/music/effects stems"
+      ]
+    }
+  },
+  "vfx_plan": {
+    "complexity": "high",
+    "realism_rules": [
+      "Match lens distortion, focus, grain, motion blur, shutter, and exposure.",
+      "Use physically plausible scale, inertia, contact, reflection, and shadow.",
+      "Maintain character identity, wardrobe, anatomy, and environment continuity.",
+      "Prefer invisible effects and practical reference whenever possible."
+    ],
+    "scene_work": [
+      {
+        "scene_id": "scene_bbdc11a8edc9",
+        "work": [
+          "cleanup",
+          "screen replacement",
+          "continuity polish"
+        ]
+      },
+      {
+        "scene_id": "scene_05524276312a",
+        "work": [
+          "cleanup",
+          "screen replacement",
+          "continuity polish"
+        ]
+      },
+      {
+        "scene_id": "scene_6edee9dd6566",
+        "work": [
+          "cleanup",
+          "screen replacement",
+          "continuity polish",
+          "environment extension",
+          "simulation or creature pass"
+        ]
+      },
+      {
+        "scene_id": "scene_475fc82d5f96",
+        "work": [
+          "cleanup",
+          "screen replacement",
+          "continuity polish"
+        ]
+      }
+    ],
+    "quality_gates": [
+      "plate match",
+      "animation",
+      "lighting",
+      "composite",
+      "color",
+      "final pixel review"
+    ]
+  },
+  "production_plan": {
+    "cinematography": {
+      "capture_intent": "photorealistic",
+      "camera_system": "large-format digital cinema camera with production-matched virtual camera",
+      "lenses_mm": [
+        24,
+        40,
+        75
+      ],
+      "camera_movements": [
+        "dolly",
+        "crane",
+        "orbital"
+      ],
+      "lighting_contrast": "sculpted",
+      "lighting_rule": "Every key light is motivated by a practical, window, sky, flame, or production source.",
+      "exposure_rule": "Protect skin tone and highlight texture; avoid synthetic clipped highlights.",
+      "depth_rule": "Use depth of field to direct attention without erasing production design.",
+      "continuity_rule": "Preserve sun direction, color temperature, weather, lens logic, and screen direction.",
+      "world_reference": "Layered practical sets, motivated lighting, physically plausible materials, and lived-in detail.",
+      "delivery": {
+        "resolution": "3840x2160",
+        "frame_rate": 24.0,
+        "aspect_ratio": "2.39:1",
+        "color_space": "ACEScg",
+        "delivery_codec": "ProRes 422 HQ",
+        "audio_layout": "5.1"
+      }
+    },
+    "continuity": {
+      "character_bibles": {
+        "character_5b14dca52b63": {
+          "name": "Alex Morgan",
+          "appearance": "Distinct naturalistic wardrobe and silhouette.",
+          "voice": "Grounded, character-specific delivery.",
+          "continuity": {}
+        },
+        "character_6127a131710c": {
+          "name": "Mara Vale",
+          "appearance": "Distinct naturalistic wardrobe and silhouette.",
+          "voice": "Grounded, character-specific delivery.",
+          "continuity": {}
+        },
+        "character_a8f72ef0f924": {
+          "name": "Director Rowan",
+          "appearance": "Distinct naturalistic wardrobe and silhouette.",
+          "voice": "Grounded, character-specific delivery.",
+          "continuity": {}
+        }
+      },
+      "scene_transitions": [
+        {
+          "from": "scene_bbdc11a8edc9",
+          "to": "scene_05524276312a",
+          "carry": [
+            "decision_pressure_for_scene_2"
+          ],
+          "receive": [
+            "emotional_state_from_scene_1"
+          ]
+        },
+        {
+          "from": "scene_05524276312a",
+          "to": "scene_6edee9dd6566",
+          "carry": [
+            "decision_pressure_for_scene_3"
+          ],
+          "receive": [
+            "emotional_state_from_scene_2"
+          ]
+        },
+        {
+          "from": "scene_6edee9dd6566",
+          "to": "scene_475fc82d5f96",
+          "carry": [
+            "decision_pressure_for_scene_4"
+          ],
+          "receive": [
+            "emotional_state_from_scene_3"
+          ]
+        }
+      ],
+      "tracked_departments": [
+        "cast performance",
+        "wardrobe",
+        "hair and makeup",
+        "props",
+        "set dressing",
+        "weather",
+        "time of day",
+        "damage",
+        "screen direction",
+        "camera and lens",
+        "sound perspective"
+      ],
+      "issues": [],
+      "passed": true
+    },
+    "safety": {
+      "safe_to_plan": true,
+      "blocked": false,
+      "reason": null,
+      "content_rating_required": true,
+      "production_rules": [
+        "Use qualified coordinators for stunts, intimacy, weapons, water, fire, animals, and minors.",
+        "Do not impersonate real people or use protected likenesses without authorization.",
+        "Do not present synthetic footage as documentary evidence of a real event.",
+        "Record asset licenses, releases, consent, and provenance."
+      ],
+      "prompt_received": true
+    },
+    "budget": {
+      "currency": "USD",
+      "planning_estimate": 1128800,
+      "range": {
+        "low": 812736,
+        "high": 1636760
+      },
+      "department_allocations": {
+        "development_and_writing": 45152,
+        "cast": 135456,
+        "production_staff": 169320,
+        "locations_and_art": 158032,
+        "camera_grip_and_lighting": 112880,
+        "sound_and_music": 67728,
+        "vfx_and_virtual_production": 203184,
+        "editorial_color_and_delivery": 101592,
+        "insurance_legal_and_safety": 45152,
+        "contingency": 90304
+      },
+      "assumptions": [
+        "High-end photorealistic production or equivalent synthetic production quality.",
+        "Final cost depends on cast, locations, rights, vendors, render volume, and revision count.",
+        "This is a planning estimate, not a quote or financing representation."
+      ]
+    },
+    "schedule": {
+      "preproduction_weeks": 4,
+      "principal_photography_days": 3,
+      "postproduction_weeks": 6,
+      "estimated_total_weeks": 11,
+      "phases": [
+        {
+          "name": "development",
+          "deliverables": [
+            "approved brief",
+            "screenplay",
+            "rights and research audit"
+          ]
+        },
+        {
+          "name": "preproduction",
+          "deliverables": [
+            "cast",
+            "locations",
+            "assets",
+            "storyboards",
+            "safety plans"
+          ]
+        },
+        {
+          "name": "production",
+          "deliverables": [
+            "picture",
+            "production audio",
+            "metadata",
+            "continuity reports"
+          ]
+        },
+        {
+          "name": "postproduction",
+          "deliverables": [
+            "edit",
+            "VFX",
+            "sound",
+            "music",
+            "color",
+            "captions"
+          ]
+        },
+        {
+          "name": "delivery",
+          "deliverables": [
+            "master",
+            "stems",
+            "textless",
+            "archive",
+            "provenance record"
+          ]
+        }
+      ],
+      "duration_target_seconds": 180
+    }
+  },
+  "render_manifest": {
+    "schema_version": 1,
+    "provider_neutral": true,
+    "target_duration_seconds": 180,
+    "render_profile": {
+      "resolution": "3840x2160",
+      "frame_rate": 24.0,
+      "aspect_ratio": "2.39:1",
+      "color_space": "ACEScg",
+      "delivery_codec": "ProRes 422 HQ",
+      "audio_layout": "5.1"
+    },
+    "cinematography": {
+      "capture_intent": "photorealistic",
+      "camera_system": "large-format digital cinema camera with production-matched virtual camera",
+      "lenses_mm": [
+        24,
+        40,
+        75
+      ],
+      "camera_movements": [
+        "dolly",
+        "crane",
+        "orbital"
+      ],
+      "lighting_contrast": "sculpted",
+      "lighting_rule": "Every key light is motivated by a practical, window, sky, flame, or production source.",
+      "exposure_rule": "Protect skin tone and highlight texture; avoid synthetic clipped highlights.",
+      "depth_rule": "Use depth of field to direct attention without erasing production design.",
+      "continuity_rule": "Preserve sun direction, color temperature, weather, lens logic, and screen direction.",
+      "world_reference": "Layered practical sets, motivated lighting, physically plausible materials, and lived-in detail.",
+      "delivery": {
+        "resolution": "3840x2160",
+        "frame_rate": 24.0,
+        "aspect_ratio": "2.39:1",
+        "color_space": "ACEScg",
+        "delivery_codec": "ProRes 422 HQ",
+        "audio_layout": "5.1"
+      }
+    },
+    "jobs": [
+      {
+        "job_id": "render_ea77f5c4ae75",
+        "shot_id": "shot_e64e1e262f3c",
+        "duration_seconds": 12,
+        "prompt": "Photorealistic high-budget cinema shot. wide master, 24mm lens, dolly. Subject: Alex Morgan and Mara Vale. Action: Cover beat 1 of scene 1: Establish the sequence objective: Establish ordinary life and the dramatic question.. Location: Primary lived-in location, DAWN. Lighting: sculpted motivated lighting. Preserve identity, wardrobe, props, weather, screen direction, and physical continuity. References: Primary lived-in location, Alex Morgan, Mara Vale.",
+        "negative_prompt": "identity drift, anatomy errors, extra limbs, warped hands, floating objects, incorrect reflections, inconsistent wardrobe, text artifacts, temporal flicker, camera teleportation, synthetic plastic skin, crushed highlights",
+        "reference_assets": [
+          "asset_location_dcb2158580dd",
+          "asset_character_cb07f0f10ac8",
+          "asset_character_8cbe3fcf4f4e"
+        ],
+        "output_file": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00001_shot_e64e1e262f3c.mov",
+        "status": "pending"
+      },
+      {
+        "job_id": "render_813d68e11031",
+        "shot_id": "shot_faa15288f858",
+        "duration_seconds": 11,
+        "prompt": "Photorealistic high-budget cinema shot. medium two-shot, 40mm lens, crane. Subject: Alex Morgan and Mara Vale. Action: Cover beat 2 of scene 1: Establish the sequence objective: Establish ordinary life and the dramatic question.. Location: Primary lived-in location, DAWN. Lighting: sculpted motivated lighting. Preserve identity, wardrobe, props, weather, screen direction, and physical continuity. References: Primary lived-in location, Alex Morgan, Mara Vale.",
+        "negative_prompt": "identity drift, anatomy errors, extra limbs, warped hands, floating objects, incorrect reflections, inconsistent wardrobe, text artifacts, temporal flicker, camera teleportation, synthetic plastic skin, crushed highlights",
+        "reference_assets": [
+          "asset_location_dcb2158580dd",
+          "asset_character_cb07f0f10ac8",
+          "asset_character_8cbe3fcf4f4e"
+        ],
+        "output_file": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00002_shot_faa15288f858.mov",
+        "status": "pending"
+      },
+      {
+        "job_id": "render_c360d86e495e",
+        "shot_id": "shot_6f1986486edf",
+        "duration_seconds": 11,
+        "prompt": "Photorealistic high-budget cinema shot. medium close-up, 75mm lens, orbital. Subject: Alex Morgan and Mara Vale. Action: Cover beat 3 of scene 1: Establish the sequence objective: Establish ordinary life and the dramatic question.. Location: Primary lived-in location, DAWN. Lighting: sculpted motivated lighting. Preserve identity, wardrobe, props, weather, screen direction, and physical continuity. References: Primary lived-in location, Alex Morgan, Mara Vale.",
+        "negative_prompt": "identity drift, anatomy errors, extra limbs, warped hands, floating objects, incorrect reflections, inconsistent wardrobe, text artifacts, temporal flicker, camera teleportation, synthetic plastic skin, crushed highlights",
+        "reference_assets": [
+          "asset_location_dcb2158580dd",
+          "asset_character_cb07f0f10ac8",
+          "asset_character_8cbe3fcf4f4e"
+        ],
+        "output_file": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00003_shot_6f1986486edf.mov",
+        "status": "pending"
+      },
+      {
+        "job_id": "render_814bb0b199fe",
+        "shot_id": "shot_d34155d81429",
+        "duration_seconds": 11,
+        "prompt": "Photorealistic high-budget cinema shot. close-up, 24mm lens, dolly. Subject: Alex Morgan and Mara Vale. Action: Cover beat 4 of scene 1: Establish the sequence objective: Establish ordinary life and the dramatic question.. Location: Primary lived-in location, DAWN. Lighting: sculpted motivated lighting. Preserve identity, wardrobe, props, weather, screen direction, and physical continuity. References: Primary lived-in location, Alex Morgan, Mara Vale.",
+        "negative_prompt": "identity drift, anatomy errors, extra limbs, warped hands, floating objects, incorrect reflections, inconsistent wardrobe, text artifacts, temporal flicker, camera teleportation, synthetic plastic skin, crushed highlights",
+        "reference_assets": [
+          "asset_location_dcb2158580dd",
+          "asset_character_cb07f0f10ac8",
+          "asset_character_8cbe3fcf4f4e"
+        ],
+        "output_file": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00004_shot_d34155d81429.mov",
+        "status": "pending"
+      },
+      {
+        "job_id": "render_2a4220ef2b13",
+        "shot_id": "shot_dcdc04d30ea8",
+        "duration_seconds": 12,
+        "prompt": "Photorealistic high-budget cinema shot. insert, 40mm lens, crane. Subject: Alex Morgan and Mara Vale. Action: Cover beat 1 of scene 2: Investigate the sequence objective: Establish ordinary life and the dramatic question.. Location: Contrasting public location, DAY. Lighting: sculpted motivated lighting. Preserve identity, wardrobe, props, weather, screen direction, and physical continuity. References: Contrasting public location, Alex Morgan, Mara Vale.",
+        "negative_prompt": "identity drift, anatomy errors, extra limbs, warped hands, floating objects, incorrect reflections, inconsistent wardrobe, text artifacts, temporal flicker, camera teleportation, synthetic plastic skin, crushed highlights",
+        "reference_assets": [
+          "asset_location_97ad66a446a6",
+          "asset_character_cb07f0f10ac8",
+          "asset_character_8cbe3fcf4f4e"
+        ],
+        "output_file": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00005_shot_dcdc04d30ea8.mov",
+        "status": "pending"
+      },
+      {
+        "job_id": "render_fa739be91cb2",
+        "shot_id": "shot_e7b0d4747446",
+        "duration_seconds": 11,
+        "prompt": "Photorealistic high-budget cinema shot. reaction, 75mm lens, orbital. Subject: Alex Morgan and Mara Vale. Action: Cover beat 2 of scene 2: Investigate the sequence objective: Establish ordinary life and the dramatic question.. Location: Contrasting public location, DAY. Lighting: sculpted motivated lighting. Preserve identity, wardrobe, props, weather, screen direction, and physical continuity. References: Contrasting public location, Alex Morgan, Mara Vale.",
+        "negative_prompt": "identity drift, anatomy errors, extra limbs, warped hands, floating objects, incorrect reflections, inconsistent wardrobe, text artifacts, temporal flicker, camera teleportation, synthetic plastic skin, crushed highlights",
+        "reference_assets": [
+          "asset_location_97ad66a446a6",
+          "asset_character_cb07f0f10ac8",
+          "asset_character_8cbe3fcf4f4e"
+        ],
+        "output_file": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00006_shot_e7b0d4747446.mov",
+        "status": "pending"
+      },
+      {
+        "job_id": "render_7daec862d98f",
+        "shot_id": "shot_14c516616001",
+        "duration_seconds": 11,
+        "prompt": "Photorealistic high-budget cinema shot. wide master, 24mm lens, dolly. Subject: Alex Morgan and Mara Vale. Action: Cover beat 3 of scene 2: Investigate the sequence objective: Establish ordinary life and the dramatic question.. Location: Contrasting public location, DAY. Lighting: sculpted motivated lighting. Preserve identity, wardrobe, props, weather, screen direction, and physical continuity. References: Contrasting public location, Alex Morgan, Mara Vale.",
+        "negative_prompt": "identity drift, anatomy errors, extra limbs, warped hands, floating objects, incorrect reflections, inconsistent wardrobe, text artifacts, temporal flicker, camera teleportation, synthetic plastic skin, crushed highlights",
+        "reference_assets": [
+          "asset_location_97ad66a446a6",
+          "asset_character_cb07f0f10ac8",
+          "asset_character_8cbe3fcf4f4e"
+        ],
+        "output_file": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00007_shot_14c516616001.mov",
+        "status": "pending"
+      },
+      {
+        "job_id": "render_f0a3c41dec09",
+        "shot_id": "shot_fe9ad55e00e2",
+        "duration_seconds": 11,
+        "prompt": "Photorealistic high-budget cinema shot. medium two-shot, 40mm lens, crane. Subject: Alex Morgan and Mara Vale. Action: Cover beat 4 of scene 2: Investigate the sequence objective: Establish ordinary life and the dramatic question.. Location: Contrasting public location, DAY. Lighting: sculpted motivated lighting. Preserve identity, wardrobe, props, weather, screen direction, and physical continuity. References: Contrasting public location, Alex Morgan, Mara Vale.",
+        "negative_prompt": "identity drift, anatomy errors, extra limbs, warped hands, floating objects, incorrect reflections, inconsistent wardrobe, text artifacts, temporal flicker, camera teleportation, synthetic plastic skin, crushed highlights",
+        "reference_assets": [
+          "asset_location_97ad66a446a6",
+          "asset_character_cb07f0f10ac8",
+          "asset_character_8cbe3fcf4f4e"
+        ],
+        "output_file": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00008_shot_fe9ad55e00e2.mov",
+        "status": "pending"
+      },
+      {
+        "job_id": "render_92246014c119",
+        "shot_id": "shot_160112990457",
+        "duration_seconds": 12,
+        "prompt": "Photorealistic high-budget cinema shot. medium close-up, 75mm lens, orbital. Subject: Alex Morgan and Mara Vale. Action: Cover beat 1 of scene 3: Complicate the sequence objective: Deliver progress while revealing a deeper cost.. Location: Final confrontation location, LATE AFTERNOON. Lighting: sculpted motivated lighting. Preserve identity, wardrobe, props, weather, screen direction, and physical continuity. References: Final confrontation location, Alex Morgan, Mara Vale, Director Rowan.",
+        "negative_prompt": "identity drift, anatomy errors, extra limbs, warped hands, floating objects, incorrect reflections, inconsistent wardrobe, text artifacts, temporal flicker, camera teleportation, synthetic plastic skin, crushed highlights",
+        "reference_assets": [
+          "asset_location_23517bb3598a",
+          "asset_character_cb07f0f10ac8",
+          "asset_character_8cbe3fcf4f4e",
+          "asset_character_100711bd3c42"
+        ],
+        "output_file": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00009_shot_160112990457.mov",
+        "status": "pending"
+      },
+      {
+        "job_id": "render_be726bf932af",
+        "shot_id": "shot_7f2cce6d7c22",
+        "duration_seconds": 11,
+        "prompt": "Photorealistic high-budget cinema shot. close-up, 24mm lens, dolly. Subject: Alex Morgan and Mara Vale. Action: Cover beat 2 of scene 3: Complicate the sequence objective: Deliver progress while revealing a deeper cost.. Location: Final confrontation location, LATE AFTERNOON. Lighting: sculpted motivated lighting. Preserve identity, wardrobe, props, weather, screen direction, and physical continuity. References: Final confrontation location, Alex Morgan, Mara Vale, Director Rowan.",
+        "negative_prompt": "identity drift, anatomy errors, extra limbs, warped hands, floating objects, incorrect reflections, inconsistent wardrobe, text artifacts, temporal flicker, camera teleportation, synthetic plastic skin, crushed highlights",
+        "reference_assets": [
+          "asset_location_23517bb3598a",
+          "asset_character_cb07f0f10ac8",
+          "asset_character_8cbe3fcf4f4e",
+          "asset_character_100711bd3c42"
+        ],
+        "output_file": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00010_shot_7f2cce6d7c22.mov",
+        "status": "pending"
+      },
+      {
+        "job_id": "render_cb961b076c25",
+        "shot_id": "shot_94b5c6b664d3",
+        "duration_seconds": 11,
+        "prompt": "Photorealistic high-budget cinema shot. insert, 40mm lens, crane. Subject: Alex Morgan and Mara Vale. Action: Cover beat 3 of scene 3: Complicate the sequence objective: Deliver progress while revealing a deeper cost.. Location: Final confrontation location, LATE AFTERNOON. Lighting: sculpted motivated lighting. Preserve identity, wardrobe, props, weather, screen direction, and physical continuity. References: Final confrontation location, Alex Morgan, Mara Vale, Director Rowan.",
+        "negative_prompt": "identity drift, anatomy errors, extra limbs, warped hands, floating objects, incorrect reflections, inconsistent wardrobe, text artifacts, temporal flicker, camera teleportation, synthetic plastic skin, crushed highlights",
+        "reference_assets": [
+          "asset_location_23517bb3598a",
+          "asset_character_cb07f0f10ac8",
+          "asset_character_8cbe3fcf4f4e",
+          "asset_character_100711bd3c42"
+        ],
+        "output_file": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00011_shot_94b5c6b664d3.mov",
+        "status": "pending"
+      },
+      {
+        "job_id": "render_1b47db4cdbb9",
+        "shot_id": "shot_a25abfeb226a",
+        "duration_seconds": 11,
+        "prompt": "Photorealistic high-budget cinema shot. reaction, 75mm lens, orbital. Subject: Alex Morgan and Mara Vale. Action: Cover beat 4 of scene 3: Complicate the sequence objective: Deliver progress while revealing a deeper cost.. Location: Final confrontation location, LATE AFTERNOON. Lighting: sculpted motivated lighting. Preserve identity, wardrobe, props, weather, screen direction, and physical continuity. References: Final confrontation location, Alex Morgan, Mara Vale, Director Rowan.",
+        "negative_prompt": "identity drift, anatomy errors, extra limbs, warped hands, floating objects, incorrect reflections, inconsistent wardrobe, text artifacts, temporal flicker, camera teleportation, synthetic plastic skin, crushed highlights",
+        "reference_assets": [
+          "asset_location_23517bb3598a",
+          "asset_character_cb07f0f10ac8",
+          "asset_character_8cbe3fcf4f4e",
+          "asset_character_100711bd3c42"
+        ],
+        "output_file": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00012_shot_a25abfeb226a.mov",
+        "status": "pending"
+      },
+      {
+        "job_id": "render_882b5fc5f832",
+        "shot_id": "shot_7ed1d9bcdfdb",
+        "duration_seconds": 12,
+        "prompt": "Photorealistic high-budget cinema shot. wide master, 24mm lens, dolly. Subject: Alex Morgan and Mara Vale. Action: Cover beat 1 of scene 4: Reveal the sequence objective: Force the lowest point and a truthful reassessment.. Location: Primary lived-in location, NIGHT. Lighting: sculpted motivated lighting. Preserve identity, wardrobe, props, weather, screen direction, and physical continuity. References: Primary lived-in location, Alex Morgan, Mara Vale.",
+        "negative_prompt": "identity drift, anatomy errors, extra limbs, warped hands, floating objects, incorrect reflections, inconsistent wardrobe, text artifacts, temporal flicker, camera teleportation, synthetic plastic skin, crushed highlights",
+        "reference_assets": [
+          "asset_location_dcb2158580dd",
+          "asset_character_cb07f0f10ac8",
+          "asset_character_8cbe3fcf4f4e"
+        ],
+        "output_file": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00013_shot_7ed1d9bcdfdb.mov",
+        "status": "pending"
+      },
+      {
+        "job_id": "render_a61959b7b33e",
+        "shot_id": "shot_db652b8ff9e9",
+        "duration_seconds": 11,
+        "prompt": "Photorealistic high-budget cinema shot. medium two-shot, 40mm lens, crane. Subject: Alex Morgan and Mara Vale. Action: Cover beat 2 of scene 4: Reveal the sequence objective: Force the lowest point and a truthful reassessment.. Location: Primary lived-in location, NIGHT. Lighting: sculpted motivated lighting. Preserve identity, wardrobe, props, weather, screen direction, and physical continuity. References: Primary lived-in location, Alex Morgan, Mara Vale.",
+        "negative_prompt": "identity drift, anatomy errors, extra limbs, warped hands, floating objects, incorrect reflections, inconsistent wardrobe, text artifacts, temporal flicker, camera teleportation, synthetic plastic skin, crushed highlights",
+        "reference_assets": [
+          "asset_location_dcb2158580dd",
+          "asset_character_cb07f0f10ac8",
+          "asset_character_8cbe3fcf4f4e"
+        ],
+        "output_file": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00014_shot_db652b8ff9e9.mov",
+        "status": "pending"
+      },
+      {
+        "job_id": "render_30a6ac7071ea",
+        "shot_id": "shot_948fcc20e7c2",
+        "duration_seconds": 11,
+        "prompt": "Photorealistic high-budget cinema shot. medium close-up, 75mm lens, orbital. Subject: Alex Morgan and Mara Vale. Action: Cover beat 3 of scene 4: Reveal the sequence objective: Force the lowest point and a truthful reassessment.. Location: Primary lived-in location, NIGHT. Lighting: sculpted motivated lighting. Preserve identity, wardrobe, props, weather, screen direction, and physical continuity. References: Primary lived-in location, Alex Morgan, Mara Vale.",
+        "negative_prompt": "identity drift, anatomy errors, extra limbs, warped hands, floating objects, incorrect reflections, inconsistent wardrobe, text artifacts, temporal flicker, camera teleportation, synthetic plastic skin, crushed highlights",
+        "reference_assets": [
+          "asset_location_dcb2158580dd",
+          "asset_character_cb07f0f10ac8",
+          "asset_character_8cbe3fcf4f4e"
+        ],
+        "output_file": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00015_shot_948fcc20e7c2.mov",
+        "status": "pending"
+      },
+      {
+        "job_id": "render_3420e365f54f",
+        "shot_id": "shot_664a22a15c79",
+        "duration_seconds": 11,
+        "prompt": "Photorealistic high-budget cinema shot. close-up, 24mm lens, dolly. Subject: Alex Morgan and Mara Vale. Action: Cover beat 4 of scene 4: Reveal the sequence objective: Force the lowest point and a truthful reassessment.. Location: Primary lived-in location, NIGHT. Lighting: sculpted motivated lighting. Preserve identity, wardrobe, props, weather, screen direction, and physical continuity. References: Primary lived-in location, Alex Morgan, Mara Vale.",
+        "negative_prompt": "identity drift, anatomy errors, extra limbs, warped hands, floating objects, incorrect reflections, inconsistent wardrobe, text artifacts, temporal flicker, camera teleportation, synthetic plastic skin, crushed highlights",
+        "reference_assets": [
+          "asset_location_dcb2158580dd",
+          "asset_character_cb07f0f10ac8",
+          "asset_character_8cbe3fcf4f4e"
+        ],
+        "output_file": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00016_shot_664a22a15c79.mov",
+        "status": "pending"
+      }
+    ],
+    "assembly": {
+      "picture_sequence": [
+        "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00001_shot_e64e1e262f3c.mov",
+        "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00002_shot_faa15288f858.mov",
+        "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00003_shot_6f1986486edf.mov",
+        "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00004_shot_d34155d81429.mov",
+        "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00005_shot_dcdc04d30ea8.mov",
+        "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00006_shot_e7b0d4747446.mov",
+        "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00007_shot_14c516616001.mov",
+        "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00008_shot_fe9ad55e00e2.mov",
+        "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00009_shot_160112990457.mov",
+        "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00010_shot_7f2cce6d7c22.mov",
+        "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00011_shot_94b5c6b664d3.mov",
+        "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00012_shot_a25abfeb226a.mov",
+        "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00013_shot_7ed1d9bcdfdb.mov",
+        "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00014_shot_db652b8ff9e9.mov",
+        "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00015_shot_948fcc20e7c2.mov",
+        "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00016_shot_664a22a15c79.mov"
+      ],
+      "audio_master": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\audio\\final_mix.wav",
+      "subtitle_file": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\captions\\captions.srt",
+      "final_master": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\the_last_signal_9e79c057_master.mov",
+      "viewing_copy": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\the_last_signal_9e79c057_viewing_copy.mp4",
+      "animatic_preview": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\the_last_signal_9e79c057_animatic.mp4"
+    }
+  },
+  "validation": {
+    "passed": true,
+    "score": 100,
+    "checks": {
+      "duration_within_limit": true,
+      "scene_duration_exact": true,
+      "shot_duration_exact": true,
+      "all_scenes_have_shots": true,
+      "render_jobs_cover_shots": true,
+      "creative_brain_considered": true,
+      "continuity_passed": true
+    },
+    "errors": [],
+    "warnings": [],
+    "target_duration_seconds": 180,
+    "scene_duration_seconds": 180,
+    "shot_duration_seconds": 180
+  },
+  "source_receipts": {
+    "brains_considered": [
+      "Creative_brain"
+    ],
+    "usable_brains": [
+      "Creative_brain"
+    ],
+    "knowledge_items_considered": 0,
+    "used_lazy_indexed_context": false
+  }
+}

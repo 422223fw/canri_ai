@@ -27,6 +27,7 @@ INTERNAL_BRAINS = {
 DOMAIN_OWNERS = {
     "code": ["Code_brain", "Technology_brain"],
     "math": ["Math_brain"],
+    "movie": ["Movie_brain", "Creative_brain", "Story_brain", "Character_brain", "World_brain"],
     "story": ["Story_brain", "Creative_brain", "Character_brain", "World_brain"],
     "science": ["Science_brain", "Research_brain", "Fact_Check_brain"],
     "knowledge": ["Research_brain", "Fact_Check_brain"],
@@ -61,6 +62,7 @@ OUTPUT_FIELDS = (
     "local_matches",
     "image_file",
     "generated_image_prompt",
+    "movie_project",
 )
 
 FACTUAL_DOMAINS = {
@@ -360,6 +362,8 @@ class CognitiveWorkspace:
             return ["Math_brain"]
         if any(term in text for term in ["story", "character", "chapter", "sentence"]):
             return ["Story_brain", "Creative_brain"]
+        if any(term in text for term in ["movie", "film", "screenplay", "cinematography", "shot list"]):
+            return ["Movie_brain"]
         return owners[:4]
 
     def _requirements(self, contract, previous, owners):
@@ -473,6 +477,16 @@ class CognitiveWorkspace:
             sum(marker in lowered for marker in INTERNAL_REPORT_MARKERS[:3]) >= 2
             or any(marker in lowered for marker in INTERNAL_REPORT_MARKERS[3:])
         )
+
+    def _looks_like_unusable_capability_notice(self, text):
+        lowered = str(text or "").strip().lower()
+        return any(marker in lowered for marker in [
+            "no visual or file attachments were found",
+            "no image attachment was found",
+            "no audio attachment was found",
+            "nothing was attached to inspect",
+            "cannot inspect without an attachment",
+        ])
 
     def _candidate_checks(self, brain_name, requirements, checks, text):
         passed = 0
@@ -595,11 +609,18 @@ class CognitiveWorkspace:
             if self._looks_internal(text):
                 score -= 100.0
                 reasons.append("contains internal process report")
+            if self._looks_like_unusable_capability_notice(text):
+                score -= 120.0
+                reasons.append("reports missing media instead of answering the text request")
 
             candidates.append({
                 "brain": brain_name,
                 "score": round(score, 3),
-                "usable": score > 0 and not self._looks_internal(text),
+                "usable": (
+                    score > 0
+                    and not self._looks_internal(text)
+                    and not self._looks_like_unusable_capability_notice(text)
+                ),
                 "output_field": field,
                 "output_characters": len(text),
                 "confidence": result.get("confidence"),

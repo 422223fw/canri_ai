@@ -754,7 +754,21 @@ class ManagerBrain:
 
         domain_rules = [
             ("code", ["code", "program", "python", "javascript", "java", "function", "api", "json"]),
-            ("science", ["science", "physics", "chemistry", "biology", "article", "experiment", "photosynthesis", "dna", "genetics", "evolution", "ecosystem", "water cycle", "volcano", "immune system", "electric current", "sound wave", "climate", "atom", "atoms"]),
+            ("movie", [
+                "movie", "film", "feature film", "short film", "screenplay",
+                "cinematography", "shot list", "movie production", "render movie",
+                "create movie", "make movie", "generate movie",
+                "\u05e1\u05e8\u05d8", "\u05e7\u05d5\u05dc\u05e0\u05d5\u05e2", "\u05ea\u05e1\u05e8\u05d9\u05d8"
+            ]),
+            ("science", [
+                "science", "physics", "chemistry", "biology", "article", "experiment",
+                "photosynthesis", "dna", "genetics", "evolution", "ecosystem",
+                "water cycle", "volcano", "immune system", "electric current",
+                "sound wave", "climate", "atom", "atoms", "gravity",
+                "cellular respiration", "plate tectonics", "natural selection",
+                "nervous system", "chemical bond", "carbon cycle", "vaccine",
+                "phases of the moon", "renewable energy", "ocean current",
+            ]),
             ("language", ["language", "translation", "translate", "grammar", "synonym", "antonym"]),
             ("geography", ["geography", "country", "city", "capital", "map", "gps", "river", "mountain"]),
             ("technology", [
@@ -913,6 +927,9 @@ class ManagerBrain:
         if intent == "image_generation" or topic == "image_generation":
             return "image_generation"
 
+        if intent == "movie_creation" or topic == "movie":
+            return "movie"
+
         if intent == "story_creation" or topic == "story":
             return "story"
 
@@ -966,6 +983,7 @@ class ManagerBrain:
         specialist_map = {
             "code": "Code_brain",
             "math": "Math_brain",
+            "movie": "Movie_brain",
             "story": "Story_brain",
             "image_generation": "Image_brain",
             "voice": "Voice_brain",
@@ -985,6 +1003,12 @@ class ManagerBrain:
             supporting.extend(["Research_brain", "Fact_Check_brain"])
         if primary == "story":
             supporting.extend(["Creative_brain", "Character_brain", "World_brain"])
+        if primary == "movie":
+            supporting.extend([
+                "Creative_brain", "Story_brain", "Character_brain", "World_brain",
+                "Image_brain", "Voice_brain", "Technology_brain", "Planner_brain",
+                "Quality_Control_brain"
+            ])
         if primary == "code":
             if intent != "code_analysis":
                 supporting.append("Planner_brain")
@@ -1051,6 +1075,17 @@ class ManagerBrain:
                 if domain in domain_set or domain in {"story", "creative"}
             ]
 
+        if primary == "movie":
+            ordered = [
+                "movie", "creative", "story", "image_generation", "voice",
+                "technology", "science", "research", "security", "memory_context"
+            ]
+            return [
+                domain
+                for domain in ordered
+                if domain in domain_set or domain in {"movie", "creative", "story"}
+            ]
+
         if primary == "image_generation":
             return [
                 domain
@@ -1090,17 +1125,17 @@ class ManagerBrain:
         ]
         requirement_count = len(contract.get("requirements", [])) if isinstance(contract, dict) else 0
         high_detail_request = (
-            primary in {"code", "planning", "knowledge", "science", "technology"}
+            primary in {"code", "planning", "knowledge", "science", "technology", "movie"}
             and requirement_count >= 6
         )
         needs_collaboration = len(central_domains) > 1 or high_detail_request
         needs_planner = (
             (primary == "code" and intent != "code_analysis")
-            or primary in {"game", "planning"}
+            or primary in {"game", "planning", "movie"}
             or needs_collaboration
         )
         needs_fact_check = primary in {
-            "knowledge", "science", "geography", "technology", "history"
+            "knowledge", "science", "geography", "technology", "history", "movie"
         }
 
         phases = [
@@ -1119,6 +1154,10 @@ class ManagerBrain:
             {
                 "phase": "domain_experts",
                 "brains": []
+            },
+            {
+                "phase": "movie_synthesis",
+                "brains": ["Movie_brain"] if "movie" in domains else []
             },
             {
                 "phase": "neural_integration",
@@ -1230,6 +1269,22 @@ class ManagerBrain:
                 "Voice_brain",
                 "Vision_brain",
                 "Security_brain"
+            ])
+
+        if "movie" in domains:
+            core.extend([
+                "Research_brain",
+                "Reasoning_brain",
+                "Planner_brain"
+            ])
+            experts.extend([
+                "Creative_brain",
+                "Character_brain",
+                "World_brain",
+                "Story_brain",
+                "Image_brain",
+                "Voice_brain",
+                "Technology_brain"
             ])
 
         if "emotion" in domains:

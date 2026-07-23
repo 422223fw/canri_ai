@@ -2498,6 +2498,77 @@ class CodeBrain:
             ],
         }
 
+    def build_delivery_explanation(self, result):
+
+        result = result if isinstance(result, dict) else {}
+        program_kind = str(result.get("program_kind") or result.get("task_type") or "program")
+        program_kind = program_kind.replace("_", " ")
+        project_files = self.project_reviewer.normalize_files(result.get("project_files"))
+        code = str(result.get("generated_code") or "")
+        review = result.get("self_review", {})
+        alignment = review.get("request_alignment", {}) if isinstance(review, dict) else {}
+
+        implemented = []
+        for check in alignment.get("checks", []) if isinstance(alignment, dict) else []:
+            if not isinstance(check, dict) or not check.get("passed"):
+                continue
+            label = check.get("requirement") or check.get("feature") or check.get("id")
+            if label:
+                implemented.append(str(label).replace("_", " "))
+
+        structure = []
+        data_files = []
+        if project_files:
+            structure.append(f"Multi-file project with {len(project_files)} files")
+            structure.extend(str(path) for path in list(project_files)[:8])
+        elif code:
+            try:
+                tree = ast.parse(code)
+                functions = [
+                    node.name for node in tree.body
+                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                ]
+                classes = [node.name for node in tree.body if isinstance(node, ast.ClassDef)]
+                if classes:
+                    structure.append("Classes: " + ", ".join(classes[:8]))
+                if functions:
+                    structure.append("Functions: " + ", ".join(functions[:12]))
+            except (SyntaxError, ValueError):
+                pass
+            data_files = list(dict.fromkeys(
+                re.findall(r"[A-Za-z0-9_.-]+\.(?:jsonl?|csv|txt|db|sqlite)", code, re.I)
+            ))[:8]
+
+        scorecard = result.get("code_quality_scorecard", {})
+        metrics = result.get("code_metrics", {})
+        validation = {
+            "syntax_valid": metrics.get("syntax_valid") if isinstance(metrics, dict) else None,
+            "ready": review.get("ready") if isinstance(review, dict) else None,
+            "coverage": alignment.get("coverage") if isinstance(alignment, dict) else None,
+            "quality_score": scorecard.get("overall_score") if isinstance(scorecard, dict) else None,
+            "validation_scope": "static syntax, request coverage, completeness, safety patterns, and structure",
+        }
+
+        language = str(result.get("language") or "python").lower()
+        if project_files:
+            run_instruction = "Open the generated project files and follow its entry-point or README instructions."
+        elif language == "python":
+            run_instruction = "Save the code as a `.py` file and run `python filename.py`."
+        else:
+            run_instruction = f"Save the code with the correct {language} extension and run it with the {language} toolchain."
+
+        return {
+            "summary": f"A complete {program_kind} implementation was generated and reviewed.",
+            "implemented_features": list(dict.fromkeys(implemented))[:16],
+            "structure": structure[:16],
+            "data_files": data_files,
+            "validation": validation,
+            "run_instruction": run_instruction,
+            "limitations": list(dict.fromkeys(
+                str(item) for item in result.get("warnings", []) if str(item).strip()
+            ))[:8],
+        }
+
     def finalize_code_result(
         self,
         result,
@@ -2610,6 +2681,7 @@ class CodeBrain:
                 result.setdefault("warnings", []).append(
                     "Project self-review found blocking issues."
                 )
+            result["delivery_explanation"] = self.build_delivery_explanation(result)
             return result
 
         if not code:
@@ -2674,6 +2746,8 @@ class CodeBrain:
             result["warnings"].append(
                 "Code self-review found issues or low confidence."
             )
+
+        result["delivery_explanation"] = self.build_delivery_explanation(result)
 
         return result
 

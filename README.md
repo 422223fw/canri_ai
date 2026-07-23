@@ -60,7 +60,13 @@ powershell -ExecutionPolicy Bypass -File .\push_canri.ps1
   IDs, and runtime telemetry.
 - `Brain_storage.py`: resilient reads and atomic JSON writes.
 - Specialist brains: code, math, science, history, geography, technology,
-  story, character, world, image, vision, voice, emotion, and others.
+  story, character, world, image, movie, vision, voice, emotion, and others.
+- Movie_brain.py and movie_engine/: full movie preproduction and render
+  orchestration. The pipeline turns Creative, Story, Character, World, Image,
+  Voice, Technology, research, scanner, dictionary, and memory context into a
+  duration-locked screenplay, scene timeline, shot list, continuity ledger,
+  asset catalog, sound/VFX plan, budget, schedule, and render manifest. Movie
+  duration is capped at five hours.
 - `Quality_Control_brain.py`: requirement-by-requirement acceptance checks.
 - `Answer_Enrichment_brain.py`: prepares useful explanations, correction
   summaries, verification details, and run instructions when the user's output
@@ -104,6 +110,7 @@ python .\tools\check_brain_runtime.py
 python .\tools\check_canri_regression.py
 python .\tools\check_canri_release.py
 python .\Canri_Tests\smoke_latest.py
+python .\Canri_Tests\smoke_movie_brain.py
 ```
 
 `check_canri_release.py` enforces the required 1.0.0 gates in
@@ -118,6 +125,35 @@ archive:
 python .\tools\validate_canri_project.py --full-jsonl
 ```
 
+## Photorealistic Movie Rendering
+
+The local animatic is a timing storyboard, not a filmed-looking movie. Canri
+can render the exported shot plan through Runway Gen-4.5 and then assemble the
+downloaded shots into one local MP4 with FFmpeg.
+
+```powershell
+python -m pip install -r .\main_ai_canri\requirements-movie.txt
+setx RUNWAYML_API_SECRET "YOUR_RUNWAY_KEY"
+```
+
+Restart the terminal after `setx`. Never put the key in source code, JSON, a
+commit, or a chat message. Preview the calculated cost without making a paid
+API call:
+
+```powershell
+python .\main_ai_canri\render_movie_runway.py ".\main_ai_canri\generated_movies\the_last_signal_9e79c057\movie_project.json" --max-cost-usd 25
+```
+
+After adding API credits and reviewing the estimate, authorize generation:
+
+```powershell
+python .\main_ai_canri\render_movie_runway.py ".\main_ai_canri\generated_movies\the_last_signal_9e79c057\movie_project.json" --max-cost-usd 25 --execute
+```
+
+The renderer checkpoints every downloaded clip, resumes completed work after
+failure, and refuses to begin when the estimated base cost exceeds the limit.
+Retries can increase the final provider charge.
+
 ## Current Limits
 
 - Canri is a deterministic local assistant architecture, not a general-purpose
@@ -128,6 +164,11 @@ python .\tools\validate_canri_project.py --full-jsonl
 - Vision and voice depth depends on available local engines and file formats.
 - Image fallback output is programmatic and is not equivalent to a hosted
   photorealistic image model.
+- Movie projects are complete provider-neutral production packages. A real
+  photorealistic final master requires `RUNWAYML_API_SECRET` or another
+  configured `movie_video_backend`, licensed references, provider credits,
+  and sufficient remote render capacity. An animatic is generated only when
+  explicitly requested and is never reported as the final movie.
 - Normal requests have no thinking-time deadline. An optional emergency
   watchdog can be enabled with `CANRI_BRAIN_WATCHDOG_SECONDS=300` if a local
   deployment needs protection from a permanently stuck brain.

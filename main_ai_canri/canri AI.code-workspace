@@ -1,0 +1,15 @@
+{
+	"folders": [
+		{
+			"name": "canri AI",
+			"path": ".."
+		},
+		{
+			"name": "Xervexl",
+			"path": "../../Xervexl/Xervexl"
+		}
+	],
+	"settings": {
+		"terminal.integrated.cwd": "${workspaceFolder:Xervexl}"
+	}
+}

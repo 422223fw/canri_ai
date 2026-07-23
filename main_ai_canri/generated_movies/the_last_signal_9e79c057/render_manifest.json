@@ -1,0 +1,296 @@
+{
+  "schema_version": 1,
+  "provider_neutral": true,
+  "target_duration_seconds": 180,
+  "render_profile": {
+    "resolution": "3840x2160",
+    "frame_rate": 24.0,
+    "aspect_ratio": "2.39:1",
+    "color_space": "ACEScg",
+    "delivery_codec": "ProRes 422 HQ",
+    "audio_layout": "5.1"
+  },
+  "cinematography": {
+    "capture_intent": "photorealistic",
+    "camera_system": "large-format digital cinema camera with production-matched virtual camera",
+    "lenses_mm": [
+      24,
+      40,
+      75
+    ],
+    "camera_movements": [
+      "dolly",
+      "crane",
+      "orbital"
+    ],
+    "lighting_contrast": "sculpted",
+    "lighting_rule": "Every key light is motivated by a practical, window, sky, flame, or production source.",
+    "exposure_rule": "Protect skin tone and highlight texture; avoid synthetic clipped highlights.",
+    "depth_rule": "Use depth of field to direct attention without erasing production design.",
+    "continuity_rule": "Preserve sun direction, color temperature, weather, lens logic, and screen direction.",
+    "world_reference": "Layered practical sets, motivated lighting, physically plausible materials, and lived-in detail.",
+    "delivery": {
+      "resolution": "3840x2160",
+      "frame_rate": 24.0,
+      "aspect_ratio": "2.39:1",
+      "color_space": "ACEScg",
+      "delivery_codec": "ProRes 422 HQ",
+      "audio_layout": "5.1"
+    }
+  },
+  "jobs": [
+    {
+      "job_id": "render_ea77f5c4ae75",
+      "shot_id": "shot_e64e1e262f3c",
+      "duration_seconds": 12,
+      "prompt": "Photorealistic high-budget cinema shot. wide master, 24mm lens, dolly. Subject: Alex Morgan and Mara Vale. Action: Cover beat 1 of scene 1: Establish the sequence objective: Establish ordinary life and the dramatic question.. Location: Primary lived-in location, DAWN. Lighting: sculpted motivated lighting. Preserve identity, wardrobe, props, weather, screen direction, and physical continuity. References: Primary lived-in location, Alex Morgan, Mara Vale.",
+      "negative_prompt": "identity drift, anatomy errors, extra limbs, warped hands, floating objects, incorrect reflections, inconsistent wardrobe, text artifacts, temporal flicker, camera teleportation, synthetic plastic skin, crushed highlights",
+      "reference_assets": [
+        "asset_location_dcb2158580dd",
+        "asset_character_cb07f0f10ac8",
+        "asset_character_8cbe3fcf4f4e"
+      ],
+      "output_file": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00001_shot_e64e1e262f3c.mov",
+      "status": "pending"
+    },
+    {
+      "job_id": "render_813d68e11031",
+      "shot_id": "shot_faa15288f858",
+      "duration_seconds": 11,
+      "prompt": "Photorealistic high-budget cinema shot. medium two-shot, 40mm lens, crane. Subject: Alex Morgan and Mara Vale. Action: Cover beat 2 of scene 1: Establish the sequence objective: Establish ordinary life and the dramatic question.. Location: Primary lived-in location, DAWN. Lighting: sculpted motivated lighting. Preserve identity, wardrobe, props, weather, screen direction, and physical continuity. References: Primary lived-in location, Alex Morgan, Mara Vale.",
+      "negative_prompt": "identity drift, anatomy errors, extra limbs, warped hands, floating objects, incorrect reflections, inconsistent wardrobe, text artifacts, temporal flicker, camera teleportation, synthetic plastic skin, crushed highlights",
+      "reference_assets": [
+        "asset_location_dcb2158580dd",
+        "asset_character_cb07f0f10ac8",
+        "asset_character_8cbe3fcf4f4e"
+      ],
+      "output_file": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00002_shot_faa15288f858.mov",
+      "status": "pending"
+    },
+    {
+      "job_id": "render_c360d86e495e",
+      "shot_id": "shot_6f1986486edf",
+      "duration_seconds": 11,
+      "prompt": "Photorealistic high-budget cinema shot. medium close-up, 75mm lens, orbital. Subject: Alex Morgan and Mara Vale. Action: Cover beat 3 of scene 1: Establish the sequence objective: Establish ordinary life and the dramatic question.. Location: Primary lived-in location, DAWN. Lighting: sculpted motivated lighting. Preserve identity, wardrobe, props, weather, screen direction, and physical continuity. References: Primary lived-in location, Alex Morgan, Mara Vale.",
+      "negative_prompt": "identity drift, anatomy errors, extra limbs, warped hands, floating objects, incorrect reflections, inconsistent wardrobe, text artifacts, temporal flicker, camera teleportation, synthetic plastic skin, crushed highlights",
+      "reference_assets": [
+        "asset_location_dcb2158580dd",
+        "asset_character_cb07f0f10ac8",
+        "asset_character_8cbe3fcf4f4e"
+      ],
+      "output_file": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00003_shot_6f1986486edf.mov",
+      "status": "pending"
+    },
+    {
+      "job_id": "render_814bb0b199fe",
+      "shot_id": "shot_d34155d81429",
+      "duration_seconds": 11,
+      "prompt": "Photorealistic high-budget cinema shot. close-up, 24mm lens, dolly. Subject: Alex Morgan and Mara Vale. Action: Cover beat 4 of scene 1: Establish the sequence objective: Establish ordinary life and the dramatic question.. Location: Primary lived-in location, DAWN. Lighting: sculpted motivated lighting. Preserve identity, wardrobe, props, weather, screen direction, and physical continuity. References: Primary lived-in location, Alex Morgan, Mara Vale.",
+      "negative_prompt": "identity drift, anatomy errors, extra limbs, warped hands, floating objects, incorrect reflections, inconsistent wardrobe, text artifacts, temporal flicker, camera teleportation, synthetic plastic skin, crushed highlights",
+      "reference_assets": [
+        "asset_location_dcb2158580dd",
+        "asset_character_cb07f0f10ac8",
+        "asset_character_8cbe3fcf4f4e"
+      ],
+      "output_file": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00004_shot_d34155d81429.mov",
+      "status": "pending"
+    },
+    {
+      "job_id": "render_2a4220ef2b13",
+      "shot_id": "shot_dcdc04d30ea8",
+      "duration_seconds": 12,
+      "prompt": "Photorealistic high-budget cinema shot. insert, 40mm lens, crane. Subject: Alex Morgan and Mara Vale. Action: Cover beat 1 of scene 2: Investigate the sequence objective: Establish ordinary life and the dramatic question.. Location: Contrasting public location, DAY. Lighting: sculpted motivated lighting. Preserve identity, wardrobe, props, weather, screen direction, and physical continuity. References: Contrasting public location, Alex Morgan, Mara Vale.",
+      "negative_prompt": "identity drift, anatomy errors, extra limbs, warped hands, floating objects, incorrect reflections, inconsistent wardrobe, text artifacts, temporal flicker, camera teleportation, synthetic plastic skin, crushed highlights",
+      "reference_assets": [
+        "asset_location_97ad66a446a6",
+        "asset_character_cb07f0f10ac8",
+        "asset_character_8cbe3fcf4f4e"
+      ],
+      "output_file": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00005_shot_dcdc04d30ea8.mov",
+      "status": "pending"
+    },
+    {
+      "job_id": "render_fa739be91cb2",
+      "shot_id": "shot_e7b0d4747446",
+      "duration_seconds": 11,
+      "prompt": "Photorealistic high-budget cinema shot. reaction, 75mm lens, orbital. Subject: Alex Morgan and Mara Vale. Action: Cover beat 2 of scene 2: Investigate the sequence objective: Establish ordinary life and the dramatic question.. Location: Contrasting public location, DAY. Lighting: sculpted motivated lighting. Preserve identity, wardrobe, props, weather, screen direction, and physical continuity. References: Contrasting public location, Alex Morgan, Mara Vale.",
+      "negative_prompt": "identity drift, anatomy errors, extra limbs, warped hands, floating objects, incorrect reflections, inconsistent wardrobe, text artifacts, temporal flicker, camera teleportation, synthetic plastic skin, crushed highlights",
+      "reference_assets": [
+        "asset_location_97ad66a446a6",
+        "asset_character_cb07f0f10ac8",
+        "asset_character_8cbe3fcf4f4e"
+      ],
+      "output_file": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00006_shot_e7b0d4747446.mov",
+      "status": "pending"
+    },
+    {
+      "job_id": "render_7daec862d98f",
+      "shot_id": "shot_14c516616001",
+      "duration_seconds": 11,
+      "prompt": "Photorealistic high-budget cinema shot. wide master, 24mm lens, dolly. Subject: Alex Morgan and Mara Vale. Action: Cover beat 3 of scene 2: Investigate the sequence objective: Establish ordinary life and the dramatic question.. Location: Contrasting public location, DAY. Lighting: sculpted motivated lighting. Preserve identity, wardrobe, props, weather, screen direction, and physical continuity. References: Contrasting public location, Alex Morgan, Mara Vale.",
+      "negative_prompt": "identity drift, anatomy errors, extra limbs, warped hands, floating objects, incorrect reflections, inconsistent wardrobe, text artifacts, temporal flicker, camera teleportation, synthetic plastic skin, crushed highlights",
+      "reference_assets": [
+        "asset_location_97ad66a446a6",
+        "asset_character_cb07f0f10ac8",
+        "asset_character_8cbe3fcf4f4e"
+      ],
+      "output_file": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00007_shot_14c516616001.mov",
+      "status": "pending"
+    },
+    {
+      "job_id": "render_f0a3c41dec09",
+      "shot_id": "shot_fe9ad55e00e2",
+      "duration_seconds": 11,
+      "prompt": "Photorealistic high-budget cinema shot. medium two-shot, 40mm lens, crane. Subject: Alex Morgan and Mara Vale. Action: Cover beat 4 of scene 2: Investigate the sequence objective: Establish ordinary life and the dramatic question.. Location: Contrasting public location, DAY. Lighting: sculpted motivated lighting. Preserve identity, wardrobe, props, weather, screen direction, and physical continuity. References: Contrasting public location, Alex Morgan, Mara Vale.",
+      "negative_prompt": "identity drift, anatomy errors, extra limbs, warped hands, floating objects, incorrect reflections, inconsistent wardrobe, text artifacts, temporal flicker, camera teleportation, synthetic plastic skin, crushed highlights",
+      "reference_assets": [
+        "asset_location_97ad66a446a6",
+        "asset_character_cb07f0f10ac8",
+        "asset_character_8cbe3fcf4f4e"
+      ],
+      "output_file": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00008_shot_fe9ad55e00e2.mov",
+      "status": "pending"
+    },
+    {
+      "job_id": "render_92246014c119",
+      "shot_id": "shot_160112990457",
+      "duration_seconds": 12,
+      "prompt": "Photorealistic high-budget cinema shot. medium close-up, 75mm lens, orbital. Subject: Alex Morgan and Mara Vale. Action: Cover beat 1 of scene 3: Complicate the sequence objective: Deliver progress while revealing a deeper cost.. Location: Final confrontation location, LATE AFTERNOON. Lighting: sculpted motivated lighting. Preserve identity, wardrobe, props, weather, screen direction, and physical continuity. References: Final confrontation location, Alex Morgan, Mara Vale, Director Rowan.",
+      "negative_prompt": "identity drift, anatomy errors, extra limbs, warped hands, floating objects, incorrect reflections, inconsistent wardrobe, text artifacts, temporal flicker, camera teleportation, synthetic plastic skin, crushed highlights",
+      "reference_assets": [
+        "asset_location_23517bb3598a",
+        "asset_character_cb07f0f10ac8",
+        "asset_character_8cbe3fcf4f4e",
+        "asset_character_100711bd3c42"
+      ],
+      "output_file": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00009_shot_160112990457.mov",
+      "status": "pending"
+    },
+    {
+      "job_id": "render_be726bf932af",
+      "shot_id": "shot_7f2cce6d7c22",
+      "duration_seconds": 11,
+      "prompt": "Photorealistic high-budget cinema shot. close-up, 24mm lens, dolly. Subject: Alex Morgan and Mara Vale. Action: Cover beat 2 of scene 3: Complicate the sequence objective: Deliver progress while revealing a deeper cost.. Location: Final confrontation location, LATE AFTERNOON. Lighting: sculpted motivated lighting. Preserve identity, wardrobe, props, weather, screen direction, and physical continuity. References: Final confrontation location, Alex Morgan, Mara Vale, Director Rowan.",
+      "negative_prompt": "identity drift, anatomy errors, extra limbs, warped hands, floating objects, incorrect reflections, inconsistent wardrobe, text artifacts, temporal flicker, camera teleportation, synthetic plastic skin, crushed highlights",
+      "reference_assets": [
+        "asset_location_23517bb3598a",
+        "asset_character_cb07f0f10ac8",
+        "asset_character_8cbe3fcf4f4e",
+        "asset_character_100711bd3c42"
+      ],
+      "output_file": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00010_shot_7f2cce6d7c22.mov",
+      "status": "pending"
+    },
+    {
+      "job_id": "render_cb961b076c25",
+      "shot_id": "shot_94b5c6b664d3",
+      "duration_seconds": 11,
+      "prompt": "Photorealistic high-budget cinema shot. insert, 40mm lens, crane. Subject: Alex Morgan and Mara Vale. Action: Cover beat 3 of scene 3: Complicate the sequence objective: Deliver progress while revealing a deeper cost.. Location: Final confrontation location, LATE AFTERNOON. Lighting: sculpted motivated lighting. Preserve identity, wardrobe, props, weather, screen direction, and physical continuity. References: Final confrontation location, Alex Morgan, Mara Vale, Director Rowan.",
+      "negative_prompt": "identity drift, anatomy errors, extra limbs, warped hands, floating objects, incorrect reflections, inconsistent wardrobe, text artifacts, temporal flicker, camera teleportation, synthetic plastic skin, crushed highlights",
+      "reference_assets": [
+        "asset_location_23517bb3598a",
+        "asset_character_cb07f0f10ac8",
+        "asset_character_8cbe3fcf4f4e",
+        "asset_character_100711bd3c42"
+      ],
+      "output_file": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00011_shot_94b5c6b664d3.mov",
+      "status": "pending"
+    },
+    {
+      "job_id": "render_1b47db4cdbb9",
+      "shot_id": "shot_a25abfeb226a",
+      "duration_seconds": 11,
+      "prompt": "Photorealistic high-budget cinema shot. reaction, 75mm lens, orbital. Subject: Alex Morgan and Mara Vale. Action: Cover beat 4 of scene 3: Complicate the sequence objective: Deliver progress while revealing a deeper cost.. Location: Final confrontation location, LATE AFTERNOON. Lighting: sculpted motivated lighting. Preserve identity, wardrobe, props, weather, screen direction, and physical continuity. References: Final confrontation location, Alex Morgan, Mara Vale, Director Rowan.",
+      "negative_prompt": "identity drift, anatomy errors, extra limbs, warped hands, floating objects, incorrect reflections, inconsistent wardrobe, text artifacts, temporal flicker, camera teleportation, synthetic plastic skin, crushed highlights",
+      "reference_assets": [
+        "asset_location_23517bb3598a",
+        "asset_character_cb07f0f10ac8",
+        "asset_character_8cbe3fcf4f4e",
+        "asset_character_100711bd3c42"
+      ],
+      "output_file": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00012_shot_a25abfeb226a.mov",
+      "status": "pending"
+    },
+    {
+      "job_id": "render_882b5fc5f832",
+      "shot_id": "shot_7ed1d9bcdfdb",
+      "duration_seconds": 12,
+      "prompt": "Photorealistic high-budget cinema shot. wide master, 24mm lens, dolly. Subject: Alex Morgan and Mara Vale. Action: Cover beat 1 of scene 4: Reveal the sequence objective: Force the lowest point and a truthful reassessment.. Location: Primary lived-in location, NIGHT. Lighting: sculpted motivated lighting. Preserve identity, wardrobe, props, weather, screen direction, and physical continuity. References: Primary lived-in location, Alex Morgan, Mara Vale.",
+      "negative_prompt": "identity drift, anatomy errors, extra limbs, warped hands, floating objects, incorrect reflections, inconsistent wardrobe, text artifacts, temporal flicker, camera teleportation, synthetic plastic skin, crushed highlights",
+      "reference_assets": [
+        "asset_location_dcb2158580dd",
+        "asset_character_cb07f0f10ac8",
+        "asset_character_8cbe3fcf4f4e"
+      ],
+      "output_file": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00013_shot_7ed1d9bcdfdb.mov",
+      "status": "pending"
+    },
+    {
+      "job_id": "render_a61959b7b33e",
+      "shot_id": "shot_db652b8ff9e9",
+      "duration_seconds": 11,
+      "prompt": "Photorealistic high-budget cinema shot. medium two-shot, 40mm lens, crane. Subject: Alex Morgan and Mara Vale. Action: Cover beat 2 of scene 4: Reveal the sequence objective: Force the lowest point and a truthful reassessment.. Location: Primary lived-in location, NIGHT. Lighting: sculpted motivated lighting. Preserve identity, wardrobe, props, weather, screen direction, and physical continuity. References: Primary lived-in location, Alex Morgan, Mara Vale.",
+      "negative_prompt": "identity drift, anatomy errors, extra limbs, warped hands, floating objects, incorrect reflections, inconsistent wardrobe, text artifacts, temporal flicker, camera teleportation, synthetic plastic skin, crushed highlights",
+      "reference_assets": [
+        "asset_location_dcb2158580dd",
+        "asset_character_cb07f0f10ac8",
+        "asset_character_8cbe3fcf4f4e"
+      ],
+      "output_file": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00014_shot_db652b8ff9e9.mov",
+      "status": "pending"
+    },
+    {
+      "job_id": "render_30a6ac7071ea",
+      "shot_id": "shot_948fcc20e7c2",
+      "duration_seconds": 11,
+      "prompt": "Photorealistic high-budget cinema shot. medium close-up, 75mm lens, orbital. Subject: Alex Morgan and Mara Vale. Action: Cover beat 3 of scene 4: Reveal the sequence objective: Force the lowest point and a truthful reassessment.. Location: Primary lived-in location, NIGHT. Lighting: sculpted motivated lighting. Preserve identity, wardrobe, props, weather, screen direction, and physical continuity. References: Primary lived-in location, Alex Morgan, Mara Vale.",
+      "negative_prompt": "identity drift, anatomy errors, extra limbs, warped hands, floating objects, incorrect reflections, inconsistent wardrobe, text artifacts, temporal flicker, camera teleportation, synthetic plastic skin, crushed highlights",
+      "reference_assets": [
+        "asset_location_dcb2158580dd",
+        "asset_character_cb07f0f10ac8",
+        "asset_character_8cbe3fcf4f4e"
+      ],
+      "output_file": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00015_shot_948fcc20e7c2.mov",
+      "status": "pending"
+    },
+    {
+      "job_id": "render_3420e365f54f",
+      "shot_id": "shot_664a22a15c79",
+      "duration_seconds": 11,
+      "prompt": "Photorealistic high-budget cinema shot. close-up, 24mm lens, dolly. Subject: Alex Morgan and Mara Vale. Action: Cover beat 4 of scene 4: Reveal the sequence objective: Force the lowest point and a truthful reassessment.. Location: Primary lived-in location, NIGHT. Lighting: sculpted motivated lighting. Preserve identity, wardrobe, props, weather, screen direction, and physical continuity. References: Primary lived-in location, Alex Morgan, Mara Vale.",
+      "negative_prompt": "identity drift, anatomy errors, extra limbs, warped hands, floating objects, incorrect reflections, inconsistent wardrobe, text artifacts, temporal flicker, camera teleportation, synthetic plastic skin, crushed highlights",
+      "reference_assets": [
+        "asset_location_dcb2158580dd",
+        "asset_character_cb07f0f10ac8",
+        "asset_character_8cbe3fcf4f4e"
+      ],
+      "output_file": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00016_shot_664a22a15c79.mov",
+      "status": "pending"
+    }
+  ],
+  "assembly": {
+    "picture_sequence": [
+      "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00001_shot_e64e1e262f3c.mov",
+      "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00002_shot_faa15288f858.mov",
+      "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00003_shot_6f1986486edf.mov",
+      "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00004_shot_d34155d81429.mov",
+      "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00005_shot_dcdc04d30ea8.mov",
+      "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00006_shot_e7b0d4747446.mov",
+      "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00007_shot_14c516616001.mov",
+      "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00008_shot_fe9ad55e00e2.mov",
+      "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00009_shot_160112990457.mov",
+      "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00010_shot_7f2cce6d7c22.mov",
+      "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00011_shot_94b5c6b664d3.mov",
+      "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00012_shot_a25abfeb226a.mov",
+      "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00013_shot_7ed1d9bcdfdb.mov",
+      "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00014_shot_db652b8ff9e9.mov",
+      "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00015_shot_948fcc20e7c2.mov",
+      "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\shots\\00016_shot_664a22a15c79.mov"
+    ],
+    "audio_master": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\audio\\final_mix.wav",
+    "subtitle_file": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\captions\\captions.srt",
+    "final_master": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\the_last_signal_9e79c057_master.mov",
+    "viewing_copy": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\the_last_signal_9e79c057_viewing_copy.mp4",
+    "animatic_preview": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\generated_movies\\the_last_signal_9e79c057\\the_last_signal_9e79c057_animatic.mp4"
+  }
+}

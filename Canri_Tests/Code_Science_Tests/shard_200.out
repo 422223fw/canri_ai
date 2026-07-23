@@ -1,0 +1,85 @@
+Main Brain Started
+Manager Brain Loaded
+Spelling Brain Loaded
+Understanding Brain Loaded
+Memory Brain Loaded
+Research Brain Loaded
+Reasoning Brain Loaded
+Response Brain Loaded
+Creative Brain Loaded
+Code Brain Loaded
+Math Brain Loaded
+Science Brain Loaded
+Language Brain Loaded
+Language Loader Loaded
+Language Loader Loaded
+Translation Engine Loaded
+Translation Engine Loaded
+Grammar Engine Loaded
+Grammar Engine Loaded
+Dictionary Engine Loaded
+Dictionary Engine Loaded
+Expressions Engine Loaded
+Expressions Engine Loaded
+Language Statistics Engine Loaded
+Language Statistics Engine Loaded
+Language Analysis Engine Loaded
+Language Analysis Engine Loaded
+Language Report Builder Loaded
+Language Report Builder Loaded
+History Brain Loaded
+Geography Brain Loaded
+Technology Brain Loaded
+Game Brain Loaded
+Story Brain Loaded
+Character Brain Loaded
+World Brain Loaded
+Image Brain Loaded
+Vision Brain Loaded
+Voice Brain Loaded
+Learning Brain Loaded
+Fact Check Brain Loaded
+Quality Control Brain Loaded
+Collaboration Brain Loaded
+Nervous System Brain Loaded
+Planner Brain Loaded
+Emotion Brain Loaded
+Security Brain Loaded
+Completed 10/100
+Completed 20/100
+Completed 30/100
+Completed 40/100
+Completed 50/100
+Completed 60/100
+Completed 70/100
+Completed 80/100
+Completed 90/100
+Completed 100/100
+{
+  "title": "Canri AI Code and Science 400-Task Benchmark",
+  "generated_utc": "2026-07-22T16:11:26.018864+00:00",
+  "total_planned": 100,
+  "total_completed": 100,
+  "total_passed": 79,
+  "total_failed": 21,
+  "pass_rate_percent": 79.0,
+  "category_summary": {
+    "science": {
+      "planned": 100,
+      "completed": 100,
+      "passed": 79,
+      "failed": 21,
+      "pass_rate_percent": 79.0,
+      "average_elapsed_seconds": 15.25
+    }
+  },
+  "primary_brains": {
+    "Research_brain": 50,
+    "Dictionary_context": 20,
+    "Science_brain": 20,
+    "unknown": 1,
+    "Vision_brain": 5,
+    "Creative_brain": 4
+  },
+  "run_elapsed_seconds": 1525.282
+}

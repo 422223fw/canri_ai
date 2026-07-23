@@ -1,0 +1,57 @@
+THE LAST SIGNAL
+
+Genre: science fiction | Tone: realistic | Target: 3 minutes
+
+
+
+INT./EXT. PRIMARY LIVED-IN LOCATION - DAWN
+
+The characters pursue the scene objective in Primary lived-in location. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+ALEX MORGAN
+We need to goal: create a complete 3-minute photorealistic science-fiction movie called "the last signal", but not at the cost we keep ignoring.
+
+MARA VALE
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: A disruption makes inaction costly.
+CONTINUITY OUT: decision_pressure_for_scene_2
+
+INT./EXT. CONTRASTING PUBLIC LOCATION - DAY
+
+The characters pursue the scene objective in Contrasting public location. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+ALEX MORGAN
+We need to goal: create a complete 3-minute photorealistic science-fiction movie called "the last signal", but not at the cost we keep ignoring.
+
+MARA VALE
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: A disruption makes inaction costly.
+CONTINUITY OUT: decision_pressure_for_scene_3
+
+INT./EXT. FINAL CONFRONTATION LOCATION - LATE AFTERNOON
+
+The characters pursue the scene objective in Final confrontation location. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+ALEX MORGAN
+We need to goal: create a complete 3-minute photorealistic science-fiction movie called "the last signal", but not at the cost we keep ignoring.
+
+MARA VALE
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: A partial victory creates a larger problem.
+CONTINUITY OUT: decision_pressure_for_scene_4
+
+INT./EXT. PRIMARY LIVED-IN LOCATION - NIGHT
+
+The characters pursue the scene objective in Primary lived-in location. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+ALEX MORGAN
+We need to goal: create a complete 3-minute photorealistic science-fiction movie called "the last signal", but not at the cost we keep ignoring.
+
+MARA VALE
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The protagonist accepts responsibility.
+CONTINUITY OUT: decision_pressure_for_scene_4

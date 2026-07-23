@@ -156,6 +156,24 @@ DOMAIN_CANRI_DATA_FILES = {
         "Image_generation_profiles.json",
         "Image_history.json"
     ],
+    "movie": [
+        "Movie_genres.json",
+        "Movie_cinematic_profiles.json",
+        "Movie_render_profiles.json",
+        "Movie_production_templates.json",
+        "Company_products.json",
+        "Story_templates.json",
+        "Story_structures.json",
+        "Story_genres.json",
+        "Character_templates.json",
+        "Character_traits.json",
+        "World_templates.json",
+        "World_rules.json",
+        "Image_styles.json",
+        "Image_prompt_templates.json",
+        "Voice_audio_profiles.json",
+        "Technology_terms.json"
+    ],
     "vision": [
         "Vision_file_profiles.json",
         "Vision_magic_signatures.json",
@@ -1849,7 +1867,7 @@ class CreativeBrain:
         topic = str(report.get("main_topic", "")).lower()
         lowered = f"{text.lower()} {' '.join(terms)}"
 
-        for domain in ["story", "code", "game", "science", "technology", "language", "geography", "history", "math", "security"]:
+        for domain in ["movie", "story", "code", "game", "science", "technology", "language", "geography", "history", "math", "security"]:
             if topic == domain or domain in lowered:
                 return domain
 
@@ -1891,6 +1909,20 @@ class CreativeBrain:
                 "language mismatch"
             ])
             direction["preferred_strategy"] = "practical_invention"
+
+        elif domain == "movie":
+            direction["good_direction"].extend([
+                "supports a complete scene and shot timeline",
+                "preserves character and world continuity",
+                "creates a strong visual and emotional identity",
+                "can be handed to Movie_brain for production validation"
+            ])
+            direction["bad_direction"].extend([
+                "a trailer concept instead of the requested full movie",
+                "visual spectacle without story causality",
+                "unrenderable ideas without asset or continuity plans"
+            ])
+            direction["preferred_strategy"] = "production_ready_movie_invention"
 
         elif domain == "story":
             direction["good_direction"].extend([
@@ -3240,6 +3272,7 @@ class CreativeBrain:
             "security": "Security_brain",
             "game": "Game_brain",
             "story": "Story_brain",
+            "movie": "Movie_brain",
             "geography": "Geography_brain",
             "history": "History_brain",
             "language": "Language_brain",
@@ -3312,6 +3345,63 @@ class CreativeBrain:
             })
         return tasks[:3]
 
+    def build_specialist_support_packet(
+        self,
+        domains,
+        scored,
+        best,
+        canri_context,
+        execution_policy
+    ):
+
+        brain_for_domain = {
+            "code": "Code_brain",
+            "science": "Science_brain",
+            "technology": "Technology_brain",
+            "math": "Math_brain",
+            "story": "Story_brain",
+            "movie": "Movie_brain",
+            "game": "Game_brain",
+            "security": "Security_brain",
+            "geography": "Geography_brain",
+            "history": "History_brain",
+            "language": "Language_brain",
+        }
+        owners = list(dict.fromkeys(
+            brain_for_domain.get(domain)
+            for domain in domains
+            if brain_for_domain.get(domain)
+        ))
+        alternatives = []
+        for candidate in scored[:5]:
+            if not isinstance(candidate, dict):
+                continue
+            alternatives.append({
+                "title": candidate.get("title"),
+                "concept": candidate.get("concept"),
+                "score": candidate.get("scores", {}).get("total"),
+                "novelty": candidate.get("scores", {}).get("novelty"),
+                "coherence": candidate.get("scores", {}).get("coherence"),
+            })
+        evidence_groups = sorted({
+            str(item.get("source_group"))
+            for item in canri_context.values()
+            if isinstance(item, dict) and item.get("source_group")
+        })[:8]
+        return {
+            "mode": execution_policy.get("mode"),
+            "owner_brains": owners,
+            "selected_direction": best.get("title") if isinstance(best, dict) else None,
+            "alternatives": alternatives,
+            "evidence_groups": evidence_groups,
+            "handoff_rules": [
+                "The specialist brain owns factual correctness and final execution.",
+                "Use an alternative only when it improves the explicit request.",
+                "Do not turn factual, code, or technology requests into a story.",
+                "Verify factual claims before they reach the user.",
+            ],
+        }
+
     def creative_execution_policy(self, report, text, detected_domain):
 
         report = report if isinstance(report, dict) else {}
@@ -3321,6 +3411,10 @@ class CreativeBrain:
         explicit_story = intent == "story_creation" or topic == "story" or any(
             marker in lowered
             for marker in ["write a story", "create a story", "continue the story", "chapter", "narrative"]
+        )
+        explicit_movie = intent == "movie_creation" or topic == "movie" or any(
+            marker in lowered
+            for marker in ["create a movie", "make a movie", "generate a movie", "produce a film", "render movie"]
         )
         explicit_code = intent in {"code_generation", "code_analysis"} or topic == "code"
         emotional_conversation = topic == "emotion" or any(
@@ -3344,6 +3438,15 @@ class CreativeBrain:
                 "max_rounds": 3,
                 "allow_story": False,
                 "reason": "Code request requires code assembly, never narrative output."
+            }
+        if explicit_movie:
+            return {
+                "mode": "movie_development",
+                "domain": "movie",
+                "generation_size": 100,
+                "max_rounds": 5,
+                "allow_story": True,
+                "reason": "Movie_brain needs an original but production-ready creative direction."
             }
         if explicit_story:
             return {
@@ -3719,7 +3822,7 @@ class CreativeBrain:
             report,
             terms
         )
-        if domain in {"geography", "story", "general"}:
+        if domain in {"geography", "story", "movie", "general"}:
             canri_context.update(
                 self.collect_indexed_geography_context(terms, text, limit=10)
             )
@@ -3804,6 +3907,18 @@ class CreativeBrain:
             canri_context
         )
 
+        specialist_support = self.build_specialist_support_packet(
+            central_domains,
+            scored,
+            best,
+            canri_context,
+            execution_policy
+        )
+        publish_output = execution_policy.get("mode") != "support_only"
+        proposed_output = final_output
+        if not publish_output:
+            final_output = ""
+
         self.remember_creative_result(
             domain,
             final_direction,
@@ -3820,10 +3935,13 @@ class CreativeBrain:
             "domain": domain,
             "central_domains": central_domains,
             "execution_policy": execution_policy,
+            "public_output_allowed": publish_output,
             "terms_used": terms,
             "direction_analysis": final_direction,
             "final_output": final_output,
             "answer": final_output,
+            "proposed_output": proposed_output,
+            "specialist_support": specialist_support,
             "story": final_output if domain == "story" else None,
             "generated_code": final_output if domain == "code" else None,
             "best_idea": best,
@@ -3910,6 +4028,7 @@ class CreativeBrain:
                 brain_name
                 for brain_name in [
                     "Story_brain" if domain == "story" else None,
+                    "Movie_brain" if domain == "movie" else None,
                     "Code_brain" if domain == "code" else None,
                     "Planner_brain",
                     "Security_brain" if best.get("scores", {}).get("safety", 100) < 80 else None,
@@ -3919,6 +4038,7 @@ class CreativeBrain:
             ],
             "raw_suggested_next_brains": [
                 "Story_brain" if domain == "story" else None,
+                "Movie_brain" if domain == "movie" else None,
                 "Code_brain" if domain == "code" else None,
                 "Planner_brain",
                 "Security_brain" if best.get("scores", {}).get("safety", 100) < 80 else None,

@@ -1,0 +1,2802 @@
+[
+  {
+    "id": 1,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal contact manager. Variation 1. It must support add, list, search by name, edit, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_001",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 2,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal library manager. Variation 1. It must support add, list, search, borrow, return, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_002",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 3,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal expense tracker. Variation 1. It must support add amount/category, list, search category, total, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_003",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 4,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal note manager. Variation 1. It must support add, list, search, edit, delete, export TXT, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_004",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 5,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal to-do list. Variation 1. It must support add, list, mark done, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_005",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 6,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal quiz game. Variation 1. It must support exactly 10 multiple-choice questions, four choices, score, play again. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_006",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 7,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal temperature converter. Variation 1. It must support read Celsius or Fahrenheit, convert to the other unit, validate input, repeat until exit. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_007",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 8,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal equation calculator. Variation 1. It must support solve linear and quadratic equations step by step and verify the solutions. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_008",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 9,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal calculator. Variation 1. It must support addition, subtraction, multiplication, division, percentages, and JSON history. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_009",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 10,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal text RPG. Variation 1. It must support player health, inventory, items, enemies, combat, JSON save/load, and a command loop. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_010",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 11,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal contact manager. Variation 2. It must support add, list, search by name, edit, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_011",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 12,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal library manager. Variation 2. It must support add, list, search, borrow, return, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_012",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 13,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal expense tracker. Variation 2. It must support add amount/category, list, search category, total, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_013",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 14,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal note manager. Variation 2. It must support add, list, search, edit, delete, export TXT, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_014",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 15,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal to-do list. Variation 2. It must support add, list, mark done, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_015",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 16,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal quiz game. Variation 2. It must support exactly 10 multiple-choice questions, four choices, score, play again. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_016",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 17,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal temperature converter. Variation 2. It must support read Celsius or Fahrenheit, convert to the other unit, validate input, repeat until exit. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_017",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 18,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal equation calculator. Variation 2. It must support solve linear and quadratic equations step by step and verify the solutions. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_018",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 19,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal calculator. Variation 2. It must support addition, subtraction, multiplication, division, percentages, and JSON history. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_019",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 20,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal text RPG. Variation 2. It must support player health, inventory, items, enemies, combat, JSON save/load, and a command loop. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_020",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 21,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal contact manager. Variation 3. It must support add, list, search by name, edit, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_021",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 22,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal library manager. Variation 3. It must support add, list, search, borrow, return, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_022",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 23,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal expense tracker. Variation 3. It must support add amount/category, list, search category, total, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_023",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 24,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal note manager. Variation 3. It must support add, list, search, edit, delete, export TXT, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_024",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 25,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal to-do list. Variation 3. It must support add, list, mark done, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_025",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 26,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal quiz game. Variation 3. It must support exactly 10 multiple-choice questions, four choices, score, play again. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_026",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 27,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal temperature converter. Variation 3. It must support read Celsius or Fahrenheit, convert to the other unit, validate input, repeat until exit. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_027",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 28,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal equation calculator. Variation 3. It must support solve linear and quadratic equations step by step and verify the solutions. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_028",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 29,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal calculator. Variation 3. It must support addition, subtraction, multiplication, division, percentages, and JSON history. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_029",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 30,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal text RPG. Variation 3. It must support player health, inventory, items, enemies, combat, JSON save/load, and a command loop. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_030",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 31,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal contact manager. Variation 4. It must support add, list, search by name, edit, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_031",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 32,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal library manager. Variation 4. It must support add, list, search, borrow, return, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_032",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 33,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal expense tracker. Variation 4. It must support add amount/category, list, search category, total, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_033",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 34,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal note manager. Variation 4. It must support add, list, search, edit, delete, export TXT, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_034",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 35,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal to-do list. Variation 4. It must support add, list, mark done, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_035",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 36,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal quiz game. Variation 4. It must support exactly 10 multiple-choice questions, four choices, score, play again. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_036",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 37,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal temperature converter. Variation 4. It must support read Celsius or Fahrenheit, convert to the other unit, validate input, repeat until exit. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_037",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 38,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal equation calculator. Variation 4. It must support solve linear and quadratic equations step by step and verify the solutions. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_038",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 39,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal calculator. Variation 4. It must support addition, subtraction, multiplication, division, percentages, and JSON history. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_039",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 40,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal text RPG. Variation 4. It must support player health, inventory, items, enemies, combat, JSON save/load, and a command loop. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_040",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 41,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal contact manager. Variation 5. It must support add, list, search by name, edit, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_041",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 42,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal library manager. Variation 5. It must support add, list, search, borrow, return, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_042",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 43,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal expense tracker. Variation 5. It must support add amount/category, list, search category, total, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_043",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 44,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal note manager. Variation 5. It must support add, list, search, edit, delete, export TXT, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_044",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 45,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal to-do list. Variation 5. It must support add, list, mark done, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_045",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 46,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal quiz game. Variation 5. It must support exactly 10 multiple-choice questions, four choices, score, play again. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_046",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 47,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal temperature converter. Variation 5. It must support read Celsius or Fahrenheit, convert to the other unit, validate input, repeat until exit. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_047",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 48,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal equation calculator. Variation 5. It must support solve linear and quadratic equations step by step and verify the solutions. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_048",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 49,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal calculator. Variation 5. It must support addition, subtraction, multiplication, division, percentages, and JSON history. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_049",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 50,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal text RPG. Variation 5. It must support player health, inventory, items, enemies, combat, JSON save/load, and a command loop. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_050",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 51,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal contact manager. Variation 6. It must support add, list, search by name, edit, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_051",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 52,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal library manager. Variation 6. It must support add, list, search, borrow, return, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_052",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 53,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal expense tracker. Variation 6. It must support add amount/category, list, search category, total, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_053",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 54,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal note manager. Variation 6. It must support add, list, search, edit, delete, export TXT, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_054",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 55,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal to-do list. Variation 6. It must support add, list, mark done, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_055",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 56,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal quiz game. Variation 6. It must support exactly 10 multiple-choice questions, four choices, score, play again. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_056",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 57,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal temperature converter. Variation 6. It must support read Celsius or Fahrenheit, convert to the other unit, validate input, repeat until exit. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_057",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 58,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal equation calculator. Variation 6. It must support solve linear and quadratic equations step by step and verify the solutions. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_058",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 59,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal calculator. Variation 6. It must support addition, subtraction, multiplication, division, percentages, and JSON history. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_059",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 60,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal text RPG. Variation 6. It must support player health, inventory, items, enemies, combat, JSON save/load, and a command loop. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_060",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 61,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal contact manager. Variation 7. It must support add, list, search by name, edit, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_061",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 62,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal library manager. Variation 7. It must support add, list, search, borrow, return, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_062",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 63,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal expense tracker. Variation 7. It must support add amount/category, list, search category, total, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_063",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 64,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal note manager. Variation 7. It must support add, list, search, edit, delete, export TXT, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_064",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 65,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal to-do list. Variation 7. It must support add, list, mark done, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_065",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 66,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal quiz game. Variation 7. It must support exactly 10 multiple-choice questions, four choices, score, play again. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_066",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 67,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal temperature converter. Variation 7. It must support read Celsius or Fahrenheit, convert to the other unit, validate input, repeat until exit. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_067",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 68,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal equation calculator. Variation 7. It must support solve linear and quadratic equations step by step and verify the solutions. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_068",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 69,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal calculator. Variation 7. It must support addition, subtraction, multiplication, division, percentages, and JSON history. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_069",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 70,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal text RPG. Variation 7. It must support player health, inventory, items, enemies, combat, JSON save/load, and a command loop. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_070",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 71,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal contact manager. Variation 8. It must support add, list, search by name, edit, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_071",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 72,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal library manager. Variation 8. It must support add, list, search, borrow, return, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_072",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 73,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal expense tracker. Variation 8. It must support add amount/category, list, search category, total, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_073",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 74,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal note manager. Variation 8. It must support add, list, search, edit, delete, export TXT, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_074",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 75,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal to-do list. Variation 8. It must support add, list, mark done, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_075",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 76,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal quiz game. Variation 8. It must support exactly 10 multiple-choice questions, four choices, score, play again. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_076",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 77,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal temperature converter. Variation 8. It must support read Celsius or Fahrenheit, convert to the other unit, validate input, repeat until exit. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_077",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 78,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal equation calculator. Variation 8. It must support solve linear and quadratic equations step by step and verify the solutions. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_078",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 79,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal calculator. Variation 8. It must support addition, subtraction, multiplication, division, percentages, and JSON history. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_079",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 80,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal text RPG. Variation 8. It must support player health, inventory, items, enemies, combat, JSON save/load, and a command loop. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_080",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 81,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal contact manager. Variation 9. It must support add, list, search by name, edit, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_081",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 82,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal library manager. Variation 9. It must support add, list, search, borrow, return, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_082",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 83,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal expense tracker. Variation 9. It must support add amount/category, list, search category, total, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_083",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 84,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal note manager. Variation 9. It must support add, list, search, edit, delete, export TXT, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_084",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 85,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal to-do list. Variation 9. It must support add, list, mark done, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_085",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 86,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal quiz game. Variation 9. It must support exactly 10 multiple-choice questions, four choices, score, play again. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_086",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 87,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal temperature converter. Variation 9. It must support read Celsius or Fahrenheit, convert to the other unit, validate input, repeat until exit. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_087",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 88,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal equation calculator. Variation 9. It must support solve linear and quadratic equations step by step and verify the solutions. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_088",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 89,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal calculator. Variation 9. It must support addition, subtraction, multiplication, division, percentages, and JSON history. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_089",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 90,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal text RPG. Variation 9. It must support player health, inventory, items, enemies, combat, JSON save/load, and a command loop. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_090",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 91,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal contact manager. Variation 10. It must support add, list, search by name, edit, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_091",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 92,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal library manager. Variation 10. It must support add, list, search, borrow, return, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_092",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 93,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal expense tracker. Variation 10. It must support add amount/category, list, search category, total, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_093",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 94,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal note manager. Variation 10. It must support add, list, search, edit, delete, export TXT, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_094",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 95,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal to-do list. Variation 10. It must support add, list, mark done, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_095",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 96,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal quiz game. Variation 10. It must support exactly 10 multiple-choice questions, four choices, score, play again. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_096",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 97,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal temperature converter. Variation 10. It must support read Celsius or Fahrenheit, convert to the other unit, validate input, repeat until exit. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_097",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 98,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal equation calculator. Variation 10. It must support solve linear and quadratic equations step by step and verify the solutions. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_098",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 99,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal calculator. Variation 10. It must support addition, subtraction, multiplication, division, percentages, and JSON history. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_099",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 100,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal text RPG. Variation 10. It must support player health, inventory, items, enemies, combat, JSON save/load, and a command loop. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_100",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 101,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal contact manager. Variation 11. It must support add, list, search by name, edit, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_101",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 102,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal library manager. Variation 11. It must support add, list, search, borrow, return, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_102",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 103,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal expense tracker. Variation 11. It must support add amount/category, list, search category, total, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_103",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 104,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal note manager. Variation 11. It must support add, list, search, edit, delete, export TXT, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_104",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 105,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal to-do list. Variation 11. It must support add, list, mark done, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_105",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 106,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal quiz game. Variation 11. It must support exactly 10 multiple-choice questions, four choices, score, play again. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_106",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 107,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal temperature converter. Variation 11. It must support read Celsius or Fahrenheit, convert to the other unit, validate input, repeat until exit. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_107",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 108,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal equation calculator. Variation 11. It must support solve linear and quadratic equations step by step and verify the solutions. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_108",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 109,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal calculator. Variation 11. It must support addition, subtraction, multiplication, division, percentages, and JSON history. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_109",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 110,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal text RPG. Variation 11. It must support player health, inventory, items, enemies, combat, JSON save/load, and a command loop. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_110",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 111,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal contact manager. Variation 12. It must support add, list, search by name, edit, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_111",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 112,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal library manager. Variation 12. It must support add, list, search, borrow, return, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_112",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 113,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal expense tracker. Variation 12. It must support add amount/category, list, search category, total, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_113",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 114,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal note manager. Variation 12. It must support add, list, search, edit, delete, export TXT, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_114",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 115,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal to-do list. Variation 12. It must support add, list, mark done, delete, JSON save/load. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_115",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 116,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal quiz game. Variation 12. It must support exactly 10 multiple-choice questions, four choices, score, play again. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_116",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 117,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal temperature converter. Variation 12. It must support read Celsius or Fahrenheit, convert to the other unit, validate input, repeat until exit. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_117",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 118,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal equation calculator. Variation 12. It must support solve linear and quadratic equations step by step and verify the solutions. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_118",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 119,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal calculator. Variation 12. It must support addition, subtraction, multiplication, division, percentages, and JSON history. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_119",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 120,
+    "category": "code_generation",
+    "prompt": "Build a real runnable Python terminal text RPG. Variation 12. It must support player health, inventory, items, enemies, combat, JSON save/load, and a command loop. Handle invalid input safely, use only the standard library, keep compatible with older JSON files when applicable, and keep running until the user types exit. Only output the final complete working Python code.",
+    "session_group": "code_generation_120",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 121,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nnumbers = [3, 5, 7]\nprint(sum(numbers))\n```",
+    "session_group": "code_explanation_001",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 122,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\ndef greet(name):\n    return f'Hello, {name}!'\nprint(greet('Maya'))\n```",
+    "session_group": "code_explanation_002",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 123,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nitems = {'a': 2, 'b': 4}\nprint(items['b'])\n```",
+    "session_group": "code_explanation_003",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 124,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nfor value in range(3):\n    print(value * 2)\n```",
+    "session_group": "code_explanation_004",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 125,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\ndef is_even(number):\n    return number % 2 == 0\nprint(is_even(8))\n```",
+    "session_group": "code_explanation_005",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 126,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nwith open('data.txt', 'w', encoding='utf-8') as file:\n    file.write('hello')\n```",
+    "session_group": "code_explanation_006",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 127,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nrecords = [{'name': 'Ari'}, {'name': 'Nora'}]\nprint([item['name'] for item in records])\n```",
+    "session_group": "code_explanation_007",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 128,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\ntry:\n    value = int(input('Number: '))\nexcept ValueError:\n    print('Invalid number')\n```",
+    "session_group": "code_explanation_008",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 129,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nclass Counter:\n    def __init__(self):\n        self.value = 0\n    def increment(self):\n        self.value += 1\n```",
+    "session_group": "code_explanation_009",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 130,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nimport json\ndata = {'ready': True}\nprint(json.dumps(data))\n```",
+    "session_group": "code_explanation_010",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 131,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nnumbers = [3, 5, 7]\nprint(sum(numbers))\n```",
+    "session_group": "code_explanation_011",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 132,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\ndef greet(name):\n    return f'Hello, {name}!'\nprint(greet('Maya'))\n```",
+    "session_group": "code_explanation_012",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 133,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nitems = {'a': 2, 'b': 4}\nprint(items['b'])\n```",
+    "session_group": "code_explanation_013",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 134,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nfor value in range(3):\n    print(value * 2)\n```",
+    "session_group": "code_explanation_014",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 135,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\ndef is_even(number):\n    return number % 2 == 0\nprint(is_even(8))\n```",
+    "session_group": "code_explanation_015",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 136,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nwith open('data.txt', 'w', encoding='utf-8') as file:\n    file.write('hello')\n```",
+    "session_group": "code_explanation_016",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 137,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nrecords = [{'name': 'Ari'}, {'name': 'Nora'}]\nprint([item['name'] for item in records])\n```",
+    "session_group": "code_explanation_017",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 138,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\ntry:\n    value = int(input('Number: '))\nexcept ValueError:\n    print('Invalid number')\n```",
+    "session_group": "code_explanation_018",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 139,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nclass Counter:\n    def __init__(self):\n        self.value = 0\n    def increment(self):\n        self.value += 1\n```",
+    "session_group": "code_explanation_019",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 140,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nimport json\ndata = {'ready': True}\nprint(json.dumps(data))\n```",
+    "session_group": "code_explanation_020",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 141,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nnumbers = [3, 5, 7]\nprint(sum(numbers))\n```",
+    "session_group": "code_explanation_021",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 142,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\ndef greet(name):\n    return f'Hello, {name}!'\nprint(greet('Maya'))\n```",
+    "session_group": "code_explanation_022",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 143,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nitems = {'a': 2, 'b': 4}\nprint(items['b'])\n```",
+    "session_group": "code_explanation_023",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 144,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nfor value in range(3):\n    print(value * 2)\n```",
+    "session_group": "code_explanation_024",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 145,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\ndef is_even(number):\n    return number % 2 == 0\nprint(is_even(8))\n```",
+    "session_group": "code_explanation_025",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 146,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nwith open('data.txt', 'w', encoding='utf-8') as file:\n    file.write('hello')\n```",
+    "session_group": "code_explanation_026",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 147,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nrecords = [{'name': 'Ari'}, {'name': 'Nora'}]\nprint([item['name'] for item in records])\n```",
+    "session_group": "code_explanation_027",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 148,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\ntry:\n    value = int(input('Number: '))\nexcept ValueError:\n    print('Invalid number')\n```",
+    "session_group": "code_explanation_028",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 149,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nclass Counter:\n    def __init__(self):\n        self.value = 0\n    def increment(self):\n        self.value += 1\n```",
+    "session_group": "code_explanation_029",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 150,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nimport json\ndata = {'ready': True}\nprint(json.dumps(data))\n```",
+    "session_group": "code_explanation_030",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 151,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nnumbers = [3, 5, 7]\nprint(sum(numbers))\n```",
+    "session_group": "code_explanation_031",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 152,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\ndef greet(name):\n    return f'Hello, {name}!'\nprint(greet('Maya'))\n```",
+    "session_group": "code_explanation_032",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 153,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nitems = {'a': 2, 'b': 4}\nprint(items['b'])\n```",
+    "session_group": "code_explanation_033",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 154,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nfor value in range(3):\n    print(value * 2)\n```",
+    "session_group": "code_explanation_034",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 155,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\ndef is_even(number):\n    return number % 2 == 0\nprint(is_even(8))\n```",
+    "session_group": "code_explanation_035",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 156,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nwith open('data.txt', 'w', encoding='utf-8') as file:\n    file.write('hello')\n```",
+    "session_group": "code_explanation_036",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 157,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nrecords = [{'name': 'Ari'}, {'name': 'Nora'}]\nprint([item['name'] for item in records])\n```",
+    "session_group": "code_explanation_037",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 158,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\ntry:\n    value = int(input('Number: '))\nexcept ValueError:\n    print('Invalid number')\n```",
+    "session_group": "code_explanation_038",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 159,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nclass Counter:\n    def __init__(self):\n        self.value = 0\n    def increment(self):\n        self.value += 1\n```",
+    "session_group": "code_explanation_039",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 160,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nimport json\ndata = {'ready': True}\nprint(json.dumps(data))\n```",
+    "session_group": "code_explanation_040",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 161,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nnumbers = [3, 5, 7]\nprint(sum(numbers))\n```",
+    "session_group": "code_explanation_041",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 162,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\ndef greet(name):\n    return f'Hello, {name}!'\nprint(greet('Maya'))\n```",
+    "session_group": "code_explanation_042",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 163,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nitems = {'a': 2, 'b': 4}\nprint(items['b'])\n```",
+    "session_group": "code_explanation_043",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 164,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nfor value in range(3):\n    print(value * 2)\n```",
+    "session_group": "code_explanation_044",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 165,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\ndef is_even(number):\n    return number % 2 == 0\nprint(is_even(8))\n```",
+    "session_group": "code_explanation_045",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 166,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nwith open('data.txt', 'w', encoding='utf-8') as file:\n    file.write('hello')\n```",
+    "session_group": "code_explanation_046",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 167,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nrecords = [{'name': 'Ari'}, {'name': 'Nora'}]\nprint([item['name'] for item in records])\n```",
+    "session_group": "code_explanation_047",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 168,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\ntry:\n    value = int(input('Number: '))\nexcept ValueError:\n    print('Invalid number')\n```",
+    "session_group": "code_explanation_048",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 169,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nclass Counter:\n    def __init__(self):\n        self.value = 0\n    def increment(self):\n        self.value += 1\n```",
+    "session_group": "code_explanation_049",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 170,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nimport json\ndata = {'ready': True}\nprint(json.dumps(data))\n```",
+    "session_group": "code_explanation_050",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 171,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nnumbers = [3, 5, 7]\nprint(sum(numbers))\n```",
+    "session_group": "code_explanation_051",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 172,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\ndef greet(name):\n    return f'Hello, {name}!'\nprint(greet('Maya'))\n```",
+    "session_group": "code_explanation_052",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 173,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nitems = {'a': 2, 'b': 4}\nprint(items['b'])\n```",
+    "session_group": "code_explanation_053",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 174,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nfor value in range(3):\n    print(value * 2)\n```",
+    "session_group": "code_explanation_054",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 175,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\ndef is_even(number):\n    return number % 2 == 0\nprint(is_even(8))\n```",
+    "session_group": "code_explanation_055",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 176,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nwith open('data.txt', 'w', encoding='utf-8') as file:\n    file.write('hello')\n```",
+    "session_group": "code_explanation_056",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 177,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nrecords = [{'name': 'Ari'}, {'name': 'Nora'}]\nprint([item['name'] for item in records])\n```",
+    "session_group": "code_explanation_057",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 178,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\ntry:\n    value = int(input('Number: '))\nexcept ValueError:\n    print('Invalid number')\n```",
+    "session_group": "code_explanation_058",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 179,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nclass Counter:\n    def __init__(self):\n        self.value = 0\n    def increment(self):\n        self.value += 1\n```",
+    "session_group": "code_explanation_059",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 180,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nimport json\ndata = {'ready': True}\nprint(json.dumps(data))\n```",
+    "session_group": "code_explanation_060",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 181,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nnumbers = [3, 5, 7]\nprint(sum(numbers))\n```",
+    "session_group": "code_explanation_061",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 182,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\ndef greet(name):\n    return f'Hello, {name}!'\nprint(greet('Maya'))\n```",
+    "session_group": "code_explanation_062",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 183,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nitems = {'a': 2, 'b': 4}\nprint(items['b'])\n```",
+    "session_group": "code_explanation_063",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 184,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nfor value in range(3):\n    print(value * 2)\n```",
+    "session_group": "code_explanation_064",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 185,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\ndef is_even(number):\n    return number % 2 == 0\nprint(is_even(8))\n```",
+    "session_group": "code_explanation_065",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 186,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nwith open('data.txt', 'w', encoding='utf-8') as file:\n    file.write('hello')\n```",
+    "session_group": "code_explanation_066",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 187,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nrecords = [{'name': 'Ari'}, {'name': 'Nora'}]\nprint([item['name'] for item in records])\n```",
+    "session_group": "code_explanation_067",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 188,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\ntry:\n    value = int(input('Number: '))\nexcept ValueError:\n    print('Invalid number')\n```",
+    "session_group": "code_explanation_068",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 189,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nclass Counter:\n    def __init__(self):\n        self.value = 0\n    def increment(self):\n        self.value += 1\n```",
+    "session_group": "code_explanation_069",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 190,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nimport json\ndata = {'ready': True}\nprint(json.dumps(data))\n```",
+    "session_group": "code_explanation_070",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 191,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nnumbers = [3, 5, 7]\nprint(sum(numbers))\n```",
+    "session_group": "code_explanation_071",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 192,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\ndef greet(name):\n    return f'Hello, {name}!'\nprint(greet('Maya'))\n```",
+    "session_group": "code_explanation_072",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 193,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nitems = {'a': 2, 'b': 4}\nprint(items['b'])\n```",
+    "session_group": "code_explanation_073",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 194,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nfor value in range(3):\n    print(value * 2)\n```",
+    "session_group": "code_explanation_074",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 195,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\ndef is_even(number):\n    return number % 2 == 0\nprint(is_even(8))\n```",
+    "session_group": "code_explanation_075",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 196,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nwith open('data.txt', 'w', encoding='utf-8') as file:\n    file.write('hello')\n```",
+    "session_group": "code_explanation_076",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 197,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nrecords = [{'name': 'Ari'}, {'name': 'Nora'}]\nprint([item['name'] for item in records])\n```",
+    "session_group": "code_explanation_077",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 198,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\ntry:\n    value = int(input('Number: '))\nexcept ValueError:\n    print('Invalid number')\n```",
+    "session_group": "code_explanation_078",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 199,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nclass Counter:\n    def __init__(self):\n        self.value = 0\n    def increment(self):\n        self.value += 1\n```",
+    "session_group": "code_explanation_079",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 200,
+    "category": "code_explanation",
+    "prompt": "Analyze this Python code. Explain what each important line does, identify the output or behavior, and mention one possible edge case. Do not invent code that is not shown.\n```python\nimport json\ndata = {'ready': True}\nprint(json.dumps(data))\n```",
+    "session_group": "code_explanation_080",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 201,
+    "category": "science",
+    "prompt": "Explain photosynthesis accurately in four clear sentences for a student.",
+    "session_group": "science_001",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 202,
+    "category": "science",
+    "prompt": "What is gravity? Give its main process and one everyday example.",
+    "session_group": "science_002",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 203,
+    "category": "science",
+    "prompt": "Explain why DNA replication matters and name one common misconception about it.",
+    "session_group": "science_003",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 204,
+    "category": "science",
+    "prompt": "Compare the water cycle with a closely related scientific idea in a short answer.",
+    "session_group": "science_004",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 205,
+    "category": "science",
+    "prompt": "Describe the cause and effect in electric current without using advanced jargon.",
+    "session_group": "science_005",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 206,
+    "category": "science",
+    "prompt": "Explain volcanoes accurately in four clear sentences for a student.",
+    "session_group": "science_006",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 207,
+    "category": "science",
+    "prompt": "What is the immune system? Give its main process and one everyday example.",
+    "session_group": "science_007",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 208,
+    "category": "science",
+    "prompt": "Explain why atoms matters and name one common misconception about it.",
+    "session_group": "science_008",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 209,
+    "category": "science",
+    "prompt": "Compare sound waves with a closely related scientific idea in a short answer.",
+    "session_group": "science_009",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 210,
+    "category": "science",
+    "prompt": "Describe the cause and effect in climate change without using advanced jargon.",
+    "session_group": "science_010",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 211,
+    "category": "science",
+    "prompt": "Explain cellular respiration accurately in four clear sentences for a student.",
+    "session_group": "science_011",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 212,
+    "category": "science",
+    "prompt": "What is plate tectonics? Give its main process and one everyday example.",
+    "session_group": "science_012",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 213,
+    "category": "science",
+    "prompt": "Explain why natural selection matters and name one common misconception about it.",
+    "session_group": "science_013",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 214,
+    "category": "science",
+    "prompt": "Compare the nervous system with a closely related scientific idea in a short answer.",
+    "session_group": "science_014",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 215,
+    "category": "science",
+    "prompt": "Describe the cause and effect in chemical bonds without using advanced jargon.",
+    "session_group": "science_015",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 216,
+    "category": "science",
+    "prompt": "Explain the carbon cycle accurately in four clear sentences for a student.",
+    "session_group": "science_016",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 217,
+    "category": "science",
+    "prompt": "What is vaccines? Give its main process and one everyday example.",
+    "session_group": "science_017",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 218,
+    "category": "science",
+    "prompt": "Explain why the phases of the Moon matters and name one common misconception about it.",
+    "session_group": "science_018",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 219,
+    "category": "science",
+    "prompt": "Compare renewable energy with a closely related scientific idea in a short answer.",
+    "session_group": "science_019",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 220,
+    "category": "science",
+    "prompt": "Describe the cause and effect in ocean currents without using advanced jargon.",
+    "session_group": "science_020",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 221,
+    "category": "science",
+    "prompt": "Explain photosynthesis accurately in four clear sentences for a student.",
+    "session_group": "science_021",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 222,
+    "category": "science",
+    "prompt": "What is gravity? Give its main process and one everyday example.",
+    "session_group": "science_022",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 223,
+    "category": "science",
+    "prompt": "Explain why DNA replication matters and name one common misconception about it.",
+    "session_group": "science_023",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 224,
+    "category": "science",
+    "prompt": "Compare the water cycle with a closely related scientific idea in a short answer.",
+    "session_group": "science_024",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 225,
+    "category": "science",
+    "prompt": "Describe the cause and effect in electric current without using advanced jargon.",
+    "session_group": "science_025",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 226,
+    "category": "science",
+    "prompt": "Explain volcanoes accurately in four clear sentences for a student.",
+    "session_group": "science_026",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 227,
+    "category": "science",
+    "prompt": "What is the immune system? Give its main process and one everyday example.",
+    "session_group": "science_027",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 228,
+    "category": "science",
+    "prompt": "Explain why atoms matters and name one common misconception about it.",
+    "session_group": "science_028",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 229,
+    "category": "science",
+    "prompt": "Compare sound waves with a closely related scientific idea in a short answer.",
+    "session_group": "science_029",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 230,
+    "category": "science",
+    "prompt": "Describe the cause and effect in climate change without using advanced jargon.",
+    "session_group": "science_030",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 231,
+    "category": "science",
+    "prompt": "Explain cellular respiration accurately in four clear sentences for a student.",
+    "session_group": "science_031",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 232,
+    "category": "science",
+    "prompt": "What is plate tectonics? Give its main process and one everyday example.",
+    "session_group": "science_032",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 233,
+    "category": "science",
+    "prompt": "Explain why natural selection matters and name one common misconception about it.",
+    "session_group": "science_033",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 234,
+    "category": "science",
+    "prompt": "Compare the nervous system with a closely related scientific idea in a short answer.",
+    "session_group": "science_034",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 235,
+    "category": "science",
+    "prompt": "Describe the cause and effect in chemical bonds without using advanced jargon.",
+    "session_group": "science_035",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 236,
+    "category": "science",
+    "prompt": "Explain the carbon cycle accurately in four clear sentences for a student.",
+    "session_group": "science_036",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 237,
+    "category": "science",
+    "prompt": "What is vaccines? Give its main process and one everyday example.",
+    "session_group": "science_037",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 238,
+    "category": "science",
+    "prompt": "Explain why the phases of the Moon matters and name one common misconception about it.",
+    "session_group": "science_038",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 239,
+    "category": "science",
+    "prompt": "Compare renewable energy with a closely related scientific idea in a short answer.",
+    "session_group": "science_039",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 240,
+    "category": "science",
+    "prompt": "Describe the cause and effect in ocean currents without using advanced jargon.",
+    "session_group": "science_040",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 241,
+    "category": "science",
+    "prompt": "Explain photosynthesis accurately in four clear sentences for a student.",
+    "session_group": "science_041",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 242,
+    "category": "science",
+    "prompt": "What is gravity? Give its main process and one everyday example.",
+    "session_group": "science_042",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 243,
+    "category": "science",
+    "prompt": "Explain why DNA replication matters and name one common misconception about it.",
+    "session_group": "science_043",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 244,
+    "category": "science",
+    "prompt": "Compare the water cycle with a closely related scientific idea in a short answer.",
+    "session_group": "science_044",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 245,
+    "category": "science",
+    "prompt": "Describe the cause and effect in electric current without using advanced jargon.",
+    "session_group": "science_045",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 246,
+    "category": "science",
+    "prompt": "Explain volcanoes accurately in four clear sentences for a student.",
+    "session_group": "science_046",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 247,
+    "category": "science",
+    "prompt": "What is the immune system? Give its main process and one everyday example.",
+    "session_group": "science_047",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 248,
+    "category": "science",
+    "prompt": "Explain why atoms matters and name one common misconception about it.",
+    "session_group": "science_048",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 249,
+    "category": "science",
+    "prompt": "Compare sound waves with a closely related scientific idea in a short answer.",
+    "session_group": "science_049",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 250,
+    "category": "science",
+    "prompt": "Describe the cause and effect in climate change without using advanced jargon.",
+    "session_group": "science_050",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 251,
+    "category": "science",
+    "prompt": "Explain cellular respiration accurately in four clear sentences for a student.",
+    "session_group": "science_051",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 252,
+    "category": "science",
+    "prompt": "What is plate tectonics? Give its main process and one everyday example.",
+    "session_group": "science_052",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 253,
+    "category": "science",
+    "prompt": "Explain why natural selection matters and name one common misconception about it.",
+    "session_group": "science_053",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 254,
+    "category": "science",
+    "prompt": "Compare the nervous system with a closely related scientific idea in a short answer.",
+    "session_group": "science_054",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 255,
+    "category": "science",
+    "prompt": "Describe the cause and effect in chemical bonds without using advanced jargon.",
+    "session_group": "science_055",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 256,
+    "category": "science",
+    "prompt": "Explain the carbon cycle accurately in four clear sentences for a student.",
+    "session_group": "science_056",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 257,
+    "category": "science",
+    "prompt": "What is vaccines? Give its main process and one everyday example.",
+    "session_group": "science_057",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 258,
+    "category": "science",
+    "prompt": "Explain why the phases of the Moon matters and name one common misconception about it.",
+    "session_group": "science_058",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 259,
+    "category": "science",
+    "prompt": "Compare renewable energy with a closely related scientific idea in a short answer.",
+    "session_group": "science_059",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 260,
+    "category": "science",
+    "prompt": "Describe the cause and effect in ocean currents without using advanced jargon.",
+    "session_group": "science_060",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 261,
+    "category": "science",
+    "prompt": "Explain photosynthesis accurately in four clear sentences for a student.",
+    "session_group": "science_061",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 262,
+    "category": "science",
+    "prompt": "What is gravity? Give its main process and one everyday example.",
+    "session_group": "science_062",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 263,
+    "category": "science",
+    "prompt": "Explain why DNA replication matters and name one common misconception about it.",
+    "session_group": "science_063",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 264,
+    "category": "science",
+    "prompt": "Compare the water cycle with a closely related scientific idea in a short answer.",
+    "session_group": "science_064",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 265,
+    "category": "science",
+    "prompt": "Describe the cause and effect in electric current without using advanced jargon.",
+    "session_group": "science_065",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 266,
+    "category": "science",
+    "prompt": "Explain volcanoes accurately in four clear sentences for a student.",
+    "session_group": "science_066",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 267,
+    "category": "science",
+    "prompt": "What is the immune system? Give its main process and one everyday example.",
+    "session_group": "science_067",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 268,
+    "category": "science",
+    "prompt": "Explain why atoms matters and name one common misconception about it.",
+    "session_group": "science_068",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 269,
+    "category": "science",
+    "prompt": "Compare sound waves with a closely related scientific idea in a short answer.",
+    "session_group": "science_069",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 270,
+    "category": "science",
+    "prompt": "Describe the cause and effect in climate change without using advanced jargon.",
+    "session_group": "science_070",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 271,
+    "category": "science",
+    "prompt": "Explain cellular respiration accurately in four clear sentences for a student.",
+    "session_group": "science_071",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 272,
+    "category": "science",
+    "prompt": "What is plate tectonics? Give its main process and one everyday example.",
+    "session_group": "science_072",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 273,
+    "category": "science",
+    "prompt": "Explain why natural selection matters and name one common misconception about it.",
+    "session_group": "science_073",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 274,
+    "category": "science",
+    "prompt": "Compare the nervous system with a closely related scientific idea in a short answer.",
+    "session_group": "science_074",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 275,
+    "category": "science",
+    "prompt": "Describe the cause and effect in chemical bonds without using advanced jargon.",
+    "session_group": "science_075",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 276,
+    "category": "science",
+    "prompt": "Explain the carbon cycle accurately in four clear sentences for a student.",
+    "session_group": "science_076",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 277,
+    "category": "science",
+    "prompt": "What is vaccines? Give its main process and one everyday example.",
+    "session_group": "science_077",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 278,
+    "category": "science",
+    "prompt": "Explain why the phases of the Moon matters and name one common misconception about it.",
+    "session_group": "science_078",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 279,
+    "category": "science",
+    "prompt": "Compare renewable energy with a closely related scientific idea in a short answer.",
+    "session_group": "science_079",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 280,
+    "category": "science",
+    "prompt": "Describe the cause and effect in ocean currents without using advanced jargon.",
+    "session_group": "science_080",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 281,
+    "category": "science",
+    "prompt": "Explain photosynthesis accurately in four clear sentences for a student.",
+    "session_group": "science_081",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 282,
+    "category": "science",
+    "prompt": "What is gravity? Give its main process and one everyday example.",
+    "session_group": "science_082",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 283,
+    "category": "science",
+    "prompt": "Explain why DNA replication matters and name one common misconception about it.",
+    "session_group": "science_083",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 284,
+    "category": "science",
+    "prompt": "Compare the water cycle with a closely related scientific idea in a short answer.",
+    "session_group": "science_084",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 285,
+    "category": "science",
+    "prompt": "Describe the cause and effect in electric current without using advanced jargon.",
+    "session_group": "science_085",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 286,
+    "category": "science",
+    "prompt": "Explain volcanoes accurately in four clear sentences for a student.",
+    "session_group": "science_086",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 287,
+    "category": "science",
+    "prompt": "What is the immune system? Give its main process and one everyday example.",
+    "session_group": "science_087",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 288,
+    "category": "science",
+    "prompt": "Explain why atoms matters and name one common misconception about it.",
+    "session_group": "science_088",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 289,
+    "category": "science",
+    "prompt": "Compare sound waves with a closely related scientific idea in a short answer.",
+    "session_group": "science_089",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 290,
+    "category": "science",
+    "prompt": "Describe the cause and effect in climate change without using advanced jargon.",
+    "session_group": "science_090",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 291,
+    "category": "science",
+    "prompt": "Explain cellular respiration accurately in four clear sentences for a student.",
+    "session_group": "science_091",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 292,
+    "category": "science",
+    "prompt": "What is plate tectonics? Give its main process and one everyday example.",
+    "session_group": "science_092",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 293,
+    "category": "science",
+    "prompt": "Explain why natural selection matters and name one common misconception about it.",
+    "session_group": "science_093",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 294,
+    "category": "science",
+    "prompt": "Compare the nervous system with a closely related scientific idea in a short answer.",
+    "session_group": "science_094",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 295,
+    "category": "science",
+    "prompt": "Describe the cause and effect in chemical bonds without using advanced jargon.",
+    "session_group": "science_095",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 296,
+    "category": "science",
+    "prompt": "Explain the carbon cycle accurately in four clear sentences for a student.",
+    "session_group": "science_096",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 297,
+    "category": "science",
+    "prompt": "What is vaccines? Give its main process and one everyday example.",
+    "session_group": "science_097",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 298,
+    "category": "science",
+    "prompt": "Explain why the phases of the Moon matters and name one common misconception about it.",
+    "session_group": "science_098",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 299,
+    "category": "science",
+    "prompt": "Compare renewable energy with a closely related scientific idea in a short answer.",
+    "session_group": "science_099",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 300,
+    "category": "science",
+    "prompt": "Describe the cause and effect in ocean currents without using advanced jargon.",
+    "session_group": "science_100",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 301,
+    "category": "science",
+    "prompt": "Explain photosynthesis accurately in four clear sentences for a student.",
+    "session_group": "science_101",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 302,
+    "category": "science",
+    "prompt": "What is gravity? Give its main process and one everyday example.",
+    "session_group": "science_102",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 303,
+    "category": "science",
+    "prompt": "Explain why DNA replication matters and name one common misconception about it.",
+    "session_group": "science_103",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 304,
+    "category": "science",
+    "prompt": "Compare the water cycle with a closely related scientific idea in a short answer.",
+    "session_group": "science_104",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 305,
+    "category": "science",
+    "prompt": "Describe the cause and effect in electric current without using advanced jargon.",
+    "session_group": "science_105",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 306,
+    "category": "science",
+    "prompt": "Explain volcanoes accurately in four clear sentences for a student.",
+    "session_group": "science_106",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 307,
+    "category": "science",
+    "prompt": "What is the immune system? Give its main process and one everyday example.",
+    "session_group": "science_107",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 308,
+    "category": "science",
+    "prompt": "Explain why atoms matters and name one common misconception about it.",
+    "session_group": "science_108",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 309,
+    "category": "science",
+    "prompt": "Compare sound waves with a closely related scientific idea in a short answer.",
+    "session_group": "science_109",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 310,
+    "category": "science",
+    "prompt": "Describe the cause and effect in climate change without using advanced jargon.",
+    "session_group": "science_110",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 311,
+    "category": "science",
+    "prompt": "Explain cellular respiration accurately in four clear sentences for a student.",
+    "session_group": "science_111",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 312,
+    "category": "science",
+    "prompt": "What is plate tectonics? Give its main process and one everyday example.",
+    "session_group": "science_112",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 313,
+    "category": "science",
+    "prompt": "Explain why natural selection matters and name one common misconception about it.",
+    "session_group": "science_113",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 314,
+    "category": "science",
+    "prompt": "Compare the nervous system with a closely related scientific idea in a short answer.",
+    "session_group": "science_114",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 315,
+    "category": "science",
+    "prompt": "Describe the cause and effect in chemical bonds without using advanced jargon.",
+    "session_group": "science_115",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 316,
+    "category": "science",
+    "prompt": "Explain the carbon cycle accurately in four clear sentences for a student.",
+    "session_group": "science_116",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 317,
+    "category": "science",
+    "prompt": "What is vaccines? Give its main process and one everyday example.",
+    "session_group": "science_117",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 318,
+    "category": "science",
+    "prompt": "Explain why the phases of the Moon matters and name one common misconception about it.",
+    "session_group": "science_118",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 319,
+    "category": "science",
+    "prompt": "Compare renewable energy with a closely related scientific idea in a short answer.",
+    "session_group": "science_119",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 320,
+    "category": "science",
+    "prompt": "Describe the cause and effect in ocean currents without using advanced jargon.",
+    "session_group": "science_120",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 321,
+    "category": "science",
+    "prompt": "Explain photosynthesis accurately in four clear sentences for a student.",
+    "session_group": "science_121",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 322,
+    "category": "science",
+    "prompt": "What is gravity? Give its main process and one everyday example.",
+    "session_group": "science_122",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 323,
+    "category": "science",
+    "prompt": "Explain why DNA replication matters and name one common misconception about it.",
+    "session_group": "science_123",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 324,
+    "category": "science",
+    "prompt": "Compare the water cycle with a closely related scientific idea in a short answer.",
+    "session_group": "science_124",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 325,
+    "category": "science",
+    "prompt": "Describe the cause and effect in electric current without using advanced jargon.",
+    "session_group": "science_125",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 326,
+    "category": "science",
+    "prompt": "Explain volcanoes accurately in four clear sentences for a student.",
+    "session_group": "science_126",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 327,
+    "category": "science",
+    "prompt": "What is the immune system? Give its main process and one everyday example.",
+    "session_group": "science_127",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 328,
+    "category": "science",
+    "prompt": "Explain why atoms matters and name one common misconception about it.",
+    "session_group": "science_128",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 329,
+    "category": "science",
+    "prompt": "Compare sound waves with a closely related scientific idea in a short answer.",
+    "session_group": "science_129",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 330,
+    "category": "science",
+    "prompt": "Describe the cause and effect in climate change without using advanced jargon.",
+    "session_group": "science_130",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 331,
+    "category": "science",
+    "prompt": "Explain cellular respiration accurately in four clear sentences for a student.",
+    "session_group": "science_131",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 332,
+    "category": "science",
+    "prompt": "What is plate tectonics? Give its main process and one everyday example.",
+    "session_group": "science_132",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 333,
+    "category": "science",
+    "prompt": "Explain why natural selection matters and name one common misconception about it.",
+    "session_group": "science_133",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 334,
+    "category": "science",
+    "prompt": "Compare the nervous system with a closely related scientific idea in a short answer.",
+    "session_group": "science_134",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 335,
+    "category": "science",
+    "prompt": "Describe the cause and effect in chemical bonds without using advanced jargon.",
+    "session_group": "science_135",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 336,
+    "category": "science",
+    "prompt": "Explain the carbon cycle accurately in four clear sentences for a student.",
+    "session_group": "science_136",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 337,
+    "category": "science",
+    "prompt": "What is vaccines? Give its main process and one everyday example.",
+    "session_group": "science_137",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 338,
+    "category": "science",
+    "prompt": "Explain why the phases of the Moon matters and name one common misconception about it.",
+    "session_group": "science_138",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 339,
+    "category": "science",
+    "prompt": "Compare renewable energy with a closely related scientific idea in a short answer.",
+    "session_group": "science_139",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 340,
+    "category": "science",
+    "prompt": "Describe the cause and effect in ocean currents without using advanced jargon.",
+    "session_group": "science_140",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 341,
+    "category": "science",
+    "prompt": "Explain photosynthesis accurately in four clear sentences for a student.",
+    "session_group": "science_141",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 342,
+    "category": "science",
+    "prompt": "What is gravity? Give its main process and one everyday example.",
+    "session_group": "science_142",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 343,
+    "category": "science",
+    "prompt": "Explain why DNA replication matters and name one common misconception about it.",
+    "session_group": "science_143",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 344,
+    "category": "science",
+    "prompt": "Compare the water cycle with a closely related scientific idea in a short answer.",
+    "session_group": "science_144",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 345,
+    "category": "science",
+    "prompt": "Describe the cause and effect in electric current without using advanced jargon.",
+    "session_group": "science_145",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 346,
+    "category": "science",
+    "prompt": "Explain volcanoes accurately in four clear sentences for a student.",
+    "session_group": "science_146",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 347,
+    "category": "science",
+    "prompt": "What is the immune system? Give its main process and one everyday example.",
+    "session_group": "science_147",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 348,
+    "category": "science",
+    "prompt": "Explain why atoms matters and name one common misconception about it.",
+    "session_group": "science_148",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 349,
+    "category": "science",
+    "prompt": "Compare sound waves with a closely related scientific idea in a short answer.",
+    "session_group": "science_149",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 350,
+    "category": "science",
+    "prompt": "Describe the cause and effect in climate change without using advanced jargon.",
+    "session_group": "science_150",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 351,
+    "category": "science",
+    "prompt": "Explain cellular respiration accurately in four clear sentences for a student.",
+    "session_group": "science_151",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 352,
+    "category": "science",
+    "prompt": "What is plate tectonics? Give its main process and one everyday example.",
+    "session_group": "science_152",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 353,
+    "category": "science",
+    "prompt": "Explain why natural selection matters and name one common misconception about it.",
+    "session_group": "science_153",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 354,
+    "category": "science",
+    "prompt": "Compare the nervous system with a closely related scientific idea in a short answer.",
+    "session_group": "science_154",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 355,
+    "category": "science",
+    "prompt": "Describe the cause and effect in chemical bonds without using advanced jargon.",
+    "session_group": "science_155",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 356,
+    "category": "science",
+    "prompt": "Explain the carbon cycle accurately in four clear sentences for a student.",
+    "session_group": "science_156",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 357,
+    "category": "science",
+    "prompt": "What is vaccines? Give its main process and one everyday example.",
+    "session_group": "science_157",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 358,
+    "category": "science",
+    "prompt": "Explain why the phases of the Moon matters and name one common misconception about it.",
+    "session_group": "science_158",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 359,
+    "category": "science",
+    "prompt": "Compare renewable energy with a closely related scientific idea in a short answer.",
+    "session_group": "science_159",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 360,
+    "category": "science",
+    "prompt": "Describe the cause and effect in ocean currents without using advanced jargon.",
+    "session_group": "science_160",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 361,
+    "category": "science",
+    "prompt": "Explain photosynthesis accurately in four clear sentences for a student.",
+    "session_group": "science_161",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 362,
+    "category": "science",
+    "prompt": "What is gravity? Give its main process and one everyday example.",
+    "session_group": "science_162",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 363,
+    "category": "science",
+    "prompt": "Explain why DNA replication matters and name one common misconception about it.",
+    "session_group": "science_163",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 364,
+    "category": "science",
+    "prompt": "Compare the water cycle with a closely related scientific idea in a short answer.",
+    "session_group": "science_164",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 365,
+    "category": "science",
+    "prompt": "Describe the cause and effect in electric current without using advanced jargon.",
+    "session_group": "science_165",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 366,
+    "category": "science",
+    "prompt": "Explain volcanoes accurately in four clear sentences for a student.",
+    "session_group": "science_166",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 367,
+    "category": "science",
+    "prompt": "What is the immune system? Give its main process and one everyday example.",
+    "session_group": "science_167",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 368,
+    "category": "science",
+    "prompt": "Explain why atoms matters and name one common misconception about it.",
+    "session_group": "science_168",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 369,
+    "category": "science",
+    "prompt": "Compare sound waves with a closely related scientific idea in a short answer.",
+    "session_group": "science_169",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 370,
+    "category": "science",
+    "prompt": "Describe the cause and effect in climate change without using advanced jargon.",
+    "session_group": "science_170",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 371,
+    "category": "science",
+    "prompt": "Explain cellular respiration accurately in four clear sentences for a student.",
+    "session_group": "science_171",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 372,
+    "category": "science",
+    "prompt": "What is plate tectonics? Give its main process and one everyday example.",
+    "session_group": "science_172",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 373,
+    "category": "science",
+    "prompt": "Explain why natural selection matters and name one common misconception about it.",
+    "session_group": "science_173",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 374,
+    "category": "science",
+    "prompt": "Compare the nervous system with a closely related scientific idea in a short answer.",
+    "session_group": "science_174",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 375,
+    "category": "science",
+    "prompt": "Describe the cause and effect in chemical bonds without using advanced jargon.",
+    "session_group": "science_175",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 376,
+    "category": "science",
+    "prompt": "Explain the carbon cycle accurately in four clear sentences for a student.",
+    "session_group": "science_176",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 377,
+    "category": "science",
+    "prompt": "What is vaccines? Give its main process and one everyday example.",
+    "session_group": "science_177",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 378,
+    "category": "science",
+    "prompt": "Explain why the phases of the Moon matters and name one common misconception about it.",
+    "session_group": "science_178",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 379,
+    "category": "science",
+    "prompt": "Compare renewable energy with a closely related scientific idea in a short answer.",
+    "session_group": "science_179",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 380,
+    "category": "science",
+    "prompt": "Describe the cause and effect in ocean currents without using advanced jargon.",
+    "session_group": "science_180",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 381,
+    "category": "science",
+    "prompt": "Explain photosynthesis accurately in four clear sentences for a student.",
+    "session_group": "science_181",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 382,
+    "category": "science",
+    "prompt": "What is gravity? Give its main process and one everyday example.",
+    "session_group": "science_182",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 383,
+    "category": "science",
+    "prompt": "Explain why DNA replication matters and name one common misconception about it.",
+    "session_group": "science_183",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 384,
+    "category": "science",
+    "prompt": "Compare the water cycle with a closely related scientific idea in a short answer.",
+    "session_group": "science_184",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 385,
+    "category": "science",
+    "prompt": "Describe the cause and effect in electric current without using advanced jargon.",
+    "session_group": "science_185",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 386,
+    "category": "science",
+    "prompt": "Explain volcanoes accurately in four clear sentences for a student.",
+    "session_group": "science_186",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 387,
+    "category": "science",
+    "prompt": "What is the immune system? Give its main process and one everyday example.",
+    "session_group": "science_187",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 388,
+    "category": "science",
+    "prompt": "Explain why atoms matters and name one common misconception about it.",
+    "session_group": "science_188",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 389,
+    "category": "science",
+    "prompt": "Compare sound waves with a closely related scientific idea in a short answer.",
+    "session_group": "science_189",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 390,
+    "category": "science",
+    "prompt": "Describe the cause and effect in climate change without using advanced jargon.",
+    "session_group": "science_190",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 391,
+    "category": "science",
+    "prompt": "Explain cellular respiration accurately in four clear sentences for a student.",
+    "session_group": "science_191",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 392,
+    "category": "science",
+    "prompt": "What is plate tectonics? Give its main process and one everyday example.",
+    "session_group": "science_192",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 393,
+    "category": "science",
+    "prompt": "Explain why natural selection matters and name one common misconception about it.",
+    "session_group": "science_193",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 394,
+    "category": "science",
+    "prompt": "Compare the nervous system with a closely related scientific idea in a short answer.",
+    "session_group": "science_194",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 395,
+    "category": "science",
+    "prompt": "Describe the cause and effect in chemical bonds without using advanced jargon.",
+    "session_group": "science_195",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 396,
+    "category": "science",
+    "prompt": "Explain the carbon cycle accurately in four clear sentences for a student.",
+    "session_group": "science_196",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 397,
+    "category": "science",
+    "prompt": "What is vaccines? Give its main process and one everyday example.",
+    "session_group": "science_197",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 398,
+    "category": "science",
+    "prompt": "Explain why the phases of the Moon matters and name one common misconception about it.",
+    "session_group": "science_198",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 399,
+    "category": "science",
+    "prompt": "Compare renewable energy with a closely related scientific idea in a short answer.",
+    "session_group": "science_199",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  },
+  {
+    "id": 400,
+    "category": "science",
+    "prompt": "Describe the cause and effect in ocean currents without using advanced jargon.",
+    "session_group": "science_200",
+    "grading_policy": "Answer must be non-empty, relevant, and free of internal planning output."
+  }
+]

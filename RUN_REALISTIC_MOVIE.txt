@@ -1,0 +1,23 @@
+CANRI PHOTOREALISTIC MOVIE RENDER
+
+The old *_animatic.mp4 is only a storyboard preview. It is not the final film.
+
+1. Create a Runway developer account and add API credits.
+2. Create an API key in the Runway developer portal.
+3. In PowerShell, store the key outside the project:
+
+   setx RUNWAYML_API_SECRET "YOUR_RUNWAY_KEY"
+
+4. Close and reopen the terminal. Do not paste the key into source code, JSON,
+   Git, GitHub, screenshots, or chat messages.
+
+5. Calculate the cost without rendering:
+
+   python .\main_ai_canri\render_movie_runway.py ".\main_ai_canri\generated_movies\the_last_signal_9e79c057\movie_project.json" --max-cost-usd 25
+
+6. Start the paid render after reviewing the estimate:
+
+   python .\main_ai_canri\render_movie_runway.py ".\main_ai_canri\generated_movies\the_last_signal_9e79c057\movie_project.json" --max-cost-usd 25 --execute
+
+The 180-second project currently estimates 2,160 Runway credits, or $21.60
+before retries and tax. Completed clips are checkpointed and reused.

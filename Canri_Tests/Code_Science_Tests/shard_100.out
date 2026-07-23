@@ -1,0 +1,88 @@
+Main Brain Started
+Manager Brain Loaded
+Spelling Brain Loaded
+Understanding Brain Loaded
+Memory Brain Loaded
+Research Brain Loaded
+Reasoning Brain Loaded
+Response Brain Loaded
+Creative Brain Loaded
+Code Brain Loaded
+Math Brain Loaded
+Science Brain Loaded
+Language Brain Loaded
+Language Loader Loaded
+Language Loader Loaded
+Translation Engine Loaded
+Translation Engine Loaded
+Grammar Engine Loaded
+Grammar Engine Loaded
+Dictionary Engine Loaded
+Dictionary Engine Loaded
+Expressions Engine Loaded
+Expressions Engine Loaded
+Language Statistics Engine Loaded
+Language Statistics Engine Loaded
+Language Analysis Engine Loaded
+Language Analysis Engine Loaded
+Language Report Builder Loaded
+Language Report Builder Loaded
+History Brain Loaded
+Geography Brain Loaded
+Technology Brain Loaded
+Game Brain Loaded
+Story Brain Loaded
+Character Brain Loaded
+World Brain Loaded
+Image Brain Loaded
+Vision Brain Loaded
+Voice Brain Loaded
+Learning Brain Loaded
+Fact Check Brain Loaded
+Quality Control Brain Loaded
+Collaboration Brain Loaded
+Nervous System Brain Loaded
+Planner Brain Loaded
+Emotion Brain Loaded
+Security Brain Loaded
+Completed 10/100
+Completed 20/100
+Completed 30/100
+Completed 40/100
+Completed 50/100
+Completed 60/100
+Completed 70/100
+Completed 80/100
+Completed 90/100
+Completed 100/100
+{
+  "title": "Canri AI Code and Science 400-Task Benchmark",
+  "generated_utc": "2026-07-22T16:18:15.176272+00:00",
+  "total_planned": 100,
+  "total_completed": 100,
+  "total_passed": 100,
+  "total_failed": 0,
+  "pass_rate_percent": 100.0,
+  "category_summary": {
+    "code_explanation": {
+      "planned": 80,
+      "completed": 80,
+      "passed": 80,
+      "failed": 0,
+      "pass_rate_percent": 100.0,
+      "average_elapsed_seconds": 16.6
+    },
+    "code_generation": {
+      "planned": 20,
+      "completed": 20,
+      "passed": 20,
+      "failed": 0,
+      "pass_rate_percent": 100.0,
+      "average_elapsed_seconds": 30.314
+    }
+  },
+  "primary_brains": {
+    "Code_brain": 100
+  },
+  "run_elapsed_seconds": 1934.44
+}

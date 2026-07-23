@@ -105,6 +105,18 @@ class ScienceBrain:
     def _save_statistics(self):
         atomic_write_json(STATISTICS_PATH, self.statistics, indent=4)
 
+    def get_understanding_report(self, data):
+        if not isinstance(data, dict):
+            return {}
+        nested = data.get("understanding", {})
+        if isinstance(nested, dict) and nested:
+            report = dict(nested)
+            for key in ["original_text", "corrected_text", "main_topic", "intent"]:
+                if not report.get(key) and data.get(key):
+                    report[key] = data.get(key)
+            return report
+        return data
+
     # ---------- ניתוח ה-report ----------
 
     def _collect_keywords(self, report):
@@ -332,7 +344,6 @@ class ScienceBrain:
         """
         Placeholder לחיפוש חיצוני - לא ממומש כרגע.
         """
-        print("[Science_brain] external search not implemented yet")
         return []
 
     # ---------- סיכום ----------
@@ -373,30 +384,95 @@ class ScienceBrain:
         return max(1, min(int(match.group(1)), 12))
 
     def build_answer(self, matches, scanner_articles, original_text):
-        source_text = ""
-        if matches:
-            source_text = str(
-                matches[0].get("content")
-                or matches[0].get("abstract")
+        source_blocks = []
+        for match in matches[:3]:
+            source_blocks.extend([
+                str(match.get("abstract") or ""),
+                str(match.get("content") or ""),
+                " ".join(str(item) for item in match.get("key_points", [])[:6]),
+            ])
+        for article in scanner_articles[:3]:
+            source_blocks.append(str(
+                article.get("text")
+                or article.get("content_excerpt")
+                or article.get("summary")
                 or ""
+            ))
+
+        sentences = []
+        for block in source_blocks:
+            sentences.extend(
+                item.strip()
+                for item in re.split(r"(?<=[.!?])\s+", block)
+                if len(item.strip()) >= 25
             )
-        if not source_text and scanner_articles:
-            source_text = str(
-                scanner_articles[0].get("text")
-                or scanner_articles[0].get("summary")
-                or ""
-            )
-        if not source_text:
+        sentences = list(dict.fromkeys(sentences))
+        if not sentences:
             return ""
 
-        sentences = [
-            item.strip()
-            for item in re.split(r"(?<=[.!?])\s+", source_text)
-            if item.strip()
-        ]
+        query_terms = {
+            token for token in re.findall(r"[a-zA-Z][a-zA-Z\-]{2,}", str(original_text).lower())
+            if token not in STOP_WORDS and token not in GENERIC_SCIENCE_TERMS
+        }
+        lowered_request = str(original_text).lower()
+        desired_markers = []
+        if any(marker in lowered_request for marker in ["why", "cause", "effect"]):
+            desired_markers.extend(["because", "cause", "therefore", "results", "leads"])
+        if any(marker in lowered_request for marker in ["example", "everyday", "application"]):
+            desired_markers.extend(["example", "used", "application", "such as"])
+        if "compare" in lowered_request:
+            desired_markers.extend(["while", "whereas", "unlike", "both", "difference"])
+
+        def sentence_score(sentence):
+            lowered = sentence.lower()
+            term_score = sum(4 for term in query_terms if term in lowered)
+            marker_score = sum(2 for marker in desired_markers if marker in lowered)
+            length_score = 2 if 45 <= len(sentence) <= 260 else 0
+            return term_score + marker_score + length_score
+
+        ranked = sorted(
+            enumerate(sentences),
+            key=lambda item: (sentence_score(item[1]), -item[0]),
+            reverse=True,
+        )
         requested = self.requested_sentence_count(original_text)
-        limit = requested or min(5, len(sentences))
-        return " ".join(sentences[:limit]).strip()
+        limit = requested or min(5, len(ranked))
+        selected = [sentence for _, sentence in ranked[:limit]]
+        if requested and len(selected) < requested:
+            selected.extend(
+                sentence for sentence in sentences
+                if sentence not in selected
+            )
+            selected = selected[:requested]
+        return " ".join(selected).strip()
+
+    def source_citations(self, matches, scanner_articles):
+        citations = []
+        for match in matches[:3]:
+            for source in match.get("source_recommendations", [])[:3]:
+                if isinstance(source, dict):
+                    citations.append(source)
+                elif source:
+                    citations.append({"title": str(source), "trust_score": match.get("trust", 50)})
+        for article in scanner_articles[:5]:
+            sources = article.get("sources", [])
+            if sources:
+                citations.extend(source for source in sources if isinstance(source, dict))
+            elif article.get("url"):
+                citations.append({
+                    "title": article.get("title"),
+                    "url": article.get("url"),
+                    "trust_score": article.get("trust_score", 0),
+                })
+        unique = []
+        seen = set()
+        for item in citations:
+            identity = item.get("url") or item.get("source_id") or item.get("title") or item.get("source_name")
+            if not identity or identity in seen:
+                continue
+            seen.add(identity)
+            unique.append(item)
+        return unique[:6]
 
     # ---------- ביטחון ----------
 
@@ -444,7 +520,8 @@ class ScienceBrain:
         data = ה-report שמועבר מ-Manager_brain (שמקורו ב-UnderstandingBrain).
         מחזיר report סטרוקטורי בחזרה ל-Manager_brain.
         """
-        original_text = data.get("original_text", "")
+        report = self.get_understanding_report(data)
+        original_text = report.get("original_text") or report.get("corrected_text") or ""
         scanner_articles = scanner_evidence(data, limit=5)
         scanner_signature = tuple(item.get("article_id") for item in scanner_articles)
         cache_key = (original_text, scanner_signature)
@@ -453,9 +530,9 @@ class ScienceBrain:
         if cache_key in self.cache:
             return self.cache[cache_key]
 
-        keywords = self._collect_keywords(data)
-        direct_keywords = self._collect_direct_keywords(data)
-        direct_phrases = self._collect_direct_phrases(data)
+        keywords = self._collect_keywords(report)
+        direct_keywords = self._collect_direct_keywords(report)
+        direct_phrases = self._collect_direct_phrases(report)
 
         # שלב 1: חיפוש מקומי (כולל דירוג לפי statistics)
         matches = self.search_local_articles(
@@ -487,14 +564,16 @@ class ScienceBrain:
             confidence = max(confidence, min(95, round(scanner_trust)))
 
         # שלב 4: needs_fact_check - flag בלבד, Fact_Check_brain מופעל ע"י Manager
-        needs_fact_check = confidence < MIN_USABLE_CONFIDENCE or len(matches) > 1
+        source_citations = self.source_citations(matches, scanner_articles)
+        needs_fact_check = confidence < 70 or not source_citations
 
         # שלב 5: עדכון סטטיסטיקה (Learning)
         if matches:
             self.update_statistics(matches, confidence)
 
         result = {
-            "topic": data.get("main_topic", "unknown"),
+            "brain": "Science_brain",
+            "topic": report.get("main_topic", "science"),
             "keywords_used": list(keywords),
             "source": source,
             "confidence": confidence,
@@ -503,11 +582,24 @@ class ScienceBrain:
             "articles_found": len(matches),
             "scanner_articles_found": len(scanner_articles),
             "scanner_evidence": scanner_articles,
+            "source_citations": source_citations,
             "top_article_ids": [
                 article["article_id"]
                 for article in matches[:5]
             ],
-            "needs_fact_check": needs_fact_check
+            "needs_fact_check": needs_fact_check,
+            "self_review": {
+                "ready": bool(matches or scanner_articles) and confidence >= MIN_USABLE_CONFIDENCE,
+                "evidence_available": bool(source_citations or scanner_articles),
+                "request_focused": bool(direct_keywords or direct_phrases),
+            },
+            "suggested_next_brains": [
+                brain_name for brain_name, enabled in [
+                    ("Fact_Check_brain", needs_fact_check),
+                    ("Research_brain", confidence < LOCAL_CONFIDENCE_THRESHOLD),
+                    ("Response_brain", True),
+                ] if enabled
+            ],
         }
 
         self.cache[cache_key] = result

@@ -61,9 +61,14 @@ class NervousSystemBrain:
     def owner_brains(self, report):
         topic = str(report.get("main_topic", "general")).lower()
         domains = report.get("domains", [])
+        if not domains:
+            domains = report.get("central_domains", [])
         requested = [topic]
         if isinstance(domains, list):
-            requested.extend(str(item).lower() for item in domains)
+            requested.extend(
+                str(item.get("domain") if isinstance(item, dict) else item).lower()
+                for item in domains
+            )
 
         owners = []
         table = self.profile.get("domain_owners", {})
@@ -88,6 +93,13 @@ class NervousSystemBrain:
                 "skipped": bool(result.get("skipped")),
                 "self_review_ready": result.get("self_review", {}).get("ready"),
                 "scanner_received": result.get("scanner_context", {}).get("received", False),
+                "source_evidence": bool(
+                    result.get("source_citations")
+                    or result.get("strongest_sources")
+                    or result.get("scanner_evidence")
+                    or result.get("scanner_knowledge_used")
+                ),
+                "needs_help": bool(result.get("needs_help")),
             })
         return states
 
@@ -123,6 +135,13 @@ class NervousSystemBrain:
         if result.get("source_citations") or result.get("strongest_sources"):
             score += 10
         lowered = text.lower()
+        if any(marker in lowered for marker in [
+            "no visual or file attachments were found",
+            "no image attachment was found",
+            "no audio attachment was found",
+            "nothing was attached to inspect",
+        ]):
+            score -= 120
         if "the current draft did not pass canri's quality check" in lowered:
             score -= 100
         if "here is the useful conclusion:" in lowered:
@@ -270,7 +289,70 @@ class NervousSystemBrain:
                     "signal": "specialist_result_available",
                     "strength": "high" if state.get("has_output") else "low",
                 })
+
+        active_by_name = {
+            state.get("brain"): state
+            for state in active_states
+            if state.get("brain") and state.get("has_output")
+        }
+        active_owners = [name for name in owners if name in active_by_name]
+        for index, source in enumerate(active_owners):
+            for target in active_owners[index + 1:]:
+                connections.append({
+                    "from": source,
+                    "to": target,
+                    "signal": "cross_domain_consultation",
+                    "strength": "high",
+                })
+                connections.append({
+                    "from": target,
+                    "to": source,
+                    "signal": "cross_domain_consultation",
+                    "strength": "high",
+                })
         return connections[:40]
+
+    def specialist_handoffs(self, results, owners, unresolved):
+        handoffs = []
+        for owner in owners[:6]:
+            result = results.get(owner, {})
+            if not isinstance(result, dict):
+                result = {}
+            handoffs.append({
+                "brain": owner,
+                "output_ready": bool(self.result_text(result)),
+                "confidence": result.get("confidence"),
+                "evidence_ready": bool(
+                    result.get("source_citations")
+                    or result.get("strongest_sources")
+                    or result.get("scanner_evidence")
+                    or result.get("scanner_knowledge_used")
+                ),
+                "needs_help": bool(result.get("needs_help") or result.get("error")),
+                "unresolved_requirements": [
+                    item.get("id") or item.get("text")
+                    for item in unresolved
+                    if owner in item.get("suggested_owners", [])
+                ][:10],
+            })
+        return handoffs
+
+    def synthesis_brief(self, report, best, owners, unresolved, scanner_state):
+        contract = report.get("request_contract", {}) if isinstance(report, dict) else {}
+        constraints = contract.get("output_constraints", {}) if isinstance(contract, dict) else {}
+        return {
+            "selected_brain": best.get("brain") if isinstance(best, dict) else None,
+            "consulted_owners": owners[:6],
+            "unresolved_count": len(unresolved),
+            "trusted_evidence_available": bool(scanner_state.get("available")),
+            "strict_output": bool(constraints.get("only_output")),
+            "instructions": [
+                "Use the selected specialist output as the base answer.",
+                "Merge only evidence or corrections that improve an explicit requirement.",
+                "Do not select a media brain's missing-attachment notice for a text-only request.",
+                "Preserve strict output constraints and keep internal coordination hidden.",
+            ],
+        }
 
     def scanner_state(self, data):
 
@@ -450,6 +532,19 @@ class NervousSystemBrain:
                     "strength": "high",
                 })
 
+        specialist_handoffs = self.specialist_handoffs(
+            results,
+            owners,
+            unresolved,
+        )
+        synthesis_brief = self.synthesis_brief(
+            report,
+            best,
+            owners,
+            unresolved,
+            scanner_state,
+        )
+
         return {
             "brain": "Nervous_system_brain",
             "internal_only": True,
@@ -459,6 +554,8 @@ class NervousSystemBrain:
             "integration_stage": manager_context.get("phase", "neural_integration"),
             "active_brains": active_states,
             "brain_connections": brain_connections[:50],
+            "specialist_handoffs": specialist_handoffs,
+            "synthesis_brief": synthesis_brief,
             "best_candidate": best,
             "ranked_candidates": ranked,
             "requirements": requirement_states,

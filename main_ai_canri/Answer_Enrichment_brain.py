@@ -43,7 +43,7 @@ class AnswerEnrichmentBrain:
             or enhancement.get("strict_output")
             or any(marker in lowered for marker in [
                 "only output", "only return", "code only",
-                "do not output a plan", "not a plan or explanation",
+                "not a plan or explanation",
                 "without explanation", "no explanation",
             ])
         )
@@ -139,9 +139,42 @@ class AnswerEnrichmentBrain:
 
     def render_code_suffix(self, code_result):
         sections = []
-        summary = self.code_summary(code_result)
+        delivery = code_result.get("delivery_explanation", {})
+        delivery = delivery if isinstance(delivery, dict) else {}
+        summary = str(delivery.get("summary") or self.code_summary(code_result)).strip()
         if summary:
             sections.append("Explanation\n" + summary)
+
+        features = [
+            str(item).strip()
+            for item in delivery.get("implemented_features", [])
+            if str(item).strip()
+        ]
+        if features:
+            sections.append(
+                "What the program includes\n"
+                + "\n".join(f"- {item}" for item in features[:12])
+            )
+
+        structure = [
+            str(item).strip()
+            for item in delivery.get("structure", [])
+            if str(item).strip()
+        ]
+        if structure:
+            sections.append(
+                "Structure\n" + "\n".join(f"- {item}" for item in structure[:12])
+            )
+
+        data_files = [
+            str(item).strip()
+            for item in delivery.get("data_files", [])
+            if str(item).strip()
+        ]
+        if data_files:
+            sections.append(
+                "Data files\n" + "\n".join(f"- `{item}`" for item in data_files[:8])
+            )
 
         changes = self.correction_summary(code_result)
         if changes:
@@ -151,9 +184,43 @@ class AnswerEnrichmentBrain:
         if verification:
             sections.append("Verification\n" + "\n".join(f"- {item}" for item in verification))
 
-        if code_result.get("generated_code") and code_result.get("language") == "python":
+        run_instruction = str(delivery.get("run_instruction") or "").strip()
+        if run_instruction:
+            sections.append("Run\n" + run_instruction)
+        elif code_result.get("generated_code") and code_result.get("language") == "python":
             sections.append("Run\nSave the code as a `.py` file and run `python filename.py`.")
+
+        limitations = [
+            str(item).strip()
+            for item in delivery.get("limitations", [])
+            if str(item).strip()
+        ]
+        if limitations:
+            sections.append(
+                "Remaining notes\n" + "\n".join(f"- {item}" for item in limitations[:6])
+            )
+
+        suggestions = self.code_improvement_suggestions(code_result, delivery)
+        if suggestions:
+            sections.append(
+                "Useful next improvements\n"
+                + "\n".join(f"- {item}" for item in suggestions)
+            )
         return "\n\n".join(sections).strip()
+
+    def code_improvement_suggestions(self, code_result, delivery):
+        suggestions = []
+        code = str(code_result.get("generated_code") or "").lower()
+        project_files = code_result.get("project_files", {})
+        if code and "def test_" not in code and not project_files:
+            suggestions.append("Add focused tests for the main commands and invalid-input paths.")
+        if any(name.endswith((".json", ".jsonl", ".db", ".sqlite")) for name in delivery.get("data_files", [])):
+            suggestions.append("Add backup and recovery behavior before replacing persistent data.")
+        if "input(" in code:
+            suggestions.append("Add graceful handling for `Ctrl+C` and end-of-file input if the program will be used regularly.")
+        if project_files and not any(str(path).lower().endswith("readme.md") for path in project_files):
+            suggestions.append("Add a short README with setup, run, and test commands.")
+        return list(dict.fromkeys(suggestions))[:3]
 
     def process(self, data):
         report = self.get_report(data)

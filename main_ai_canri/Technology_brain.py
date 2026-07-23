@@ -876,6 +876,98 @@ class TechnologyBrain:
             )[:8]
         }
 
+    def build_answer(
+        self,
+        domain,
+        local_matches,
+        recommendations,
+        research_result=None
+    ):
+
+        parts = []
+
+        if local_matches:
+            top = local_matches[0]
+            item = top.get("data", {})
+            name = str(top.get("name") or domain).replace("_", " ")
+            definition = (
+                item.get("definition")
+                or item.get("role")
+                or item.get("goal")
+                or item.get("description")
+            )
+            if definition:
+                parts.append(f"{name.title()}: {str(definition).strip()}")
+
+        components = recommendations.get("recommended_components", [])
+        stack = recommendations.get("recommended_stack", [])
+        risks = recommendations.get("risks", [])
+        if components:
+            parts.append(
+                "Important components or checks: "
+                + ", ".join(map(str, components[:6]))
+                + "."
+            )
+        if stack:
+            parts.append(
+                "Suitable stack: " + ", ".join(map(str, stack[:6])) + "."
+            )
+        if risks:
+            parts.append(
+                "Main risks or limits: " + ", ".join(map(str, risks[:5])) + "."
+            )
+
+        if not parts and isinstance(research_result, dict):
+            for key in ["answer", "summary", "final_output"]:
+                value = research_result.get(key)
+                if isinstance(value, str) and value.strip():
+                    parts.append(value.strip())
+                    break
+
+        if not parts:
+            parts.append(
+                f"The request concerns {domain.replace('_', ' ')}. "
+                "More verified technical context is required before a specific recommendation."
+            )
+
+        return "\n\n".join(parts)
+
+    def source_citations(self, scanner_articles, research_result=None):
+
+        citations = []
+        for article in scanner_articles[:6]:
+            sources = article.get("sources", [])
+            citations.extend(source for source in sources if isinstance(source, dict))
+            if not sources and article.get("url"):
+                citations.append({
+                    "title": article.get("title"),
+                    "url": article.get("url"),
+                    "trust_score": article.get("trust_score", 0)
+                })
+
+        if isinstance(research_result, dict):
+            for key in ["source_citations", "strongest_sources", "fetched_sources"]:
+                citations.extend(
+                    item for item in research_result.get(key, [])
+                    if isinstance(item, dict)
+                )
+
+        unique = []
+        seen = set()
+        for item in citations:
+            identity = (
+                item.get("url")
+                or item.get("source_id")
+                or item.get("title")
+                or item.get("source_name")
+            )
+            if not identity or identity in seen:
+                continue
+            seen.add(identity)
+            unique.append(item)
+
+        return unique[:8]
+
     def detect_needs(
         self,
         local_matches,
@@ -1063,6 +1155,16 @@ class TechnologyBrain:
             terms
         )
 
+        if scanner_articles:
+            scanner_trust = max(
+                float(item.get("trust_score", 0) or 0)
+                for item in scanner_articles
+            )
+            confidence = max(
+                confidence,
+                min(95, round(scanner_trust, 2))
+            )
+
         recommendations = self.collect_recommendations(
             local_matches
         )
@@ -1090,6 +1192,18 @@ class TechnologyBrain:
                 research_payload
             )
 
+        answer = self.build_answer(
+            domain,
+            local_matches,
+            recommendations,
+            research_result
+        )
+
+        source_citations = self.source_citations(
+            scanner_articles,
+            research_result
+        )
+
         self.update_statistics(
             confidence,
             domain,
@@ -1098,6 +1212,8 @@ class TechnologyBrain:
 
         return {
             "brain": "Technology_brain",
+            "answer": answer,
+            "summary": answer,
             "used_understanding_report": bool(report),
             "technology_domain": domain,
             "intent": intent,
@@ -1106,6 +1222,7 @@ class TechnologyBrain:
             "local_knowledge_found": len(local_matches),
             "scanner_articles_found": len(scanner_articles),
             "scanner_evidence": scanner_articles,
+            "source_citations": source_citations,
             "local_matches": [
                 {
                     "type": match["type"],
@@ -1141,6 +1258,13 @@ class TechnologyBrain:
             "needs_planner": needs["needs_planner"],
             "needs_hardware_check": needs["needs_hardware_check"],
             "research_fallback": research_result,
+            "self_review": {
+                "ready": bool(answer) and bool(
+                    local_matches or scanner_articles or research_result
+                ),
+                "domain_aligned": domain != "technology" or bool(terms),
+                "evidence_available": bool(source_citations or local_matches)
+            },
             "rules": [
                 "Use the Understanding_brain report as the main input.",
                 "Search local technology and hardware knowledge first.",

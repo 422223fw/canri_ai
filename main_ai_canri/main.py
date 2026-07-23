@@ -38,6 +38,7 @@ from Story_brain import brain as story_brain
 from Character_brain import brain as character_brain
 from World_brain import brain as world_brain
 from Image_brain import brain as image_brain
+from Movie_brain import brain as movie_brain
 from Vision_brain import brain as vision_brain
 from Voice_brain import brain as voice_brain
 
@@ -163,6 +164,11 @@ def register_all_brains():
     )
 
     manager_brain.register_brain(
+        "Movie_brain",
+        movie_brain
+    )
+
+    manager_brain.register_brain(
         "Vision_brain",
         vision_brain
     )
@@ -226,7 +232,19 @@ def build_basic_understanding(message, corrected_text):
     topic_rules = [
         ("code", ["code", "python", "javascript", "java", "function", "api", "json"]),
         ("game", ["game", "player", "level", "inventory", "enemy"]),
-        ("science", ["science", "physics", "chemistry", "biology", "gravity", "atom"]),
+        ("movie", [
+            "movie", "film", "feature film", "short film", "screenplay",
+            "cinematography", "shot list", "render movie", "create movie",
+            "\u05e1\u05e8\u05d8", "\u05e7\u05d5\u05dc\u05e0\u05d5\u05e2", "\u05ea\u05e1\u05e8\u05d9\u05d8"
+        ]),
+        ("science", [
+            "science", "physics", "chemistry", "biology", "gravity", "atom",
+            "photosynthesis", "dna", "water cycle", "electric current", "volcano",
+            "immune system", "sound wave", "climate change", "cellular respiration",
+            "plate tectonics", "natural selection", "nervous system", "chemical bond",
+            "carbon cycle", "vaccine", "phases of the moon", "renewable energy",
+            "ocean current",
+        ]),
         ("language", ["translate", "translation", "grammar", "synonym", "antonym", "language"]),
         ("geography", ["country", "city", "capital", "map", "gps", "river", "mountain"]),
         ("technology", ["technology", "hardware", "cpu", "gpu", "computer", "robot"]),
@@ -252,6 +270,8 @@ def build_basic_understanding(message, corrected_text):
         intent = "math"
     elif main_topic == "story" and any(word in lowered for word in ["write", "create", "continue", "story"]):
         intent = "story_creation"
+    elif main_topic == "movie":
+        intent = "movie_creation"
 
     first_word = re.findall(r"[A-Za-z\u0590-\u05FF]+", text.lower())
     only_match = re.search(r"only\s+output\s+(?:the\s+)?([^\n.!?]{2,100})", lowered)

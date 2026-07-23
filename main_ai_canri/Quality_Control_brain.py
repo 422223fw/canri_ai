@@ -275,6 +275,7 @@ class QualityControlBrain:
             "is_code_analysis": intent == "code_analysis",
             "is_code_generation": inferred_code_request and intent != "code_analysis",
             "is_math_request": topic == "math" or intent == "math" or self.looks_like_math(lowered),
+            "is_movie_request": topic == "movie" or intent == "movie_creation",
             "is_story_request": topic == "story" or intent == "story_creation",
             "is_reliability_request": not inferred_code_request and any(
                 marker in lowered
@@ -359,6 +360,8 @@ class QualityControlBrain:
             preferred.append("Code_brain")
         elif requirements.get("is_math_request"):
             preferred.append("Math_brain")
+        elif requirements.get("is_movie_request"):
+            preferred.append("Movie_brain")
         elif requirements.get("is_story_request"):
             preferred.extend(["Story_brain", "Creative_brain"])
         elif requirements.get("is_reliability_request"):
@@ -853,6 +856,8 @@ class QualityControlBrain:
             expected.append("Code_brain")
         if requirements["is_math_request"]:
             expected.append("Math_brain")
+        if requirements.get("is_movie_request"):
+            expected.append("Movie_brain")
         if requirements["is_story_request"]:
             expected.extend(["Story_brain", "Creative_brain"])
         if requirements["is_reliability_request"]:
@@ -1776,6 +1781,25 @@ class QualityControlBrain:
                     "high",
                     "Story flow is exposing internal creative planning fields.",
                     "Return only the final story text."
+                )
+
+        if requirements.get("is_movie_request"):
+            movie_result = results.get("Movie_brain", {})
+            if not isinstance(movie_result, dict) or not movie_result.get("movie_project"):
+                self.add_issue(
+                    issues,
+                    "Movie_brain",
+                    "high",
+                    "Movie request did not produce a complete movie production package.",
+                    "Build the screenplay, scene timeline, shot plan, assets, sound, VFX, continuity, and render manifest."
+                )
+            elif not movie_result.get("validation", {}).get("passed"):
+                self.add_issue(
+                    issues,
+                    "Movie_brain",
+                    "high",
+                    "Movie project failed duration or production validation.",
+                    "Correct the scene and shot timelines and rerun Movie_brain validation."
                 )
 
         if requirements["is_reliability_request"] and self.looks_like_story_template(response_text):

@@ -98,8 +98,19 @@ DOMAIN_RULES = {
         "game", "rpg", "player", "enemy", "inventory", "level", "quest",
         "combat", "save", "load", "משחק", "שחקן", "אויב", "שלב"
     ],
+    "movie": [
+        "movie", "film", "feature film", "short film", "screenplay",
+        "cinematography", "shot list", "storyboard", "movie production",
+        "render movie", "create movie", "make movie", "generate movie",
+        "\u05e1\u05e8\u05d8", "\u05e7\u05d5\u05dc\u05e0\u05d5\u05e2", "\u05ea\u05e1\u05e8\u05d9\u05d8", "\u05e6\u05d9\u05dc\u05d5\u05dd \u05e1\u05e8\u05d8"
+    ],
     "science": [
         "science", "physics", "chemistry", "biology", "gravity", "atom", "atoms",
+        "photosynthesis", "dna", "water cycle", "electric current", "volcano",
+        "immune system", "sound wave", "climate change", "cellular respiration",
+        "plate tectonics", "natural selection", "nervous system", "chemical bond",
+        "carbon cycle", "vaccine", "phases of the moon", "renewable energy",
+        "ocean current",
         "photosynthesis", "dna", "genetics", "evolution", "ecosystem",
         "water cycle", "volcano", "immune system", "electric current",
         "sound wave", "climate",
@@ -196,6 +207,11 @@ INTENT_RULES = {
         "research", "sources", "find information", "reliable", "look up",
         "מקורות", "מחקר", "מידע אמין"
     ],
+    "movie_creation": [
+        "create a movie", "make a movie", "generate a movie", "produce a film",
+        "create movie", "make movie", "render movie", "full movie",
+        "\u05ea\u05db\u05d9\u05df \u05e1\u05e8\u05d8", "\u05e6\u05d5\u05e8 \u05e1\u05e8\u05d8", "\u05dc\u05d9\u05e6\u05d5\u05e8 \u05e1\u05e8\u05d8"
+    ],
     "story_creation": [
         "write a story", "story", "character", "plot", "סיפור", "דמות"
     ],
@@ -223,6 +239,7 @@ OUTPUT_RULES = {
     "correction": "corrected_text",
     "research": "sourced_summary",
     "story_creation": "story",
+    "movie_creation": "movie_project",
     "image_generation": "image_asset",
     "game_design": "game_plan",
     "creative_generation": "creative_result"
@@ -1331,6 +1348,10 @@ class UnderstandingBrain:
             "story", "stories", "chapter", "character", "plot",
             "scene", "dialogue", "sentences", "sentence"
         }
+        movie_terms = {
+            "movie", "film", "screenplay", "cinematography", "storyboard",
+            "shot", "shots", "render", "production"
+        }
         code_terms = {
             "code", "program", "python", "javascript", "java",
             "function", "class", "api", "terminal", "runnable"
@@ -1344,6 +1365,7 @@ class UnderstandingBrain:
         }
 
         has_story = main_topic == "story" or bool(story_terms & word_set)
+        has_movie = main_topic == "movie" or bool(movie_terms & word_set)
         has_code = main_topic == "code" or bool(code_terms & word_set)
         has_game = main_topic == "game" or bool(game_terms & word_set)
         has_image = main_topic == "image_generation" or bool(image_terms & word_set)
@@ -1355,6 +1377,8 @@ class UnderstandingBrain:
             return "math"
 
         if action_word == "do":
+            if has_movie:
+                return "movie_creation"
             if has_code:
                 return "code_generation"
             if has_image:
@@ -1387,6 +1411,8 @@ class UnderstandingBrain:
             return "question"
 
         if action_word in {"write", "create", "make", "generate", "invent", "continue"}:
+            if has_movie and action_word in {"create", "make", "generate", "invent"}:
+                return "movie_creation"
             if has_image and action_word in {"create", "make", "generate", "invent"}:
                 return "image_generation"
             if has_code:
@@ -1403,6 +1429,8 @@ class UnderstandingBrain:
             return "image_generation"
 
         if action_word in {"build", "implement"}:
+            if has_movie:
+                return "movie_creation"
             if has_code or has_game:
                 return "code_generation"
             return "planning"
@@ -2532,6 +2560,13 @@ class UnderstandingBrain:
         if intent in {"story_creation", "creative_generation"}:
             tasks.extend(["generate_final_content", "avoid_dictionary_definition"])
 
+        if intent == "movie_creation":
+            tasks.extend([
+                "build_creative_brief", "build_screenplay", "plan_scenes",
+                "plan_shots", "plan_audio_vfx", "validate_movie_timeline",
+                "prepare_render_manifest"
+            ])
+
         if intent == "image_generation":
             tasks.extend(["build_image_prompt", "create_image_asset", "check_visual_safety"])
 
@@ -2569,6 +2604,20 @@ class UnderstandingBrain:
                 "World_brain"
             ])
 
+        if main_topic == "movie" or intent == "movie_creation":
+            route.extend([
+                "Planner_brain",
+                "Creative_brain",
+                "Character_brain",
+                "World_brain",
+                "Story_brain",
+                "Image_brain",
+                "Voice_brain",
+                "Technology_brain",
+                "Movie_brain",
+                "Security_brain"
+            ])
+
         if main_topic == "creative" or intent in {"game_design", "creative_generation"}:
             route.append("Creative_brain")
 
@@ -2590,6 +2639,7 @@ class UnderstandingBrain:
             "math": "Math_brain",
             "security": "Security_brain",
             "game": "Game_brain",
+            "movie": "Movie_brain",
             "vision": "Vision_brain",
             "voice": "Voice_brain",
             "image_generation": "Image_brain",
@@ -2683,6 +2733,8 @@ class UnderstandingBrain:
 
             if intent == "story_creation":
                 main_topic = "story"
+            elif intent == "movie_creation":
+                main_topic = "movie"
             elif intent == "code_generation":
                 main_topic = "code"
             elif intent == "code_analysis":

@@ -502,7 +502,7 @@ class ResponseBrain:
             "plan", "steps", "best_idea", "facts", "articles", "local_matches",
             "game_design", "response", "translated_text", "story", "draft",
             "final_output", "image_file", "generated_image_prompt"
-            , "project_files"
+            , "project_files", "movie_project", "render_status"
         ]
 
         score += sum(5 for key in useful_keys if result.get(key))
@@ -525,6 +525,9 @@ class ResponseBrain:
         ):
             score += 45
 
+        if brain_name == "Movie_brain" and result.get("movie_project"):
+            score += 65
+
         if result.get("generated_code"):
             score += 15
 
@@ -534,6 +537,7 @@ class ResponseBrain:
         priority = {
             "Code_brain": 24,
             "Game_brain": 13,
+            "Movie_brain": 18,
             "Image_brain": 13,
             "Science_brain": 12,
             "Technology_brain": 12,
@@ -611,6 +615,7 @@ class ResponseBrain:
             "code": {"Code_brain"},
             "math": {"Math_brain"},
             "story": {"Story_brain", "Creative_brain"},
+            "movie": {"Movie_brain"},
             "science": {"Science_brain", "Research_brain"},
             "knowledge": {"Research_brain", "Fact_Check_brain"},
             "technology": {"Technology_brain", "Research_brain"},
@@ -627,6 +632,8 @@ class ResponseBrain:
             permitted = {"Code_brain"}
         elif intent == "story_creation":
             permitted = {"Story_brain", "Creative_brain"}
+        elif intent == "movie_creation":
+            permitted = {"Movie_brain"}
         else:
             permitted = allowed.get(topic)
 
@@ -691,6 +698,9 @@ class ResponseBrain:
         if topic == "story" or intent == "story_creation":
             preferred.extend(["Story_brain", "Creative_brain"])
 
+        if topic == "movie" or intent == "movie_creation":
+            preferred.append("Movie_brain")
+
         if topic == "image_generation" or intent == "image_generation":
             preferred.append("Image_brain")
 
@@ -703,6 +713,7 @@ class ResponseBrain:
             "geography": "Geography_brain",
             "history": "History_brain",
             "game": "Game_brain",
+            "movie": "Movie_brain",
             "image_generation": "Image_brain",
             "vision": "Vision_brain",
             "voice": "Voice_brain",
@@ -1127,6 +1138,9 @@ class ResponseBrain:
 
         if brain_name == "Image_brain":
             return self.format_image_result(result)
+
+        if brain_name == "Movie_brain":
+            return str(result.get("answer") or result.get("final_output") or "")
 
         if brain_name == "Story_brain":
             for key in ["story", "final_output", "draft"]:
@@ -1556,7 +1570,7 @@ class ResponseBrain:
                 marker in lowered
                 for marker in [
                     "only output", "only return", "code only",
-                    "do not output a plan", "not a plan or explanation"
+                    "not a plan or explanation", "without explanation", "no explanation"
                 ]
             )
         )
@@ -1673,6 +1687,9 @@ class ResponseBrain:
         elif (
             not self.is_action_request(report)
             and self.is_definition_or_explanation_request(user_text, report)
+            and str(report.get("main_topic", "")).lower() not in {
+                "science", "technology", "history", "geography", "math",
+            }
             and not any(
                 marker in user_text.lower()
                 for marker in ["reliable", "fact check", "check if", "local knowledge", "use local knowledge"]
