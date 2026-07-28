@@ -634,6 +634,28 @@ class MemoryBrain:
                     },
                 })
 
+        agent_result = results.get("Agent_brain", {})
+        if isinstance(agent_result, dict):
+            changed_files = [
+                {
+                    "path": item.get("path"),
+                    "added_lines": item.get("added_lines", 0),
+                    "removed_lines": item.get("removed_lines", 0),
+                    "line_count": item.get("after_line_count", 0),
+                }
+                for item in agent_result.get("action_results", [])
+                if isinstance(item, dict)
+                and item.get("type") == "write_file"
+                and item.get("ok")
+            ]
+            if changed_files:
+                artifacts.append({
+                    "type": "agent_project",
+                    "workspace": agent_result.get("workspace"),
+                    "status": agent_result.get("status"),
+                    "files": changed_files[:50],
+                })
+
         for language, content in re.findall(
             r"```([a-zA-Z0-9_+\-.#]*)\s*(.*?)```",
             str(canri_text or ""),
@@ -835,7 +857,10 @@ class MemoryBrain:
         }
         topic = str(turn.get("main_topic", "")).lower()
         if kind == "code":
-            return bool(artifact_types.intersection({"code", "code_project"}) or topic == "code")
+            return bool(
+                artifact_types.intersection({"code", "code_project", "agent_project"})
+                or topic == "code"
+            )
         if kind == "story":
             return "story" in artifact_types or topic in {"story", "creative"}
         if kind == "answer":
@@ -1077,6 +1102,14 @@ class MemoryBrain:
                     if not continuation_turn or item.get("turn_id") == continuation_turn.get("id")
                 ),
                 code_blocks[-1] if code_blocks else None,
+            ),
+            "agent_continuation": next(
+                (
+                    artifact
+                    for artifact in reversed((continuation_turn or last_turn).get("artifacts", []))
+                    if isinstance(artifact, dict) and artifact.get("type") == "agent_project"
+                ),
+                None,
             ),
             "thread_state": {
                 "active_topic": continuation_turn.get("main_topic") if continuation_turn else last_topic,

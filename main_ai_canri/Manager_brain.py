@@ -20,6 +20,11 @@ from Brain_runtime import brain_runtime
 from Brain_storage import load_json_resilient
 
 try:
+    from domain_packages import build_domain_package_context
+except Exception:
+    build_domain_package_context = None
+
+try:
     from Cognitive_workspace import CognitiveWorkspace
 except Exception:
     CognitiveWorkspace = None
@@ -668,6 +673,25 @@ class ManagerBrain:
         if isinstance(data_pack, dict):
             recommended.extend(data_pack.get("recommended_brains", []))
 
+        structured_domains = []
+        for item in report.get("central_domains", []):
+            domain = item.get("domain") if isinstance(item, dict) else item
+            domain = str(domain or "").strip().lower()
+            if domain and domain not in structured_domains:
+                structured_domains.append(domain)
+        if not structured_domains and report.get("main_topic"):
+            structured_domains.append(str(report.get("main_topic")).strip().lower())
+        domain_packages = (
+            build_domain_package_context(
+                structured_domains,
+                report,
+                memory_report,
+                knowledge,
+            )
+            if build_domain_package_context is not None
+            else {"available": False, "packages": []}
+        )
+
         return {
             "query": query,
             "request": {
@@ -693,6 +717,8 @@ class ManagerBrain:
                 "topic_shift_from_previous": conversation.get("topic_shift_from_previous", False),
                 "keyword_overlap_with_previous": conversation.get("keyword_overlap_with_previous", [])[:12],
                 "usable_previous_code": conversation.get("usable_previous_code"),
+                "agent_continuation": conversation.get("agent_continuation"),
+                "continuation_source": conversation.get("continuation_source", {}),
                 "session_isolation": conversation.get("session_isolation", True)
             },
             "dictionary": {
@@ -713,6 +739,7 @@ class ManagerBrain:
                 "available": knowledge.get("available") if isinstance(knowledge, dict) else False,
                 "matches": knowledge_matches
             },
+            "domain_packages": domain_packages,
             "recommended_brains": list(dict.fromkeys(recommended)),
             "handoff_rules": [
                 "Every specialist should use Understanding + Memory + shared_context before answering.",
@@ -727,156 +754,49 @@ class ManagerBrain:
     # ---------- planning ----------
 
     def classify_request(self, report, memory_report):
-
-        topic = str(report.get("main_topic", "")).lower()
-        intent = str(report.get("intent", "")).lower()
-        terms = self.collect_terms(report, memory_report)
-        raw_text = " ".join(
-            str(report.get(key, ""))
-            for key in [
-                "original_text",
-                "corrected_text",
-                "text",
-                "goal",
-                "prompt"
-            ]
-            if report.get(key)
+        report = report if isinstance(report, dict) else {}
+        memory_report = memory_report if isinstance(memory_report, dict) else {}
+        contract = report.get("request_contract", {})
+        contract = contract if isinstance(contract, dict) else {}
+        intent = str(
+            report.get("intent")
+            or contract.get("intent")
+            or "unknown"
         ).lower()
         domains = []
-        for item in report.get("central_domains", []):
-            domain = item.get("domain") if isinstance(item, dict) else item
+
+        def add_domain(value):
+            domain = value.get("domain") if isinstance(value, dict) else value
             domain = str(domain or "").lower().strip()
-            # Secondary dictionary associations are evidence, not an explicit
-            # user request. Domain rules below add them only when the prompt
-            # itself contains a matching term.
-            if domain == topic and domain not in {"unknown", "general"}:
+            if domain and domain not in {"unknown", "request"}:
                 domains.append(domain)
 
-        domain_rules = [
-            ("code", ["code", "program", "python", "javascript", "java", "function", "api", "json"]),
-            ("movie", [
-                "movie", "film", "feature film", "short film", "screenplay",
-                "cinematography", "shot list", "movie production", "render movie",
-                "create movie", "make movie", "generate movie",
-                "\u05e1\u05e8\u05d8", "\u05e7\u05d5\u05dc\u05e0\u05d5\u05e2", "\u05ea\u05e1\u05e8\u05d9\u05d8"
-            ]),
-            ("science", [
-                "science", "physics", "chemistry", "biology", "article", "experiment",
-                "photosynthesis", "dna", "genetics", "evolution", "ecosystem",
-                "water cycle", "volcano", "immune system", "electric current",
-                "sound wave", "climate", "atom", "atoms", "gravity",
-                "cellular respiration", "plate tectonics", "natural selection",
-                "nervous system", "chemical bond", "carbon cycle", "vaccine",
-                "phases of the moon", "renewable energy", "ocean current",
-            ]),
-            ("language", ["language", "translation", "translate", "grammar", "synonym", "antonym"]),
-            ("geography", ["geography", "country", "city", "capital", "map", "gps", "river", "mountain"]),
-            ("technology", [
-                "technology", "hardware", "computer", "cpu", "gpu", "robot", "server",
-                "microcontroller", "arduino", "raspberry pi", "sensor", "gpio", "serial",
-                "embedded", "firmware", "circuit", "electronics", "iot"
-            ]),
-            ("history", ["history", "historical", "empire", "war", "ancient"]),
-            ("math", ["math", "number", "equation", "calculate", "solve", "step by step", "algebra", "x^2", "x**2"]),
-            ("security", ["security", "password", "token", "encrypt", "danger", "bomb", "suicide"]),
-            ("emotion", [
-                "feel", "feeling", "sad", "lonely", "anxious", "worried",
-                "afraid", "angry", "upset", "frustrated", "overwhelmed",
-                "emotional support", "can we talk", "listen to me", "need someone",
-                "\u05e7\u05e9\u05d4 \u05dc\u05d9", "\u05d0\u05e0\u05d9 \u05de\u05e8\u05d2\u05d9\u05e9", "\u05d0\u05e0\u05d9 \u05de\u05e8\u05d2\u05d9\u05e9\u05d4", "\u05d0\u05e4\u05e9\u05e8 \u05dc\u05d3\u05d1\u05e8"
-            ]),
-            ("image_generation", ["generate image", "create image", "make image", "draw", "illustration", "poster", "logo", "icon", "concept art", "image prompt"]),
-            ("vision", ["vision", "image", "photo", "picture", "video", "attachment", "pdf", "png", "jpg", "mp4"]),
-            ("voice", ["voice", "audio", "sound", "recording", "microphone", "speech", "transcribe", "wav", "mp3", "m4a"]),
-            ("creative", ["creative", "creativity", "idea", "invent", "original", "brainstorm", "stuck", "fallback"]),
-            ("story", ["story", "stories", "chapter", "character", "plot", "narrative", "leo", "tiny door"]),
-            ("game", ["game", "player", "enemy", "level", "inventory"])
-        ]
+        add_domain(report.get("main_topic"))
+        add_domain(contract.get("topic"))
+        for item in report.get("central_domains", []):
+            add_domain(item)
+        for item in contract.get("central_domains", []):
+            add_domain(item)
+        for item in contract.get("domain_details", []):
+            add_domain(item)
 
-        def keyword_is_explicit(keyword):
-            keyword = str(keyword).lower().strip()
-            if not keyword:
-                return False
-            return re.search(
-                r"(?<![a-z0-9])" + re.escape(keyword) + r"(?![a-z0-9])",
-                raw_text
-            ) is not None
-
-        for domain, keywords in domain_rules:
-            if topic == domain or intent == domain or any(keyword_is_explicit(keyword) for keyword in keywords):
-                domains.append(domain)
-
-        if intent in {"code_generation", "code_analysis"}:
-            domains.append("code")
-
-        explicit_math_request = any(
-            keyword_is_explicit(marker)
-            for marker in [
-                "math", "calculate", "solve", "equation", "algebra",
-                "geometry", "probability", "step by step",
-            ]
-        )
-        if intent == "math" or explicit_math_request or (
-            intent != "code_analysis"
-            and
-            re.search(r"\d|\bx\b", raw_text)
-            and (
-                "=" in raw_text
-                or "^" in raw_text
-                or "**" in raw_text
-                or any(term in raw_text for term in ["solve", "calculate", "step by step"])
-            )
-        ):
-            domains.append("math")
-
-        if intent in ["question", "research"]:
-            domains.append("research")
-
-        if intent == "image_generation":
-            domains.append("image_generation")
-
-        explicit_story_request = (
-            "story" in domains
-            and any(
-                marker in raw_text
-                for marker in [
-                    "story",
-                    "stories",
-                    "chapter",
-                    "continue the same story",
-                    "continued story"
-                ]
-            )
-        )
-        explicit_code_request = any(
-            marker in raw_text
-            for marker in [
-                "code",
-                "program",
-                "python",
-                "javascript",
-                "java",
-                "function"
-            ]
-        )
-        explicit_game_request = any(
-            marker in raw_text
-            for marker in [
-                "game",
-                "rpg",
-                "player",
-                "enemy",
-                "inventory",
-                "level"
-            ]
-        )
-
-        if explicit_story_request and not explicit_code_request and not explicit_game_request:
-            domains = [
-                domain
-                for domain in domains
-                if domain in {"story", "creative", "memory_context"}
-            ]
+        # These are semantic intent-to-domain mappings. Lexical analysis is
+        # owned exclusively by Understanding_brain.
+        intent_domains = {
+            "code_generation": "code",
+            "code_analysis": "code",
+            "code_editing": "code",
+            "debugging": "code",
+            "game_creation": "game",
+            "image_generation": "image_generation",
+            "math": "math",
+            "movie_creation": "movie",
+            "story_creation": "story",
+            "translation": "language",
+        }
+        add_domain(intent_domains.get(intent))
+        if intent in {"question", "research"}:
+            add_domain("research")
 
         if memory_report.get("memory_found", 0):
             domains.append("memory_context")
@@ -887,79 +807,40 @@ class ManagerBrain:
         return list(dict.fromkeys(domains))
 
     def primary_domain(self, report, memory_report=None):
-
-        memory_report = memory_report or {}
-        topic = str(report.get("main_topic", "")).lower()
-        intent = str(report.get("intent", "")).lower()
-        raw_text = " ".join(
-            str(report.get(key, ""))
-            for key in [
-                "original_text",
-                "corrected_text",
-                "text",
-                "goal",
-                "prompt"
-            ]
-            if report.get(key)
-        ).lower()
+        report = report if isinstance(report, dict) else {}
+        contract = report.get("request_contract", {})
+        contract = contract if isinstance(contract, dict) else {}
+        topic = str(report.get("main_topic") or contract.get("topic") or "").lower()
+        intent = str(report.get("intent") or contract.get("intent") or "").lower()
         requested_action = report.get("requested_action", {})
         action_intent = ""
         if isinstance(requested_action, dict):
             action_intent = str(requested_action.get("intent_override", "")).lower()
-
-        if intent in {"code_generation", "code_analysis"} or action_intent in {"code_generation", "code_analysis"}:
-            return "code"
-
-        if topic == "code" and any(term in raw_text for term in ["code", "program", "python", "runnable", "terminal"]):
-            return "code"
-
-        if intent == "math" or action_intent == "math" or (
-            re.search(r"\d|\bx\b", raw_text)
-            and (
-                "=" in raw_text
-                or "^" in raw_text
-                or "**" in raw_text
-                or any(term in raw_text for term in ["solve", "calculate", "equation", "step by step"])
-            )
-        ):
-            return "math"
-
-        if intent == "image_generation" or topic == "image_generation":
-            return "image_generation"
-
-        if intent == "movie_creation" or topic == "movie":
-            return "movie"
-
-        if intent == "story_creation" or topic == "story":
-            return "story"
-
-        if topic == "emotion":
-            return "emotion"
-
-        if any(
-            marker in raw_text
-            for marker in [
-                "historically", "historical importance", "history of", "timeline of",
-                "printing press", "renaissance", "silk road", "moon landing",
-                "ancient egypt", "roman empire", "industrial revolution",
-                "french revolution", "invention of writing", "development of the internet"
-            ]
-        ):
-            return "history"
-
-        if topic in {
-            "science", "geography", "technology", "history", "language",
-            "game", "voice", "vision", "security", "emotion", "planning"
-        }:
+        intent_domains = {
+            "code_generation": "code",
+            "code_analysis": "code",
+            "code_editing": "code",
+            "debugging": "code",
+            "game_creation": "game",
+            "image_generation": "image_generation",
+            "math": "math",
+            "movie_creation": "movie",
+            "story_creation": "story",
+            "translation": "language",
+        }
+        for candidate in (action_intent, intent):
+            if candidate in intent_domains:
+                return intent_domains[candidate]
+        if topic and topic not in {"unknown", "request"}:
             return topic
-
-        if intent in {"question", "research"} and any(
-            marker in raw_text
-            for marker in ["reliable", "sources", "fact check", "local knowledge", "what is", "explain"]
-        ):
+        for item in report.get("central_domains", []):
+            domain = item.get("domain") if isinstance(item, dict) else item
+            domain = str(domain or "").lower().strip()
+            if domain not in {"", "unknown", "request"}:
+                return domain
+        if intent in {"question", "research"}:
             return "knowledge"
-
-        return topic or "general"
+        return "general"
 
     def routing_decision(self, report, memory_report=None):
 
@@ -971,6 +852,12 @@ class ManagerBrain:
         continuation_requested = bool(
             (isinstance(continuation_contract, dict) and continuation_contract.get("requested"))
             or (isinstance(conversation, dict) and conversation.get("continuation_request"))
+            or (
+                isinstance(continuation_contract, dict)
+                and continuation_contract.get("agent_mode_requested")
+                and isinstance(conversation, dict)
+                and conversation.get("agent_continuation")
+            )
         )
         domains = self.focus_domains(
             self.classify_request(report, memory_report),
@@ -1124,6 +1011,22 @@ class ManagerBrain:
         continuation_requested = bool(
             (isinstance(continuation_contract, dict) and continuation_contract.get("requested"))
             or (isinstance(conversation, dict) and conversation.get("continuation_request"))
+            or (
+                isinstance(continuation_contract, dict)
+                and continuation_contract.get("agent_mode_requested")
+                and isinstance(conversation, dict)
+                and conversation.get("agent_continuation")
+            )
+        )
+        requested_action = report.get("requested_action", {})
+        action_requested = bool(
+            isinstance(requested_action, dict)
+            and requested_action.get("is_action_request")
+        )
+        agent_creative_consultation = bool(
+            agent_enabled
+            and primary in {"code", "game"}
+            and (continuation_requested or contract.get("action") or action_requested)
         )
         story_continuation = primary == "story" and continuation_requested
         central_domains = [
@@ -1159,6 +1062,10 @@ class ManagerBrain:
                 "brains": ["Project_context_brain"] if agent_enabled else []
             },
             {
+                "phase": "agent_project_ideation",
+                "brains": ["Creative_brain"] if agent_creative_consultation else []
+            },
+            {
                 "phase": "core_reasoning",
                 "brains": ["Planner_brain"] if needs_planner else []
             },
@@ -1183,16 +1090,16 @@ class ManagerBrain:
                 "brains": ["Nervous_system_brain"] if needs_collaboration else []
             },
             {
-                "phase": "agent_execution",
-                "brains": ["Agent_brain"] if agent_enabled else []
-            },
-            {
                 "phase": "verification",
                 "brains": (
                     (["Fact_Check_brain"] if needs_fact_check else [])
                     + ["Quality_Control_brain"]
                     + ([] if story_continuation else ["Learning_brain"])
                 )
+            },
+            {
+                "phase": "agent_execution",
+                "brains": ["Agent_brain"] if agent_enabled else []
             },
             {
                 "phase": "answer_enrichment",
@@ -1314,21 +1221,17 @@ class ManagerBrain:
             ])
 
         if "story" in domains:
-            story_text = " ".join(
-                str(report.get(key, ""))
-                for key in ["original_text", "corrected_text", "text", "goal", "prompt"]
-                if report.get(key)
-            ).lower()
             if not story_continuation:
                 experts.append("Creative_brain")
-            if any(
-                marker in story_text
-                for marker in [
-                    "character profile", "character sheet", "worldbuilding",
-                    "world building", "novel", "chapter outline"
-                ]
-            ):
-                experts.extend(["Character_brain", "World_brain"])
+            routing_hints = {
+                str(item)
+                for item in report.get("routing_hints", [])
+            }
+            experts.extend(
+                brain_name
+                for brain_name in ("Character_brain", "World_brain")
+                if brain_name in routing_hints
+            )
             experts.append("Story_brain")
 
         if "game" in domains:
@@ -1984,6 +1887,10 @@ class ManagerBrain:
                 phase_context["dictionary"] = shared_dictionary
                 phase_context["data_context"] = shared_data_context
                 phase_context["shared_context"] = shared_brain_context
+                phase_context["domain_packages"] = shared_brain_context.get(
+                    "domain_packages",
+                    {},
+                )
 
             results = self.execute(
                 phase_brains,
@@ -2005,6 +1912,10 @@ class ManagerBrain:
                             merged_files.update(explicit_files)
                         data["existing_project_files"] = merged_files
                     data["project_context"] = project_context
+            if phase_name == "agent_project_ideation" and isinstance(data, dict):
+                creative_guidance = results.get("Creative_brain", {})
+                if isinstance(creative_guidance, dict):
+                    data["agent_creative_guidance"] = creative_guidance
             workspace = self.refresh_cognitive_workspace(
                 phase_context if isinstance(phase_context, dict) else {},
                 report,

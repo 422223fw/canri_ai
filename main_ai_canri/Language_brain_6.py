@@ -62,6 +62,8 @@ class LanguageStatisticsEngine:
         self.statistics.setdefault("continuations_detected", 0)
         self.statistics.setdefault("protected_code_fragments", 0)
         self.statistics.setdefault("scanner_evidence_used", 0)
+        self.statistics.setdefault("discourse_acts", {})
+        self.statistics.setdefault("agent_mode_requests", 0)
 
     def increase_counter(self, container, key, amount=1):
         if key:
@@ -252,6 +254,13 @@ class LanguageStatisticsEngine:
             if frame.get("continuation", {}).get("is_continuation"):
                 self.statistics["continuations_detected"] += 1
             self.statistics["protected_code_fragments"] += len(frame.get("code_fragments", []))
+        discourse = analysis.get("discourse", {}) if isinstance(analysis, dict) else {}
+        if isinstance(discourse, dict):
+            for item in discourse.get("acts", []):
+                if isinstance(item, dict) and item.get("id"):
+                    self.increase_counter(self.statistics["discourse_acts"], item["id"])
+            if discourse.get("agent_mode_requested"):
+                self.statistics["agent_mode_requests"] += 1
         scanner_evidence = results.get("scanner_evidence", [])
         if isinstance(scanner_evidence, list):
             self.statistics["scanner_evidence_used"] += len(scanner_evidence)

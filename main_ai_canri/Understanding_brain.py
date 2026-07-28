@@ -27,6 +27,7 @@ except Exception:
 WORD_RE = re.compile(r"[A-Za-z\u0590-\u05FF][A-Za-z0-9_\-\u0590-\u05FF']*")
 DATA_DIR = Path(__file__).parent / "data"
 PUNCTUATION_FILE = DATA_DIR / "Punctuation_dictionary.json"
+DISCOURSE_PATTERNS_FILE = DATA_DIR / "Language_discourse_patterns.json"
 
 CODE_KEYWORDS = {
     "and", "as", "assert", "async", "await", "break", "case", "catch",
@@ -291,6 +292,7 @@ class UnderstandingBrain:
 
         self.dictionary_ready = dk is not None
         self.punctuation_dictionary = self.load_punctuation_dictionary()
+        self.discourse_patterns = self.load_discourse_patterns()
 
         print("Understanding Brain Loaded")
 
@@ -304,6 +306,60 @@ class UnderstandingBrain:
             return data if isinstance(data, dict) else {"metadata": {}, "symbols": {}}
         except (OSError, json.JSONDecodeError):
             return {"metadata": {}, "symbols": {}}
+
+    def load_discourse_patterns(self):
+
+        if not DISCOURSE_PATTERNS_FILE.exists():
+            return {"dialogue_acts": [], "reference_classes": {}}
+        try:
+            with DISCOURSE_PATTERNS_FILE.open("r", encoding="utf-8") as file:
+                data = json.load(file)
+            return data if isinstance(data, dict) else {"dialogue_acts": []}
+        except (OSError, json.JSONDecodeError):
+            return {"dialogue_acts": [], "reference_classes": {}}
+
+    def detect_discourse_acts(self, text):
+
+        lowered = str(text or "").casefold()
+        matched_acts = []
+        routes = []
+        for item in self.discourse_patterns.get("dialogue_acts", []):
+            if not isinstance(item, dict):
+                continue
+            matched_markers = [
+                str(marker)
+                for marker in item.get("markers", [])
+                if str(marker).casefold() in lowered
+            ]
+            if not matched_markers:
+                continue
+            act_id = str(item.get("id") or "").strip()
+            if not act_id:
+                continue
+            matched_acts.append({
+                "id": act_id,
+                "meaning": item.get("meaning"),
+                "markers": matched_markers[:8],
+                "preserve_context": bool(item.get("preserve_context")),
+                "route": list(item.get("route", []))[:8],
+            })
+            routes.extend(item.get("route", []))
+
+        act_ids = [item["id"] for item in matched_acts]
+        topic_shift = "topic_shift" in act_ids
+        continuation_acts = {
+            "continuation", "additive_change", "repair", "replacement",
+            "clarification",
+        }
+        return {
+            "acts": matched_acts,
+            "act_ids": act_ids,
+            "is_continuation": bool(set(act_ids).intersection(continuation_acts)) and not topic_shift,
+            "preserve_context": any(item["preserve_context"] for item in matched_acts) and not topic_shift,
+            "agent_mode_requested": "agent_mode" in act_ids,
+            "topic_shift": topic_shift,
+            "routes": list(dict.fromkeys(str(route) for route in routes if route)),
+        }
 
     # ---------- input ----------
 
@@ -2446,6 +2502,7 @@ class UnderstandingBrain:
     ):
 
         lowered = str(text).lower()
+        discourse = self.detect_discourse_acts(text)
         continuation_markers = [
             "continue", "same", "previous", "earlier", "above",
             "improve it", "fix it", "add to it", "that code", "this code",
@@ -2469,6 +2526,12 @@ class UnderstandingBrain:
         first_line = next(
             (line.strip() for line in str(text).splitlines() if line.strip()),
             str(text).strip()
+        )
+
+        marker_continuation = any(marker in lowered for marker in continuation_markers)
+        continuation_requested = bool(
+            (marker_continuation or discourse.get("is_continuation"))
+            and not discourse.get("topic_shift")
         )
 
         return {
@@ -2498,15 +2561,22 @@ class UnderstandingBrain:
                 "requested_format": output_constraints.get("requested_format")
             },
             "detail_inventory": detail_inventory,
+            "discourse": discourse,
             "continuation": {
-                "requested": any(marker in lowered for marker in continuation_markers),
+                "requested": continuation_requested,
                 "markers": [marker for marker in continuation_markers if marker in lowered][:12],
-                "preserve_previous_behavior": any(
-                    marker in lowered
-                    for marker in [
-                        "same", "previous", "continue", "you just wrote",
-                        "keep the existing", "improve it", "fix it"
-                    ]
+                "dialogue_acts": discourse.get("act_ids", []),
+                "agent_mode_requested": bool(discourse.get("agent_mode_requested")),
+                "topic_shift": bool(discourse.get("topic_shift")),
+                "preserve_previous_behavior": bool(
+                    discourse.get("preserve_context")
+                    or any(
+                        marker in lowered
+                        for marker in [
+                            "same", "previous", "continue", "you just wrote",
+                            "keep the existing", "improve it", "fix it"
+                        ]
+                    )
                 ),
                 "requested_changes": [
                     item.get("text")

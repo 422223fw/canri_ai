@@ -8,7 +8,7 @@ language request does not reread the same large dictionaries.
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -37,6 +37,7 @@ class LanguageLoader:
             "emojis": "Emoji_dictionary.json",
             "history": "Language_history.json",
             "precision_patterns": "Language_precision_patterns.json",
+            "discourse_patterns": "Language_discourse_patterns.json",
         }
         self._cache = None
         self._cache_signature = None
@@ -123,7 +124,7 @@ class LanguageLoader:
             return self._cache
 
         data = {}
-        self.last_loaded_utc = datetime.utcnow().isoformat()
+        self.last_loaded_utc = datetime.now(timezone.utc).isoformat()
 
         for key, filename in self.files.items():
             default = [] if key in ["examples", "history"] else {}

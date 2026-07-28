@@ -3,11 +3,12 @@
 from datetime import datetime, timezone
 
 from Brain_runtime import brain_runtime
+from Canri_identity import release_version
 
 
 class MainBrain:
 
-    VERSION = "1.1.4-alpha"
+    VERSION = release_version()
 
     def __init__(self):
         print("Main Brain Started")

@@ -8,7 +8,7 @@ The project uses a shared runtime contract, isolated chat memory, indexed
 local knowledge, targeted quality retries, cross-brain neural integration,
 a request-scoped cognitive workspace, and atomic JSON storage. Normal
 requests have no thinking deadline. The release version is reported by
-`main_ai_canri/Main_brain.py` and is currently `1.1.4-alpha`.
+`main_ai_canri/data/Canri_self_profile.json` and is currently `1.2.0`.
 
 ## Requirements
 
@@ -54,11 +54,20 @@ powershell -ExecutionPolicy Bypass -File .\push_canri.ps1
   user-facing answer.
 - `Understanding_brain.py`: whole-request intent, entities, requirements, and
   sentence graph.
+- `domain_packages/`: active packages for code, science, technology,
+  creativity, math, and user understanding. Each package keeps the established
+  root brain intact, adds a manifest and bounded runtime context, and defines
+  specialist handoffs and acceptance checks. The code package also contains a
+  conservative editor for existing Agent projects.
 - `Data_context.py`: bounded retrieval from dictionaries, memory, scanners,
   and local knowledge indexes.
 - `Brain_runtime.py`: uniform result contract, timeouts, safe errors, request
   IDs, and runtime telemetry.
 - `Brain_storage.py`: resilient reads and atomic JSON writes.
+- `Canri_self_profile.json`: versioned self-description of Canri's purpose,
+  brains, capabilities, workflows, limits, and user-facing features. It is
+  indexed by `Data_context.py`, while `Main_brain.py` and `Response_brain.py`
+  use it as the canonical source for release and capability information.
 - Specialist brains: code, math, science, history, geography, technology,
   story, character, world, image, movie, vision, voice, emotion, and others.
 - Movie_brain.py and movie_engine/: full movie preproduction and render
@@ -85,6 +94,10 @@ candidate reaches every advisory quality check, `Response_brain` still returns
 the strongest usable result while keeping diagnostics in Thinking details.
 Passed requirements are carried into later attempts so a correction should
 not remove behavior that already worked.
+
+`Planner_brain.py` builds executable steps from the current structured request
+contract. Stored templates are used only as quality and risk references; they
+do not decide the request domain or replace the user's requirements.
 
 ## Data
 
@@ -174,6 +187,13 @@ The Agent indexes related files together and passes a bounded set of relevant so
 files to the specialist brains. It creates a backup before overwriting an existing
 file and records an audit entry locally. Approval mode returns commands such as
 `/agent approve 12ab34cd56ef` or `/agent reject 12ab34cd56ef` in the chat.
+
+When Agent mode is enabled, an explicit `Use Agent mode ...` request stays in
+the Agent workflow on continuation turns. Canri loads the active chat's Agent
+artifact and current workspace files, obtains a creative enhancement pass when
+appropriate, validates the generated project with `Quality_Control_brain`, and
+only then applies the verified files. If Agent mode is disabled, the same
+explicit request returns a configuration message instead of silently running.
 
 Direct Agent commands are also available:
 

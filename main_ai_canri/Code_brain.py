@@ -13,6 +13,11 @@ from Code_artifact_catalog import CodeArtifactCatalog
 from Brain_storage import atomic_write_json, load_json_resilient
 
 try:
+    from domain_packages.code.project_editor import ExistingProjectEditor
+except Exception:
+    ExistingProjectEditor = None
+
+try:
     from Scanner_knowledge import scanner_evidence
 except Exception:
     scanner_evidence = None
@@ -1051,7 +1056,7 @@ class CodeExplainer:
 class CodeProjectReviewer:
 
     CAPABILITY_EVIDENCE = {
-        "multi_file": lambda paths, text: len(paths) >= 5,
+        "multi_file": lambda paths, text: len(paths) >= 2,
         "dependencies": lambda paths, text: any(
             path in paths for path in {"pyproject.toml", "requirements.txt"}
         ),
@@ -2274,6 +2279,11 @@ class CodeBrain:
         self.self_reviewer = CodeSelfReviewer()
         self.project_reviewer = CodeProjectReviewer()
         self.code_explainer = CodeExplainer()
+        self.project_continuation_editor = (
+            ExistingProjectEditor()
+            if ExistingProjectEditor is not None
+            else None
+        )
 
         self.load_data()
         self.advanced_project_builder = AdvancedCodeProjectBuilder(
@@ -2399,6 +2409,127 @@ class CodeBrain:
             return {"app/legacy.py": str(existing_code)}
         return {}
 
+    def build_existing_project_continuation_result(
+        self,
+        data,
+        text,
+        terms,
+        task_type,
+        report,
+        existing_files,
+    ):
+        if self.project_continuation_editor is None:
+            return {}
+        creative_guidance = (
+            data.get("agent_creative_guidance", {})
+            if isinstance(data, dict)
+            else {}
+        )
+        contract = report.get("request_contract", {}) if isinstance(report, dict) else {}
+        contract = contract if isinstance(contract, dict) else {}
+        continuation = contract.get("continuation", {})
+        continuation = continuation if isinstance(continuation, dict) else {}
+        memory = data.get("memory", {}) if isinstance(data, dict) else {}
+        memory = memory if isinstance(memory, dict) else {}
+        conversation = memory.get("conversation", {})
+        conversation = conversation if isinstance(conversation, dict) else {}
+        continuation_context = bool(
+            continuation.get("requested")
+            or conversation.get("continuation_request")
+            or (
+                continuation.get("agent_mode_requested")
+                and conversation.get("agent_continuation")
+            )
+        )
+        transformation = self.project_continuation_editor.build(
+            text,
+            report,
+            existing_files,
+            creative_guidance,
+            continuation_context,
+        )
+        if not transformation:
+            return {}
+
+        project_files = transformation["project_files"]
+        preserved_existing = {
+            path: existing_files[path]
+            for path in transformation.get("preserved_paths", [])
+            if path in existing_files
+        }
+        capabilities = {
+            "multi_file": len(project_files) > 1,
+            "existing_project": True,
+            "graphical_interface": True,
+            "audio": bool(transformation.get("with_music")),
+        }
+        review = self.project_reviewer.review(
+            project_files,
+            capabilities,
+            preserved_existing,
+        )
+        return {
+            "brain": "Code_brain",
+            "used_understanding_report": True,
+            "used_memory_report": True,
+            "language": "python",
+            "task_type": task_type,
+            "program_kind": "graphical_guessing_game",
+            "output_mode": "project_update",
+            "professional_mode": True,
+            "project_files": project_files,
+            "existing_project_files": preserved_existing,
+            "original_project_files": existing_files,
+            "generated_code": project_files.get(transformation["entrypoint"], ""),
+            "entrypoint": transformation["entrypoint"],
+            "changed_paths": sorted(transformation.get("changed_paths", [])),
+            "capabilities": capabilities,
+            "project_review": review,
+            "request_text": text,
+            "terms_used": terms,
+            "matched_functions": sum(path.endswith(".py") for path in project_files),
+            "selected": sorted(transformation.get("changed_paths", [])),
+            "change_safety": {
+                "strategy": "request_specific_existing_project_transformation",
+                "changed_files": transformation.get("changed_paths", []),
+                "preserved_files": transformation.get("preserved_paths", []),
+                "unrelated_files_preserved": True,
+            },
+            "continuation": {
+                "handler": transformation.get("handler"),
+                "requirements_implemented": transformation.get("requirements_implemented", []),
+                "creative_guidance_used": transformation.get("creative_guidance_used", False),
+            },
+            "assembly_plan": {
+                "architecture": "separated_game_logic_and_tkinter_interface",
+                "steps": [
+                    "Load the existing Agent project files.",
+                    "Read continuation requirements from Understanding_brain.",
+                    "Preserve unrelated files and replace only the relevant game modules.",
+                    "Validate every Python file before Agent applies the update.",
+                ],
+                "quality_gates": [
+                    "all Python files parse",
+                    "existing project context is preserved",
+                    "terminal input is removed from the graphical entry point",
+                    "invalid guesses remain recoverable",
+                ],
+                "data_files_used": [
+                    "domain_packages/code/manifest.json",
+                    "Code_project_recipes.json",
+                ],
+            },
+            "missing": list(review.get("errors", [])),
+            "needs_creative_brain": False,
+            "needs_security": False,
+            "confidence": 96 if review.get("ready") else 65,
+            "suggested_next_brains": ["Quality_Control_brain", "Agent_brain"],
+            "rules": [
+                "Use the active Agent workspace as the source of truth for continuation edits.",
+                "Never replace unrelated project files with a generic template.",
+            ],
+        }
+
     def is_advanced_project_request(self, text, report=None, existing_files=None):
 
         capabilities = self.advanced_project_builder.detect_capabilities(
@@ -2515,6 +2646,13 @@ class CodeBrain:
             label = check.get("requirement") or check.get("feature") or check.get("id")
             if label:
                 implemented.append(str(label).replace("_", " "))
+        continuation = result.get("continuation", {})
+        if isinstance(continuation, dict):
+            implemented.extend(
+                str(item).strip()
+                for item in continuation.get("requirements_implemented", [])
+                if str(item).strip()
+            )
 
         structure = []
         data_files = []
@@ -2551,14 +2689,20 @@ class CodeBrain:
 
         language = str(result.get("language") or "python").lower()
         if project_files:
-            run_instruction = "Open the generated project files and follow its entry-point or README instructions."
+            entrypoint = str(result.get("entrypoint") or "").strip()
+            run_instruction = (
+                f"From the project directory, run `python {entrypoint}`."
+                if language == "python" and entrypoint
+                else "Open the generated project files and follow its entry-point or README instructions."
+            )
         elif language == "python":
             run_instruction = "Save the code as a `.py` file and run `python filename.py`."
         else:
             run_instruction = f"Save the code with the correct {language} extension and run it with the {language} toolchain."
 
+        action = "updated" if result.get("output_mode") == "project_update" else "generated"
         return {
-            "summary": f"A complete {program_kind} implementation was generated and reviewed.",
+            "summary": f"A complete {program_kind} implementation was {action} and reviewed.",
             "implemented_features": list(dict.fromkeys(implemented))[:16],
             "structure": structure[:16],
             "data_files": data_files,
@@ -7894,6 +8038,21 @@ if __name__ == "__main__":
             data,
             existing_code
         )
+
+        continuation_result = self.build_existing_project_continuation_result(
+            data,
+            text,
+            terms,
+            task_type,
+            report,
+            existing_project_files,
+        )
+        if continuation_result:
+            return self.finalize_code_result(
+                continuation_result,
+                scanner_articles,
+                library_context,
+            )
 
         if (
             not skeleton_requested

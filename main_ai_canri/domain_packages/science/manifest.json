@@ -1,0 +1,33 @@
+{
+  "id": "science",
+  "name": "Canri Science and Evidence Package",
+  "primary_brain": "Science_brain",
+  "supporting_brains": [
+    "Understanding_brain", "Research_brain", "Fact_Check_brain",
+    "Reasoning_brain", "Math_brain", "Technology_brain", "Quality_Control_brain"
+  ],
+  "capabilities": [
+    "plain-language scientific explanation", "mechanism and cause analysis",
+    "hypothesis and experiment structure", "evidence versus inference separation",
+    "units and quantitative checks", "source reliability review",
+    "common misconception correction", "cross-domain science and technology synthesis"
+  ],
+  "context_inputs": [
+    "Understanding topic and question focus", "local knowledge evidence",
+    "trusted scanner excerpts", "source metadata", "math result when required",
+    "fact-check verdicts"
+  ],
+  "data_sources": [
+    "Knowledge_index.json", "Knowledge_database.jsonl", "Articles.json",
+    "general_scan_database.jsonl", "Knowledge_sources.json", "Science_statistics.json"
+  ],
+  "acceptance_checks": [
+    "The explanation directly answers the question", "Claims match available evidence",
+    "Inference is labeled", "Units and calculations are consistent",
+    "No unrelated story output replaces a factual answer", "Uncertainty is stated honestly"
+  ],
+  "handoff": {
+    "before": ["Understanding_brain", "Research_brain"],
+    "after": ["Fact_Check_brain", "Quality_Control_brain", "Response_brain"]
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "id": "math",
+  "name": "Canri Mathematics and Verification Package",
+  "primary_brain": "Math_brain",
+  "supporting_brains": [
+    "Understanding_brain", "Reasoning_brain", "Science_brain",
+    "Code_brain", "Quality_Control_brain"
+  ],
+  "capabilities": [
+    "arithmetic", "percentages", "unit conversions", "linear equations",
+    "quadratic equations", "step-by-step solutions", "substitution checks",
+    "numeric validation", "math-to-code handoff"
+  ],
+  "context_inputs": [
+    "parsed expression", "requested method", "units", "precision requirements",
+    "step-output constraint", "domain context"
+  ],
+  "data_sources": [
+    "Math_statistics.json", "Knowledge_index.json", "general_scan_database.jsonl"
+  ],
+  "acceptance_checks": [
+    "The expression is parsed correctly", "Each transformation is valid",
+    "The final value is substituted back when possible", "Units are preserved",
+    "Rounding is explicit", "A creative narrative never replaces the calculation"
+  ],
+  "handoff": {
+    "before": ["Understanding_brain"],
+    "after": ["Reasoning_brain", "Quality_Control_brain", "Response_brain"]
+  }
+}

@@ -35,11 +35,14 @@ class AgentBrain:
         "edit the project", "modify the project", "update the project", "fix the project",
         "write to the project", "create the file", "write the file", "save the code",
         "apply the changes", "implement in", "inside the project", "in the project",
+        "continue the project", "continue from", "continue the same", "same project",
+        "improve the project", "improve the same", "update the existing", "modify the existing",
         "תשנה את הפרויקט", "תעדכן את הפרויקט", "תתקן את הפרויקט", "תכתוב בפרויקט",
         "תיצור קובץ", "תכתוב בקובץ", "שמור את הקוד", "תיישם", "בפרויקט",
     )
     TEST_MARKERS = (
         "run tests", "run the tests", "test the project", "verify the project",
+        "syntax check", "check syntax", "compile the project", "validate the files",
         "תריץ בדיקות", "הרץ בדיקות", "תבדוק את הפרויקט",
     )
 
@@ -434,22 +437,52 @@ class AgentBrain:
             return [dict(action) for action in provided if isinstance(action, dict)][:100]
 
         lowered = text.casefold()
-        mutation_requested = any(marker.casefold() in lowered for marker in self.MUTATION_MARKERS)
+        mutation_requested = self._mutation_requested(data, lowered)
         test_requested = any(marker.casefold() in lowered for marker in self.TEST_MARKERS)
+        syntax_requested = any(
+            marker in lowered
+            for marker in ("syntax check", "check syntax", "compile the project", "validate the files")
+        )
         results = data.get("results", {})
         code_result = results.get("Code_brain", {}) if isinstance(results, dict) else {}
+        creative_result = results.get("Creative_brain", {}) if isinstance(results, dict) else {}
+        creative_consulted = bool(
+            isinstance(creative_result, dict)
+            and (
+                creative_result.get("specialist_support")
+                or creative_result.get("best_idea")
+                or creative_result.get("proposed_output")
+            )
+        )
+        write_reason = (
+            "Code_brain project output produced after creative consultation"
+            if creative_consulted
+            else "Code_brain project output requested for this workspace"
+        )
         actions: list[dict[str, Any]] = []
 
         if mutation_requested and isinstance(code_result, dict):
             project_files = code_result.get("project_files")
             if isinstance(project_files, dict) and project_files:
-                for path, content in list(project_files.items())[:100]:
+                changed_paths = {
+                    str(path).replace("\\", "/")
+                    for path in (code_result.get("changed_paths") or [])
+                }
+                project_update = str(code_result.get("output_mode", "")).casefold() == "project_update"
+                selected_files = [
+                    (path, content)
+                    for path, content in project_files.items()
+                    if not project_update
+                    or not changed_paths
+                    or str(path).replace("\\", "/") in changed_paths
+                ]
+                for path, content in selected_files[:100]:
                     if isinstance(content, str):
                         actions.append({
                             "type": "write_file",
                             "path": str(path),
                             "content": content,
-                            "reason": "Code_brain project output requested for this workspace",
+                            "reason": write_reason,
                         })
             elif isinstance(code_result.get("generated_code"), str) and code_result["generated_code"].strip():
                 target = self._explicit_path(text) or "canri_generated.py"
@@ -457,19 +490,146 @@ class AgentBrain:
                     "type": "write_file",
                     "path": target,
                     "content": code_result["generated_code"],
-                    "reason": "Code_brain output requested for this workspace",
+                    "reason": write_reason,
                 })
 
         if test_requested:
             project = results.get("Project_context_brain", {}) if isinstance(results, dict) else {}
             files = project.get("project_summary", {}).get("extensions", {}) if isinstance(project, dict) else {}
+            files = dict(files) if isinstance(files, dict) else {}
+            generated_files = code_result.get("project_files", {}) if isinstance(code_result, dict) else {}
+            if isinstance(generated_files, dict):
+                for path in generated_files:
+                    suffix = Path(str(path)).suffix.lower()
+                    if suffix:
+                        files[suffix] = int(files.get(suffix, 0) or 0) + 1
             if ".py" in files:
-                actions.append({"type": "run_command", "command": ["python", "-m", "pytest", "-q"], "reason": "user requested project tests"})
+                command = (
+                    ["python", "-m", "compileall", "-q", "."]
+                    if syntax_requested
+                    else ["python", "-m", "pytest", "-q"]
+                )
+                actions.append({
+                    "type": "run_command",
+                    "command": command,
+                    "reason": "user requested a Python syntax check" if syntax_requested else "user requested project tests",
+                })
             elif ".cs" in files:
                 actions.append({"type": "run_command", "command": ["dotnet", "test"], "reason": "user requested project tests"})
             elif any(extension in files for extension in (".js", ".ts", ".tsx", ".jsx")):
                 actions.append({"type": "run_command", "command": ["npm", "test"], "reason": "user requested project tests"})
+
+        generated_files = code_result.get("project_files", {}) if isinstance(code_result, dict) else {}
+        validation_paths = set(generated_files) if isinstance(generated_files, dict) else set()
+        changed_validation_paths = {
+            str(path).replace("\\", "/")
+            for path in (code_result.get("changed_paths") or [])
+        } if isinstance(code_result, dict) else set()
+        if (
+            isinstance(code_result, dict)
+            and str(code_result.get("output_mode", "")).casefold() == "project_update"
+            and changed_validation_paths
+        ):
+            validation_paths = changed_validation_paths
+        python_paths = [
+            str(path)
+            for path in validation_paths
+            if str(path).lower().endswith(".py")
+        ][:50]
+        if (
+            mutation_requested
+            and python_paths
+            and not any(action.get("type") == "run_command" for action in actions)
+        ):
+            actions.append({
+                "type": "run_command",
+                "command": ["python", "-m", "py_compile", *python_paths],
+                "reason": "automatic syntax validation for generated Python files",
+            })
         return actions
+
+    def _mutation_requested(self, data: dict[str, Any], lowered_text: str) -> bool:
+        """Use Understanding's request contract as the source of truth for writes."""
+
+        report = data.get("understanding", {})
+        report = report if isinstance(report, dict) else {}
+        contract = report.get("request_contract", {})
+        contract = contract if isinstance(contract, dict) else {}
+        continuation = contract.get("continuation", {})
+        continuation = continuation if isinstance(continuation, dict) else {}
+        requested_action = report.get("requested_action", {})
+        requested_action = requested_action if isinstance(requested_action, dict) else {}
+        semantic = report.get("semantic_frame", {})
+        semantic = semantic if isinstance(semantic, dict) else {}
+
+        structured_actions = {
+            str(contract.get("action", "")).casefold(),
+            str(requested_action.get("action_word", "")).casefold(),
+            str(semantic.get("main_action", "")).casefold(),
+        }
+        for action in semantic.get("actions", []):
+            if isinstance(action, dict):
+                structured_actions.add(str(action.get("word", "")).casefold())
+
+        mutating_actions = {
+            "add", "apply", "build", "change", "continue", "create", "edit",
+            "fix", "generate", "implement", "improve", "modify", "replace",
+            "save", "update", "write",
+        }
+        intent = str(report.get("intent") or contract.get("intent") or "").casefold()
+        structured_request = bool(
+            structured_actions.intersection(mutating_actions)
+            or continuation.get("requested")
+            or (
+                requested_action.get("is_action_request")
+                and intent in {"code_generation", "code_editing", "debugging", "game_creation"}
+            )
+        )
+        marker_request = any(marker.casefold() in lowered_text for marker in self.MUTATION_MARKERS)
+        return structured_request or marker_request
+
+    @staticmethod
+    def _explicit_agent_request(data: dict[str, Any], text: str) -> bool:
+        lowered = str(text or "").casefold()
+        explicit_phrase = bool(re.search(r"\buse\s+agent\s+mode\b", lowered))
+        report = data.get("understanding", {})
+        report = report if isinstance(report, dict) else {}
+        contract = report.get("request_contract", {})
+        contract = contract if isinstance(contract, dict) else {}
+        continuation = contract.get("continuation", {})
+        continuation = continuation if isinstance(continuation, dict) else {}
+        target = " ".join(
+            str(value or "")
+            for value in (
+                contract.get("target"),
+                contract.get("action_kind"),
+                report.get("main_topic"),
+            )
+        ).casefold()
+        return bool(
+            explicit_phrase
+            or continuation.get("agent_mode_requested")
+            or ("agent" in target and "mode" in target)
+        )
+
+    @staticmethod
+    def _continuation_context_used(data: dict[str, Any]) -> bool:
+        report = data.get("understanding", {})
+        report = report if isinstance(report, dict) else {}
+        contract = report.get("request_contract", {})
+        contract = contract if isinstance(contract, dict) else {}
+        continuation = contract.get("continuation", {})
+        continuation = continuation if isinstance(continuation, dict) else {}
+        memory = data.get("memory", {})
+        memory = memory if isinstance(memory, dict) else {}
+        conversation = memory.get("conversation", {})
+        conversation = conversation if isinstance(conversation, dict) else {}
+        return bool(
+            continuation.get("requested")
+            or conversation.get("continuation_request")
+            or conversation.get("agent_continuation")
+            or data.get("existing_project_files")
+        )
 
     def _load_pending(self) -> dict[str, Any]:
         loaded = load_json_resilient(PENDING_FILE, default={"schema_version": 1, "pending": {}})
@@ -552,10 +712,21 @@ class AgentBrain:
             lines.append(f"Reject with: /agent reject {action_id}")
             return "\n".join(lines)
 
+        written = [item for item in results if item.get("type") == "write_file" and item.get("ok")]
+        commands = [item for item in results if item.get("type") == "run_command"]
+        added = sum(int(item.get("added_lines", 0) or 0) for item in written)
+        removed = sum(int(item.get("removed_lines", 0) or 0) for item in written)
         lines = [f"Agent completed {len(results)} action(s) in {root}."]
+        if written:
+            lines.append(
+                f"I updated {len(written)} file(s): +{added} line(s), -{removed} line(s)."
+            )
         for item in results[:30]:
             if item.get("type") == "write_file":
-                lines.append(f"- Wrote {item.get('path')} ({item.get('characters', 0)} characters).")
+                lines.append(
+                    f"- {item.get('path')}: +{item.get('added_lines', 0)} "
+                    f"-{item.get('removed_lines', 0)}, {item.get('after_line_count', 0)} total lines."
+                )
             elif item.get("type") == "run_command":
                 command = " ".join(item.get("command", []))
                 lines.append(f"- Ran `{command}` with exit code {item.get('returncode')}.")
@@ -565,13 +736,31 @@ class AgentBrain:
                 lines.append(f"- Found {len(item.get('matches', []))} match(es) for {item.get('query')!r}.")
             if item.get("error"):
                 lines.append(f"  Error: {item['error']}")
+        if written and not commands:
+            lines.append("The files were saved. No validation command was requested or executed.")
         return "\n".join(lines)
 
     def process(self, data: Any) -> dict[str, Any]:
         payload = data if isinstance(data, dict) else {"original_text": str(data)}
+        text = self._text(payload)
+        explicit_agent_request = self._explicit_agent_request(payload, text)
         settings = normalize_agent_settings(payload.get("agent_settings", {}))
         mode = settings.get("mode", "off")
         if mode == "off":
+            if explicit_agent_request:
+                return {
+                    "brain": "Agent_brain",
+                    "status": "configuration_required",
+                    "skipped": True,
+                    "reason": "agent_mode_off",
+                    "display_text": (
+                        "Agent mode was requested, but it is disabled in Settings. "
+                        "Choose Restricted, Approval, or Autonomous mode and select a workspace."
+                    ),
+                    "confidence": 100,
+                    "user_visible": True,
+                    "explicit_agent_request": True,
+                }
             return {
                 "brain": "Agent_brain",
                 "status": "disabled",
@@ -593,9 +782,45 @@ class AgentBrain:
                 "user_visible": True,
             }
 
-        text = self._text(payload)
         directive_actions, control = self._directive_actions(text)
         session_id = str(payload.get("session_id", "default"))
+        continuation_context_used = self._continuation_context_used(payload)
+        results_context = payload.get("results", {})
+        creative_result = (
+            results_context.get("Creative_brain", {})
+            if isinstance(results_context, dict)
+            else {}
+        )
+        code_result = (
+            results_context.get("Code_brain", {})
+            if isinstance(results_context, dict)
+            else {}
+        )
+        delivery_explanation = (
+            code_result.get("delivery_explanation", {})
+            if isinstance(code_result, dict)
+            else {}
+        )
+        delivery_explanation = (
+            delivery_explanation
+            if isinstance(delivery_explanation, dict)
+            else {}
+        )
+        report = payload.get("understanding", {})
+        report = report if isinstance(report, dict) else {}
+        contract = report.get("request_contract", {})
+        contract = contract if isinstance(contract, dict) else {}
+        output_constraints = contract.get("output_constraints", {})
+        output_constraints = output_constraints if isinstance(output_constraints, dict) else {}
+        allow_delivery_notes = not bool(output_constraints.get("only_output"))
+        creative_consultation_used = bool(
+            isinstance(creative_result, dict)
+            and (
+                creative_result.get("specialist_support")
+                or creative_result.get("best_idea")
+                or creative_result.get("proposed_output")
+            )
+        )
 
         if "reject" in control:
             rejected = self._reject_pending(control["reject"], session_id)
@@ -618,15 +843,26 @@ class AgentBrain:
             if not actions:
                 project = payload.get("results", {}).get("Project_context_brain", {})
                 summary = project.get("project_summary", {}) if isinstance(project, dict) else {}
+                visible = bool(explicit_agent_request or self._mutation_requested(payload, text.casefold()))
                 return {
                     "brain": "Agent_brain",
-                    "status": "observing",
+                    "status": "no_changes" if visible else "observing",
                     "mode": mode,
                     "workspace": str(root),
                     "project_summary": summary,
                     "actions": [],
-                    "confidence": 90,
-                    "user_visible": False,
+                    "display_text": (
+                        "Agent inspected the selected project, but no verified file change was produced. "
+                        "The code specialist must return concrete project files before Agent can apply them."
+                        if visible else ""
+                    ),
+                    "missing": ["verified project files"] if visible else [],
+                    "needs_help": visible,
+                    "confidence": 30 if visible else 90,
+                    "user_visible": visible,
+                    "explicit_agent_request": explicit_agent_request,
+                    "continuation_context_used": continuation_context_used,
+                    "creative_consultation_used": creative_consultation_used,
                 }
 
             mutating = [action for action in actions if action.get("type") in {"write_file", "create_file", "run_command"}]
@@ -649,6 +885,9 @@ class AgentBrain:
                     "display_text": self._format_display("approval_required", root, previews, action_id),
                     "confidence": 95,
                     "user_visible": True,
+                    "explicit_agent_request": explicit_agent_request,
+                    "continuation_context_used": continuation_context_used,
+                    "creative_consultation_used": creative_consultation_used,
                 }
 
             execution_results: list[dict[str, Any]] = []
@@ -675,6 +914,37 @@ class AgentBrain:
                 ],
             }
             self._audit(audit_record)
+            display_text = self._format_display(status, root, execution_results)
+            if continuation_context_used:
+                display_text += (
+                    "\nI continued the active chat's existing Agent project and preserved "
+                    "files that were not part of this change."
+                )
+            if creative_consultation_used:
+                display_text += "\nA creative enhancement pass was considered before the code was applied."
+            if allow_delivery_notes and delivery_explanation:
+                summary = str(delivery_explanation.get("summary") or "").strip()
+                if summary:
+                    display_text += f"\n{summary}"
+                implemented = [
+                    str(item).strip()
+                    for item in delivery_explanation.get("implemented_features", [])
+                    if str(item).strip()
+                ][:8]
+                if implemented:
+                    display_text += "\nImplemented: " + "; ".join(implemented) + "."
+                validation = delivery_explanation.get("validation", {})
+                if isinstance(validation, dict) and validation:
+                    validation_text = ", ".join(
+                        f"{key}={value}"
+                        for key, value in validation.items()
+                        if value not in (None, "", [], {})
+                    )
+                    if validation_text:
+                        display_text += f"\nValidation: {validation_text}."
+                run_instruction = str(delivery_explanation.get("run_instruction") or "").strip()
+                if run_instruction:
+                    display_text += f"\nRun: {run_instruction}"
             return {
                 "brain": "Agent_brain",
                 "status": status,
@@ -683,10 +953,23 @@ class AgentBrain:
                 "actions_attempted": len(actions),
                 "actions_completed": successful,
                 "action_results": execution_results,
-                "display_text": self._format_display(status, root, execution_results),
+                "changed_files": [
+                    {
+                        "path": item.get("path"),
+                        "added_lines": item.get("added_lines", 0),
+                        "removed_lines": item.get("removed_lines", 0),
+                        "line_count": item.get("after_line_count", 0),
+                    }
+                    for item in execution_results
+                    if item.get("type") == "write_file" and item.get("ok")
+                ],
+                "display_text": display_text,
                 "confidence": round(100 * successful / max(1, len(actions)), 2),
                 "user_visible": True,
                 "audit_recorded": True,
+                "explicit_agent_request": explicit_agent_request,
+                "continuation_context_used": continuation_context_used,
+                "creative_consultation_used": creative_consultation_used,
             }
         except AgentPolicyError as error:
             return {

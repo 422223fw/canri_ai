@@ -1,0 +1,35 @@
+{
+  "id": "understanding",
+  "name": "Canri Whole-Request Understanding Package",
+  "primary_brain": "Understanding_brain",
+  "supporting_brains": [
+    "Spelling_brain", "Language_brain", "Memory_brain", "Data_context",
+    "Project_context_brain", "Manager_brain", "Planner_brain"
+  ],
+  "capabilities": [
+    "whole-request interpretation", "word roles and parts of speech",
+    "requested-action recognition", "entity and code-term preservation",
+    "atomic requirement extraction", "output constraint extraction",
+    "continuation detection", "central-domain ranking", "sentence graph",
+    "global goal and small-detail inventory", "routing hints"
+  ],
+  "context_inputs": [
+    "original user text", "conservative spelling result", "attachments",
+    "dictionary meanings and word types", "code syntax recognition",
+    "active chat identifier"
+  ],
+  "data_sources": [
+    "main_dictionary.json", "Grammar_dictionary.json", "Connections_Dictionary.json",
+    "Punctuation_dictionary.json", "Code_terms_dictionary.json", "Language_examples.json"
+  ],
+  "acceptance_checks": [
+    "The entire input is analyzed", "The main action is not mistaken for a definition request",
+    "Code identifiers remain intact", "Every explicit detail appears in the request contract",
+    "Continuation is tied to the active chat", "Planner and Manager consume structured fields",
+    "Unknown vocabulary does not silently force the code domain"
+  ],
+  "handoff": {
+    "before": ["Spelling_brain"],
+    "after": ["Memory_brain", "Manager_brain", "every selected specialist"]
+  }
+}

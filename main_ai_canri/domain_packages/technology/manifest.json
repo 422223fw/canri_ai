@@ -1,0 +1,33 @@
+{
+  "id": "technology",
+  "name": "Canri Technology and Hardware Package",
+  "primary_brain": "Technology_brain",
+  "supporting_brains": [
+    "Understanding_brain", "Code_brain", "Science_brain", "Research_brain",
+    "Fact_Check_brain", "Security_brain", "Planner_brain", "Quality_Control_brain"
+  ],
+  "capabilities": [
+    "hardware and software explanation", "product and company context",
+    "system architecture", "embedded and device project planning",
+    "API and protocol reasoning", "code-to-hardware integration",
+    "tradeoff comparison", "current-source verification"
+  ],
+  "context_inputs": [
+    "Understanding entities and constraints", "product catalog matches",
+    "code scanner evidence", "general scanner evidence", "science context",
+    "security requirements"
+  ],
+  "data_sources": [
+    "Company_products.json", "Product_scan_sources.json", "product_scan_database.jsonl",
+    "Code_scan_sources.json", "code_scan_database.jsonl", "Knowledge_index.json"
+  ],
+  "acceptance_checks": [
+    "The requested technology is identified correctly", "Interfaces are concrete",
+    "Hardware assumptions are explicit", "Security and failure modes are considered",
+    "Current product claims have sources", "Code and hardware responsibilities agree"
+  ],
+  "handoff": {
+    "before": ["Understanding_brain", "Research_brain"],
+    "after": ["Code_brain", "Security_brain", "Quality_Control_brain"]
+  }
+}

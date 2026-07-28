@@ -1,0 +1,34 @@
+{
+  "id": "creativity",
+  "name": "Canri Controlled Creativity Package",
+  "primary_brain": "Creative_brain",
+  "supporting_brains": [
+    "Understanding_brain", "Memory_brain", "Reasoning_brain", "Story_brain",
+    "Character_brain", "World_brain", "Game_brain", "Image_brain",
+    "Code_brain", "Quality_Control_brain"
+  ],
+  "capabilities": [
+    "multiple candidate directions", "novel but relevant improvements",
+    "story and world development", "character consistency", "game ideas",
+    "interface and user-experience ideas", "code feature enhancement",
+    "selection by relevance, coherence, feasibility, and requirement coverage"
+  ],
+  "context_inputs": [
+    "complete user goal", "explicit constraints", "active conversation artifact",
+    "dictionary connections", "scanner context", "specialist limitations",
+    "existing project structure"
+  ],
+  "data_sources": [
+    "Creative_seed_bank.json", "Creative_memory.json", "Creative_scoring_rules.json",
+    "Creative_writing_rules.json", "World_templates.json", "Character_traits.json"
+  ],
+  "acceptance_checks": [
+    "Ideas remain relevant to the request", "Novelty does not remove required behavior",
+    "The selected candidate is feasible", "Creative reports are not exposed as final output",
+    "Continuation preserves established facts and artifacts", "Strict factual tasks stay factual"
+  ],
+  "handoff": {
+    "before": ["Understanding_brain", "Memory_brain"],
+    "after": ["appropriate specialist brain", "Quality_Control_brain", "Response_brain"]
+  }
+}

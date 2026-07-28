@@ -63,6 +63,7 @@ DOMAIN_HINTS = {
     "image_generation": ["image", "generation", "prompt", "style", "composition", "lighting"],
     "math": ["math", "number", "equation", "calculate", "unit"],
     "history": ["history", "historical", "ancient", "medieval", "war", "empire", "timeline"],
+    "canri": ["canri", "assistant", "brain", "capability", "version", "identity", "agent"],
 }
 
 
@@ -390,6 +391,7 @@ def recommended_brains_from_domains(domains):
         "image_generation": ["Image_brain", "Creative_brain", "Quality_Control_brain"],
         "math": ["Math_brain", "Reasoning_brain", "Quality_Control_brain"],
         "history": ["History_brain", "Research_brain", "Fact_Check_brain"],
+        "canri": ["Response_brain", "Manager_brain", "Fact_Check_brain"],
     }
 
     brains = []

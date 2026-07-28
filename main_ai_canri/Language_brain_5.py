@@ -106,6 +106,9 @@ class ExpressionsEngine:
     def find_interaction_signals(self, text, language_data):
         text_lower = self.clean_text(text)
         patterns = self.get_precision_data(language_data).get("interaction_patterns", [])
+        discourse = language_data.get("discourse_patterns", {})
+        if isinstance(discourse, dict):
+            patterns = list(patterns) + list(discourse.get("dialogue_acts", []))
         results = []
 
         for item in patterns if isinstance(patterns, list) else []:
@@ -116,9 +119,18 @@ class ExpressionsEngine:
                 if str(marker).lower() in text_lower
             ]
             if matches:
-                results.append({"id": item.get("id"), "markers": matches})
+                results.append({
+                    "id": item.get("id"),
+                    "meaning": item.get("meaning"),
+                    "markers": matches,
+                    "preserve_context": item.get("preserve_context"),
+                    "route": item.get("route", []),
+                })
 
-        return results
+        unique = {}
+        for item in results:
+            unique.setdefault(item.get("id") or str(item), item)
+        return list(unique.values())
 
     def find_enumerations(self, text):
         results = []

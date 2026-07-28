@@ -269,6 +269,7 @@ class LanguageBrain:
             "expressions": expressions,
             "language_data_summary": raw_report.get("language_data_summary", {}),
             "precision_contract": analysis.get("semantic_frame", {}),
+            "discourse": analysis.get("discourse", {}),
             "scanner_evidence": raw_report.get("scanner_evidence", []),
             "scanner_usage": raw_report.get("scanner_usage", {})
         })

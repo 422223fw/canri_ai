@@ -241,85 +241,81 @@ class PlannerBrain:
     # ---------- classification ----------
 
     def detect_domain(self, report, terms, text):
+        """Trust Understanding_brain's structured domain decision."""
 
-        topic = str(report.get("main_topic", "")).lower()
-        lowered = f"{text.lower()} {' '.join(terms)}"
+        contract = report.get("request_contract", {})
+        contract = contract if isinstance(contract, dict) else {}
+        candidates = [
+            report.get("main_topic"),
+            contract.get("topic"),
+            contract.get("global_picture", {}).get("topic")
+            if isinstance(contract.get("global_picture"), dict) else None,
+        ]
+        for item in report.get("central_domains", []):
+            candidates.append(item.get("domain") if isinstance(item, dict) else item)
+        for item in contract.get("central_domains", []):
+            candidates.append(item.get("domain") if isinstance(item, dict) else item)
 
-        domain_rules = {
-            "code": ["code", "python", "javascript", "java", "function", "api", "debug"],
-            "science": ["science", "physics", "chemistry", "biology", "experiment", "article"],
-            "language": ["language", "translation", "translate", "grammar", "synonym", "antonym"],
-            "geography": ["geography", "country", "city", "capital", "map", "gps", "river"],
-            "technology": ["technology", "hardware", "software", "cpu", "gpu", "robot", "server"],
-            "history": ["history", "empire", "war", "ancient", "timeline"],
-            "math": ["math", "equation", "calculate", "algebra", "geometry"],
-            "game": ["game", "player", "enemy", "level", "inventory"],
-            "story": ["story", "character", "plot", "world", "creative"],
-            "security": ["security", "password", "token", "encrypt", "danger", "safe"]
-        }
-
-        for domain, keywords in domain_rules.items():
-            if topic == domain or any(keyword in lowered for keyword in keywords):
+        for candidate in candidates:
+            domain = str(candidate or "").strip().lower()
+            if domain not in {"", "unknown", "request"}:
                 return domain
-
-        return topic if topic and topic != "unknown" else "code" if "program" in lowered else "general"
+        return "general"
 
     def detect_intent(self, report, terms, text):
-
-        intent = str(report.get("intent", "")).lower()
-        lowered = f"{text.lower()} {' '.join(terms)}"
-
-        if intent and intent != "unknown":
-            return intent
-
-        intent_rules = {
-            "code_generation": ["write code", "generate code", "program", "function", "script"],
-            "debugging": ["debug", "fix", "error", "bug"],
-            "research": ["research", "find information", "source", "article"],
-            "translation": ["translate", "translation"],
-            "comparison": ["compare", "versus", "vs"],
-            "learning": ["learn", "lesson", "teach"],
-            "planning": ["plan", "roadmap", "steps"],
-            "question": ["what", "why", "how", "where"]
-        }
-
-        for detected_intent, keywords in intent_rules.items():
-            if any(keyword in lowered for keyword in keywords):
-                return detected_intent
-
+        contract = report.get("request_contract", {})
+        contract = contract if isinstance(contract, dict) else {}
+        requested_action = report.get("requested_action", {})
+        requested_action = requested_action if isinstance(requested_action, dict) else {}
+        candidates = [
+            report.get("intent"),
+            requested_action.get("intent_override"),
+            contract.get("intent"),
+            contract.get("global_picture", {}).get("intent")
+            if isinstance(contract.get("global_picture"), dict) else None,
+        ]
+        for candidate in candidates:
+            intent = str(candidate or "").strip().lower()
+            if intent not in {"", "unknown", "request"}:
+                return intent
         return "planning"
 
-    def detect_scale(self, terms, text):
-
-        lowered = f"{text.lower()} {' '.join(terms)}"
-
-        if any(word in lowered for word in ["production", "professional", "advanced"]):
+    def detect_scale(self, report, contract):
+        detail = contract.get("detail_inventory", {}) if isinstance(contract, dict) else {}
+        coverage = detail.get("coverage", {}) if isinstance(detail, dict) else {}
+        requirement_count = len(contract.get("requirements", [])) if isinstance(contract, dict) else 0
+        detail_count = sum(
+            int(value or 0)
+            for value in coverage.values()
+            if isinstance(value, (int, float))
+        ) if isinstance(coverage, dict) else 0
+        feature_count = len(report.get("features", [])) if isinstance(report, dict) else 0
+        complexity = requirement_count + detail_count + feature_count
+        if complexity >= 18:
             return "professional"
-
-        if any(word in lowered for word in ["big", "large", "huge", "full", "complete"]):
+        if complexity >= 9:
             return "large"
-
-        if any(word in lowered for word in ["simple", "basic", "small", "quick"]):
+        if complexity <= 2:
             return "small"
-
         return "medium"
 
-    def detect_output(self, intent, terms, text):
-
-        lowered = f"{text.lower()} {' '.join(terms)}"
-
-        if "code" in lowered or intent == "code_generation":
-            return "code"
-        if "table" in lowered:
-            return "comparison_table"
-        if "roadmap" in lowered:
-            return "roadmap"
-        if "lesson" in lowered or intent == "learning":
-            return "lesson"
-        if "report" in lowered or intent == "research":
-            return "report"
-
-        return "implementation_plan"
+    def detect_output(self, report, contract, intent):
+        constraints = contract.get("output_constraints", {}) if isinstance(contract, dict) else {}
+        requested = str(constraints.get("requested_format") or "").strip().lower()
+        if requested:
+            return requested
+        intent_outputs = {
+            "code_generation": "code",
+            "code_analysis": "code_review",
+            "translation": "translation",
+            "comparison": "comparison_table",
+            "learning": "lesson",
+            "research": "report",
+            "story_creation": "story",
+            "image_generation": "image",
+            "movie_creation": "movie_project",
+        }
+        return intent_outputs.get(intent, "implementation_plan")
 
     # ---------- template search ----------
 
@@ -481,14 +477,28 @@ class PlannerBrain:
                 requirement = {}
                 requirement_text = str(item).strip()
 
-            key = re.sub(r"\s+", " ", requirement_text.lower()).strip()
-            if not key or key in seen:
-                continue
-            seen.add(key)
-            requirement["id"] = requirement.get("id") or f"requirement_{index}"
-            requirement["text"] = requirement_text
-            requirement.setdefault("kind", "explicit_constraint")
-            requirements.append(requirement)
+            fragments = [requirement_text]
+            if len(requirement_text) > 100:
+                split_fragments = [
+                    fragment.strip(" -\t")
+                    for fragment in re.split(r"(?<=[.!?])\s+|\n+", requirement_text)
+                    if fragment.strip(" -\t")
+                ]
+                if len(split_fragments) > 1:
+                    fragments = split_fragments
+            for fragment_index, fragment in enumerate(fragments, start=1):
+                key = re.sub(r"\s+", " ", fragment.lower()).strip()
+                if not key or key in seen:
+                    continue
+                seen.add(key)
+                normalized = dict(requirement)
+                base_id = requirement.get("id") or f"requirement_{index}"
+                normalized["id"] = (
+                    f"{base_id}_{fragment_index}" if len(fragments) > 1 else base_id
+                )
+                normalized["text"] = fragment
+                normalized.setdefault("kind", "explicit_constraint")
+                requirements.append(normalized)
 
         if not requirements and text:
             requirements.append({
@@ -499,30 +509,38 @@ class PlannerBrain:
 
         return requirements[:80]
 
-    def requirement_brains(self, requirement, domain):
-
-        lowered = requirement.get("text", "").lower()
-        brains = []
-        rules = {
-            "Code_brain": ["code", "program", "function", "python", "json", "api"],
-            "Security_brain": ["safe", "security", "password", "validate", "permission"],
-            "Fact_Check_brain": ["fact", "source", "reliable", "verify", "current"],
-            "Math_brain": ["calculate", "equation", "total", "percentage", "average"],
-            "Story_brain": ["story", "character", "chapter", "plot"],
-            "Memory_brain": ["continue", "same", "previous", "existing"],
-        }
-        domain_brain = {
+    def understanding_brains(self, report, domain):
+        routed = [
+            str(item)
+            for item in report.get("routing_hints", [])
+            if str(item).endswith("_brain")
+            and str(item) not in {"Planner_brain", "Response_brain", "Manager_brain"}
+        ]
+        domain_owner = {
             "code": "Code_brain",
+            "science": "Science_brain",
+            "technology": "Technology_brain",
             "math": "Math_brain",
+            "game": "Game_brain",
             "story": "Story_brain",
+            "creative": "Creative_brain",
+            "history": "History_brain",
+            "geography": "Geography_brain",
+            "language": "Language_brain",
             "security": "Security_brain",
         }.get(domain)
-        if domain_brain:
-            brains.append(domain_brain)
-        for brain_name, markers in rules.items():
-            if any(marker in lowered for marker in markers):
-                brains.append(brain_name)
-        return list(dict.fromkeys(brains or ["Reasoning_brain"]))
+        if domain_owner:
+            routed.insert(0, domain_owner)
+        return list(dict.fromkeys(routed or ["Reasoning_brain"]))
+
+    def requirement_brains(self, requirement, domain, routed_brains):
+        owners = list(routed_brains[:6])
+        kind = str(requirement.get("kind", "")).lower()
+        if kind == "output_constraint":
+            owners.extend(["Quality_Control_brain", "Response_brain"])
+        if "continuation" in kind:
+            owners.insert(0, "Memory_brain")
+        return list(dict.fromkeys(owners or ["Reasoning_brain"]))
 
     def topological_order(self, steps):
 
@@ -581,7 +599,7 @@ class PlannerBrain:
             "missing_dependencies": missing_dependencies
         }
 
-    def build_steps(self, template, dependency_data, memory_report, requirements, domain):
+    def build_steps(self, template, dependency_data, memory_report, requirements, domain, routed_brains):
 
         steps = []
         dependencies = dependency_data.get("dependencies", {})
@@ -644,7 +662,7 @@ class PlannerBrain:
                     "name": f"implement and verify: {requirement['text']}",
                     "requires": [anchor_id] if anchor_id else [],
                     "before": [],
-                    "needed_brains": self.requirement_brains(requirement, domain),
+                    "needed_brains": self.requirement_brains(requirement, domain, routed_brains),
                     "blocking": requirement.get("kind") == "output_constraint",
                     "status": "planned",
                     "requirement_ids": [requirement["id"]],
@@ -723,25 +741,36 @@ class PlannerBrain:
             for stage, step_ids in sorted(groups.items())
         ]
 
-    def identify_missing_information(self, domain, intent, terms):
+    def identify_missing_information(self, domain, intent, report, contract):
 
         missing = []
+        report = report if isinstance(report, dict) else {}
+        contract = contract if isinstance(contract, dict) else {}
+        coverage = contract.get("coverage", {})
+        coverage = coverage if isinstance(coverage, dict) else {}
+        if report and not coverage.get("whole_input_analyzed", True):
+            missing.append("Understanding_brain did not confirm whole-request analysis")
 
-        if not terms:
-            missing.append("No clear terms were extracted from the request")
+        target = contract.get("target")
+        topic = contract.get("topic") or report.get("main_topic")
+        entities = contract.get("entities", [])
+        if (
+            intent in {"research", "question"}
+            and domain == "general"
+            and not target
+            and str(topic or "").lower() in {"", "general", "unknown", "request"}
+            and not entities
+        ):
+            missing.append("Understanding_brain did not identify a specific research target")
 
-        if domain == "code" and not any(term in terms for term in ["python", "javascript", "java", "html", "css", "sql"]):
-            missing.append("Programming language is not clear")
+        for item in contract.get("unresolved_details", []):
+            value = item.get("text") if isinstance(item, dict) else item
+            if value:
+                missing.append(str(value))
 
-        if intent in ["research", "question"] and domain == "general":
-            missing.append("Topic is too broad")
+        return list(dict.fromkeys(missing))[:12]
 
-        if domain == "geography" and any(term in terms for term in ["weather", "population", "current", "today"]):
-            missing.append("Current geographic data may require Research_brain")
-
-        return missing
-
-    def build_plan(self, domain, intent, scale, output, terms, memory_report, contract):
+    def build_plan(self, domain, intent, scale, output, terms, memory_report, contract, report):
 
         matches = self.find_templates(
             domain,
@@ -751,41 +780,40 @@ class PlannerBrain:
             terms
         )
 
-        if matches:
-            selected = matches[0]["template"]
-            match_score = matches[0]["score"]
-            matched_terms = matches[0]["matched_terms"]
-        else:
-            selected = {
-                "id": "fallback_general_plan",
-                "domain": domain,
-                "intent": intent,
-                "scale": scale,
-                "output": output,
-                "name": "fallback general planning template",
-                "default_steps": [
-                    "clarify goal",
-                    "collect information",
-                    "choose strategy",
-                    "execute with specialist brains",
-                    "verify result"
-                ],
-                "needed_brains": [
-                    "Reasoning_brain",
-                    "Research_brain",
-                    "Fact_Check_brain",
-                    "Response_brain"
-                ],
-                "difficulty": 60,
-                "estimated_minutes": 40,
-                "confidence": 55
-            }
-            match_score = 35
-            matched_terms = []
+        advisory = matches[0]["template"] if matches else {}
+        match_score = matches[0]["score"] if matches else 45
+        matched_terms = matches[0]["matched_terms"] if matches else []
+        routed_brains = self.understanding_brains(report, domain)
+        continuation = contract.get("continuation", {}) if isinstance(contract, dict) else {}
+        default_steps = [
+            "confirm the understood goal, requested result, and every explicit constraint",
+        ]
+        if isinstance(continuation, dict) and continuation.get("requested"):
+            default_steps.append("load the active conversation artifact and preserve its working behavior")
+        default_steps.extend([
+            "gather only the project context, evidence, and specialist input required by this request",
+            "produce the requested result from the requirement contract",
+            "integrate specialist outputs and resolve conflicts against the user's goal",
+            "validate every requirement and prepare the requested output format",
+        ])
+        selected = {
+            "id": "request_contract_plan",
+            "domain": domain,
+            "intent": intent,
+            "scale": scale,
+            "output": output,
+            "name": "request-driven plan synthesized from Understanding_brain",
+            "default_steps": default_steps,
+            "needed_brains": routed_brains,
+            "difficulty": advisory.get("difficulty", 60),
+            "estimated_minutes": advisory.get("estimated_minutes", 30),
+            "confidence": max(70, advisory.get("confidence", 60)),
+            "quality_checks": advisory.get("quality_checks", []),
+        }
 
-        dependency_data = self.get_dependency_data(
-            selected["id"]
-        )
+        # Prebuilt dependency graphs are advisory only. The executable plan is
+        # synthesized from the current request contract and its requirements.
+        dependency_data = {}
 
         risk_rule = self.get_risk_rule(
             domain,
@@ -802,7 +830,8 @@ class PlannerBrain:
             dependency_data,
             memory_report,
             requirements,
-            domain
+            domain,
+            routed_brains,
         )
         quality_pattern = self.choose_quality_pattern(domain, intent, terms)
         requirement_coverage = self.build_requirement_coverage(requirements, steps)
@@ -817,7 +846,7 @@ class PlannerBrain:
         needed_brains.extend(selected.get("needed_brains", []))
 
         risk_level = risk_rule.get("risk_level", "medium")
-        missing = self.identify_missing_information(domain, intent, terms)
+        missing = self.identify_missing_information(domain, intent, report, contract)
 
         confidence = min(
             100,
@@ -831,6 +860,8 @@ class PlannerBrain:
             "goal": contract.get("global_picture", {}).get("goal") or selected.get("name"),
             "planning_strategy": selected.get("name"),
             "template_id": selected.get("id"),
+            "advisory_template_id": advisory.get("id"),
+            "template_role": "quality_and_risk_reference_only",
             "domain": domain,
             "intent": intent,
             "scale": scale,
@@ -847,7 +878,7 @@ class PlannerBrain:
             "missing_information": missing,
             "matched_terms": matched_terms[:30],
             "confidence": round(confidence, 2),
-            "dependency_graph_used": bool(dependency_data),
+            "dependency_graph_used": False,
             "memory_context_used": bool(memory_report.get("memory_found", 0)),
             "quality_checks": selected.get("quality_checks", [])
                 + quality_pattern.get("quality_checks", []),
@@ -925,20 +956,20 @@ class PlannerBrain:
             text
         )
 
-        scale = self.detect_scale(
-            terms,
-            text
-        )
-
-        output = self.detect_output(
-            intent,
-            terms,
-            text
-        )
-
         contract = self.get_request_contract(report, data)
         if not contract.get("global_picture"):
             contract["global_picture"] = {"goal": text}
+
+        scale = self.detect_scale(
+            report,
+            contract
+        )
+
+        output = self.detect_output(
+            report,
+            contract,
+            intent,
+        )
 
         plan = self.build_plan(
             domain,
@@ -947,7 +978,8 @@ class PlannerBrain:
             output,
             terms,
             memory_report,
-            contract
+            contract,
+            report,
         )
 
         self.update_statistics(plan)

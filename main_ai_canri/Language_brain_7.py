@@ -59,6 +59,63 @@ class LanguageAnalysisEngine:
         data = language_data.get("precision_patterns", {})
         return data if isinstance(data, dict) else {}
 
+    def get_discourse_data(self, language_data):
+        data = language_data.get("discourse_patterns", {})
+        return data if isinstance(data, dict) else {}
+
+    def get_understanding_contract(self, report):
+        if not isinstance(report, dict):
+            return {}, {}
+        understanding = report.get("understanding", report)
+        understanding = understanding if isinstance(understanding, dict) else {}
+        contract = understanding.get("request_contract", {})
+        return understanding, contract if isinstance(contract, dict) else {}
+
+    def analyze_discourse(self, text, report, language_data):
+        patterns = self.get_discourse_data(language_data)
+        lowered = str(text).casefold()
+        matched_acts = []
+        for act in patterns.get("dialogue_acts", []):
+            if not isinstance(act, dict):
+                continue
+            markers = [str(item).casefold() for item in act.get("markers", []) if str(item).strip()]
+            matched = [marker for marker in markers if marker in lowered]
+            if matched:
+                matched_acts.append({
+                    "id": act.get("id"),
+                    "meaning": act.get("meaning"),
+                    "matched_markers": matched[:8],
+                    "preserve_context": bool(act.get("preserve_context")),
+                    "route": act.get("route", []),
+                })
+
+        understanding, contract = self.get_understanding_contract(report)
+        continuation = contract.get("continuation", {})
+        continuation = continuation if isinstance(continuation, dict) else {}
+        if continuation.get("requested") and not any(
+            item.get("id") == "continuation" for item in matched_acts
+        ):
+            matched_acts.insert(0, {
+                "id": "continuation",
+                "meaning": "Continue the active result instead of starting over.",
+                "matched_markers": continuation.get("markers", [])[:8],
+                "preserve_context": bool(continuation.get("preserve_previous_behavior")),
+                "route": ["Memory_brain", "Project_context_brain"],
+                "source": "Understanding_brain",
+            })
+        return {
+            "acts": matched_acts[:12],
+            "primary_act": matched_acts[0].get("id") if matched_acts else None,
+            "is_continuation": bool(continuation.get("requested")) or any(
+                item.get("id") == "continuation" for item in matched_acts
+            ),
+            "agent_mode_requested": any(
+                item.get("id") == "agent_mode" for item in matched_acts
+            ),
+            "understanding_contract_used": bool(contract),
+            "understanding_intent": understanding.get("intent"),
+        }
+
     def request_action_map(self, language_data):
         actions = self.get_precision_data(language_data).get("request_actions", [])
         return {
@@ -451,7 +508,7 @@ class LanguageAnalysisEngine:
         mapping = self.get_precision_data(language_data).get("output_markers", {})
         return self.extract_marker_groups(text, mapping)
 
-    def build_semantic_frame(self, tags, text, language_data=None):
+    def build_semantic_frame(self, tags, text, language_data=None, report=None):
         actions = []
         targets = []
         relations = []
@@ -492,6 +549,40 @@ class LanguageAnalysisEngine:
         continuation = self.extract_continuation(text, language_data)
         output_constraints = self.extract_output_constraints(text, language_data)
         code_fragments = self.extract_code_fragments(text)
+        understanding, contract = self.get_understanding_contract(report)
+        contract_action = str(contract.get("action") or "").strip()
+        contract_target = str(contract.get("target") or "").strip()
+        if contract_action and contract_action not in actions:
+            actions.insert(0, contract_action)
+        if contract_target and contract_target not in targets:
+            targets.insert(0, contract_target)
+
+        intent = str(understanding.get("intent") or contract.get("intent") or "").lower()
+        intent_outputs = {
+            "code_generation": "code",
+            "code_editing": "code",
+            "code_analysis": "code_review",
+            "image_generation": "image",
+            "math": "solution",
+            "movie_creation": "movie",
+            "story_creation": "story",
+            "translation": "translation",
+        }
+        requested_format = contract.get("output_constraints", {}).get("requested_format") \
+            if isinstance(contract.get("output_constraints"), dict) else None
+        requested_output = requested_format or intent_outputs.get(intent, requested_output)
+
+        contract_continuation = contract.get("continuation", {})
+        if isinstance(contract_continuation, dict) and contract_continuation.get("requested"):
+            continuation = {
+                "is_continuation": True,
+                "markers": contract_continuation.get("markers", continuation.get("markers", [])),
+                "must_preserve_previous_result": bool(
+                    contract_continuation.get("preserve_previous_behavior", True)
+                ),
+                "requested_changes": contract_continuation.get("requested_changes", []),
+                "source": "Understanding_brain",
+            }
 
         return {
             "actions": list(dict.fromkeys(actions)),
@@ -505,6 +596,9 @@ class LanguageAnalysisEngine:
             "continuation": continuation,
             "output_constraints": output_constraints,
             "code_fragments": code_fragments,
+            "understanding_contract_used": bool(contract),
+            "understanding_requirements": list(contract.get("requirements", []))[:80],
+            "understanding_output_constraints": contract.get("output_constraints", {}),
             "detail_count": (
                 len(quantified_constraints)
                 + len(explicit_constraints)
@@ -575,7 +669,8 @@ class LanguageAnalysisEngine:
         rules = self.find_matching_rules(text, language_code, language_data)
         examples = self.find_related_examples(text, language_code, language_data)
         word_tags = self.tag_sentence_roles(text, report, language_data)
-        semantic_frame = self.build_semantic_frame(word_tags, text, language_data)
+        semantic_frame = self.build_semantic_frame(word_tags, text, language_data, report)
+        discourse = self.analyze_discourse(text, report, language_data)
         context_links = self.build_context_links(word_tags)
         complexity = self.calculate_complexity(text, word_tags)
         confidence = self.calculate_confidence(
@@ -602,6 +697,7 @@ class LanguageAnalysisEngine:
             "related_examples": examples,
             "word_tags": word_tags,
             "semantic_frame": semantic_frame,
+            "discourse": discourse,
             "context_links": context_links,
             "complexity": complexity,
             "scanner_evidence_count": len(language_data.get("scanner_evidence", [])),

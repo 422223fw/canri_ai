@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from Brain_storage import atomic_write_json
+from Canri_identity import load_canri_identity, release_version
 
 
 DATA_DIR = Path(__file__).parent / "data"
@@ -217,15 +218,24 @@ class ResponseBrain:
 
     def capability_answer(self):
 
+        identity = load_canri_identity()
+        capabilities = identity.get("capabilities", {}) if isinstance(identity, dict) else {}
+        core = capabilities.get("core", []) if isinstance(capabilities, dict) else []
+        feature_lines = [str(item) for item in core[:6] if str(item).strip()]
+        feature_text = "\n".join(
+            f"{index}. {item}"
+            for index, item in enumerate(feature_lines, start=1)
+        )
+        if not feature_text:
+            feature_text = (
+                "1. Answer questions and explain topics.\n"
+                "2. Plan projects and generate code.\n"
+                "3. Use specialist brains and local knowledge."
+            )
+
         return (
-            "Right now I can help with several things inside this Canri project:\n\n"
-            "1. Answer simple questions and explain topics.\n"
-            "2. Plan projects, games, systems, and learning paths.\n"
-            "3. Generate and assemble code drafts, especially Python-style code.\n"
-            "4. Check whether information looks reliable before presenting it.\n"
-            "5. Use specialist brains for science, technology, geography, history, language, games, stories, vision, voice, memory, and creativity.\n"
-            "6. Use Creative_brain when another brain is stuck or missing an idea.\n"
-            "7. Summarize all brain outputs into one clean answer on the screen.\n\n"
+            f"Canri AI {release_version()} can help with several things inside this project:\n\n"
+            f"{feature_text}\n\n"
             "A good test prompt is: Create a simple Python inventory system."
         )
 
@@ -1667,7 +1677,7 @@ class ResponseBrain:
             and agent_result.get("display_text")
             and agent_status in {
                 "completed", "partially_completed", "blocked", "approval_required",
-                "configuration_required", "rejected", "not_found"
+                "configuration_required", "rejected", "not_found", "no_changes"
             }
         )
 

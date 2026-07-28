@@ -1,0 +1,40 @@
+{
+  "id": "code",
+  "name": "Canri Code Engineering Package",
+  "primary_brain": "Code_brain",
+  "supporting_brains": [
+    "Understanding_brain", "Memory_brain", "Project_context_brain",
+    "Planner_brain", "Reasoning_brain", "Technology_brain", "Creative_brain",
+    "Security_brain", "Quality_Control_brain", "Agent_brain"
+  ],
+  "capabilities": [
+    "single-file runnable programs", "multi-file project generation",
+    "continuation of an existing project", "behavior-preserving edits",
+    "standard-library Python applications", "database and JSON persistence",
+    "API and asynchronous architecture planning", "input validation",
+    "syntax checking", "dependency-aware project layout", "tests and failure paths",
+    "function selection from indexed catalogs", "Agent workspace application"
+  ],
+  "context_inputs": [
+    "Understanding request contract", "active chat continuation source",
+    "selected project files", "cross-file import links", "scanner evidence",
+    "code term dictionary", "creative enhancement proposals", "quality correction packet"
+  ],
+  "data_sources": [
+    "code.json", "Code_project_recipes.json", "Code_advanced_profiles.json",
+    "Code_terms_dictionary.json", "Code_library_functions.json",
+    "Code_project_templates.json", "code_scan_database.jsonl",
+    "Planner_quality_patterns.json"
+  ],
+  "acceptance_checks": [
+    "Every explicit feature is implemented", "Python syntax is valid",
+    "No placeholder-only functions remain", "The requested entry point exists",
+    "Invalid input and expected failures are handled", "Existing behavior is preserved",
+    "Imports match the generated file layout", "Strict output instructions are respected",
+    "Agent writes exactly the generated project files when requested"
+  ],
+  "handoff": {
+    "before": ["Understanding_brain", "Memory_brain", "Project_context_brain"],
+    "after": ["Quality_Control_brain", "Agent_brain", "Response_brain"]
+  }
+}

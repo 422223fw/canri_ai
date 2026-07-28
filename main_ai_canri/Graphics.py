@@ -15,6 +15,7 @@ from tkinter.scrolledtext import ScrolledText
 import tkinter as tk
 
 from Agent_settings import load_agent_settings, save_agent_settings
+from Canri_identity import release_version
 from Movie_settings import load_movie_settings, save_movie_settings
 
 
@@ -384,7 +385,7 @@ class CanriGraphics:
 
     def show_settings(self):
         window = tk.Toplevel(self.root)
-        window.title("Canri settings")
+        window.title(f"Canri settings - v{release_version()}")
         window.geometry("680x720")
         window.resizable(False, False)
         window.configure(bg=self.colors["app"])
@@ -395,7 +396,7 @@ class CanriGraphics:
 
         tk.Label(
             body,
-            text="Movie video provider",
+            text=f"Canri AI v{release_version()} - Movie video provider",
             bg=self.colors["app"],
             fg=self.colors["text"],
             font=("Segoe UI", 12, "bold"),
