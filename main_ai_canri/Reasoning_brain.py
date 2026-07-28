@@ -18,6 +18,8 @@ from collections import Counter
 from datetime import datetime, timezone
 from Brain_storage import atomic_write_json
 from pathlib import Path
+from domain_packages.understanding.context import stop_terms as understanding_stop_terms
+from Semantic_router import load_semantic_profiles
 
 
 DATA_DIR = Path(__file__).parent / "data"
@@ -27,14 +29,6 @@ STATS_FILE = DATA_DIR / "Reasoning_statistics.json"
 
 MAX_FACTS = 30
 MAX_CONNECTIONS = 40
-
-STOP_WORDS = {
-    "the", "and", "for", "with", "that", "this", "what", "where",
-    "how", "why", "is", "are", "was", "were", "does", "did",
-    "about", "from", "into", "make", "create", "build",
-    "של", "את", "על", "מה", "איפה", "איך", "למה", "זה", "אני",
-    "רוצה", "תעשה", "תכין", "לי"
-}
 
 NEGATION_TERMS = {
     "not", "no", "never", "cannot", "can't", "without",
@@ -253,7 +247,7 @@ class ReasoningBrain:
                 continue
 
             word = word_data.get("word")
-            if word:
+            if word and not word_data.get("is_stop_word"):
                 terms.append(str(word))
 
             for connection in word_data.get("connections", [])[:8]:
@@ -292,6 +286,7 @@ class ReasoningBrain:
         )
 
         clean = []
+        blocked = understanding_stop_terms(report)
 
         for term in terms:
             term = re.sub(r"\s+", " ", str(term).lower()).strip()
@@ -300,7 +295,7 @@ class ReasoningBrain:
             if (
                 term
                 and len(term) > 1
-                and term not in STOP_WORDS
+                and term not in blocked
                 and term not in clean
             ):
                 clean.append(term)
@@ -414,7 +409,7 @@ class ReasoningBrain:
 
     # ---------- facts ----------
 
-    def normalize_fact(self, fact, source="input", confidence=70):
+    def normalize_fact(self, fact, source="input", confidence=70, blocked=None):
 
         if isinstance(fact, dict):
             text = (
@@ -442,7 +437,7 @@ class ReasoningBrain:
             confidence = 70
         confidence = max(0, min(confidence, 100))
 
-        tokens = self.tokenize(text)
+        tokens = self.tokenize(text, blocked)
 
         return {
             "text": text,
@@ -452,36 +447,44 @@ class ReasoningBrain:
             "negated": bool(set(tokens) & NEGATION_TERMS)
         }
 
-    def tokenize(self, text):
+    def tokenize(self, text, blocked=None):
 
         tokens = re.findall(
             r"[a-zA-Z\u0590-\u05FF][a-zA-Z0-9_\-\u0590-\u05FF]{1,}",
             text.lower()
         )
 
-        return [
-            token
-            for token in tokens
-            if token not in STOP_WORDS
-        ]
+        blocked = blocked or set()
+        return [token for token in tokens if token not in blocked]
 
     def extract_facts(self, data, report, memory_report, previous_results, text):
 
         facts = []
+        blocked = understanding_stop_terms(report)
 
         if isinstance(data, dict):
             for fact in data.get("facts", []):
-                normalized = self.normalize_fact(fact, "input", 75)
+                normalized = self.normalize_fact(fact, "input", 75, blocked)
                 if normalized:
                     facts.append(normalized)
 
         for fact in self.graph_facts(report):
-            normalized = self.normalize_fact(fact, fact.get("source", "Understanding_brain"), fact.get("confidence", 70))
+            normalized = self.normalize_fact(
+                fact,
+                fact.get("source", "Understanding_brain"),
+                fact.get("confidence", 70),
+                blocked,
+            )
             if normalized:
                 facts.append(normalized)
 
         for fact in self.context_facts(data):
-            normalized = self.normalize_fact(fact, fact.get("source", "context"), fact.get("confidence", 72))
+            normalized = self.normalize_fact(
+                fact,
+                fact.get("source", "context"),
+                fact.get("confidence", 72),
+                blocked,
+            )
             if normalized:
                 facts.append(normalized)
 
@@ -494,7 +497,9 @@ class ReasoningBrain:
 
             if word:
                 text_fact = f"{word} is connected to {', '.join(str(x) for x in connections[:5])}"
-                normalized = self.normalize_fact(text_fact, "Understanding_brain", 65)
+                normalized = self.normalize_fact(
+                    text_fact, "Understanding_brain", 65, blocked
+                )
                 if normalized:
                     facts.append(normalized)
 
@@ -505,7 +510,8 @@ class ReasoningBrain:
             normalized = self.normalize_fact(
                 match.get("summary", ""),
                 "Memory_brain",
-                min(match.get("score", 50), 90)
+                min(match.get("score", 50), 90),
+                blocked,
             )
             if normalized:
                 facts.append(normalized)
@@ -520,17 +526,24 @@ class ReasoningBrain:
                     continue
 
                 for value in values[:5]:
-                    normalized = self.normalize_fact(value, brain_name, result.get("confidence", 65))
+                    normalized = self.normalize_fact(
+                        value, brain_name, result.get("confidence", 65), blocked
+                    )
                     if normalized:
                         facts.append(normalized)
 
             if result.get("summary"):
-                normalized = self.normalize_fact(result["summary"], brain_name, result.get("confidence", 65))
+                normalized = self.normalize_fact(
+                    result["summary"],
+                    brain_name,
+                    result.get("confidence", 65),
+                    blocked,
+                )
                 if normalized:
                     facts.append(normalized)
 
         if not facts and text:
-            normalized = self.normalize_fact(text, "request_text", 55)
+            normalized = self.normalize_fact(text, "request_text", 55, blocked)
             if normalized:
                 facts.append(normalized)
 
@@ -549,48 +562,38 @@ class ReasoningBrain:
     # ---------- classification ----------
 
     def detect_domain(self, report, terms, text):
+        report = report if isinstance(report, dict) else {}
+        contract = report.get("request_contract", {})
+        contract = contract if isinstance(contract, dict) else {}
 
-        topic = str(report.get("main_topic", "")).lower()
-        lowered = f"{text.lower()} {' '.join(terms)}"
-
-        domain_rules = {
-            "code": ["code", "python", "javascript", "java", "function", "api", "debug"],
-            "science": ["science", "physics", "chemistry", "biology", "evidence", "experiment"],
-            "language": ["language", "translation", "grammar", "synonym", "antonym"],
-            "geography": ["geography", "country", "city", "capital", "map", "gps"],
-            "technology": ["technology", "hardware", "software", "cpu", "gpu", "robot"],
-            "history": ["history", "empire", "war", "ancient", "timeline"],
-            "math": ["math", "equation", "calculate", "algebra", "geometry"],
-            "game": ["game", "player", "enemy", "level", "inventory"],
-            "story": ["story", "character", "plot", "world"],
-            "security": ["security", "password", "token", "encrypt", "danger", "safe"]
-        }
-
-        for domain, keywords in domain_rules.items():
-            if topic == domain or any(keyword in lowered for keyword in keywords):
+        for value in (
+            report.get("main_topic"),
+            contract.get("topic"),
+            *report.get("central_domains", []),
+            *contract.get("central_domains", []),
+        ):
+            domain = value.get("domain") if isinstance(value, dict) else value
+            domain = str(domain or "").strip().lower()
+            if domain and domain not in {"unknown", "request"}:
                 return domain
 
-        return topic if topic and topic != "unknown" else "general"
+        return "general"
 
     def detect_intent(self, report, terms, text):
+        report = report if isinstance(report, dict) else {}
+        contract = report.get("request_contract", {})
+        contract = contract if isinstance(contract, dict) else {}
+        requested_action = report.get("requested_action", {})
+        requested_action = requested_action if isinstance(requested_action, dict) else {}
 
-        intent = str(report.get("intent", "")).lower()
-
-        if intent and intent != "unknown":
-            return intent
-
-        lowered = f"{text.lower()} {' '.join(terms)}"
-
-        if any(word in lowered for word in ["debug", "fix", "error", "bug"]):
-            return "debugging"
-        if any(word in lowered for word in ["compare", "versus", "vs"]):
-            return "comparison"
-        if any(word in lowered for word in ["research", "source", "evidence"]):
-            return "research"
-        if any(word in lowered for word in ["plan", "steps", "roadmap"]):
-            return "planning"
-        if any(word in lowered for word in ["why", "how", "what"]):
-            return "question"
+        for value in (
+            requested_action.get("intent_override"),
+            report.get("intent"),
+            contract.get("intent"),
+        ):
+            intent = str(value or "").strip().lower()
+            if intent and intent not in {"unknown", "request"}:
+                return intent
 
         return "explanation"
 
@@ -1080,7 +1083,7 @@ class ReasoningBrain:
             "intent": intent
         }
 
-    def generate_solutions(self, domain, intent, mode, missing_information, contradictions):
+    def generate_solutions(self, report, domain, intent, mode, missing_information, contradictions):
 
         solutions = []
 
@@ -1098,21 +1101,34 @@ class ReasoningBrain:
                 "priority": "high"
             })
 
-        domain_actions = {
-            "code": "Create a step-by-step implementation path and route code to Code_brain.",
-            "science": "Compare evidence and route factual claims to Science_brain and Fact_Check_brain.",
-            "language": "Use Language_brain for translation, grammar, tone, and examples.",
-            "geography": "Use Geography_brain for local knowledge and Research_brain for current data.",
-            "technology": "Use Technology_brain to analyze tools, hardware, software, and constraints.",
-            "history": "Build a timeline and verify dates with History_brain or Research_brain.",
-            "math": "Solve step by step and verify each transformation.",
-            "game": "Use Planner_brain to split gameplay systems before Code_brain.",
-            "story": "Use Creative_brain and Story_brain to build coherent narrative structure.",
-            "security": "Use Security_brain before giving operational details."
-        }
+        specialists = []
+        for detail in report.get("semantic_domain_profiles", []):
+            if not isinstance(detail, dict):
+                continue
+            if str(detail.get("domain", "")).casefold() != str(domain).casefold():
+                continue
+            specialists.extend([
+                detail.get("brain"),
+                *detail.get("supporting_brains", []),
+            ])
+        if not specialists:
+            profile = load_semantic_profiles().get(str(domain).casefold(), {})
+            specialists.extend([
+                profile.get("brain"),
+                *profile.get("supporting_brains", []),
+            ])
+        specialists = list(dict.fromkeys(
+            str(item) for item in specialists if str(item or "").endswith("_brain")
+        ))
+        specialist_text = ", ".join(specialists[:4])
+        action = (
+            f"Use the structured request contract and consult {specialist_text}."
+            if specialist_text else
+            "Use the structured request contract, available evidence, and requirement checks."
+        )
 
         solutions.append({
-            "action": domain_actions.get(domain, "Gather more information and reason step by step."),
+            "action": action,
             "reason": f"Detected {domain} domain with {mode} reasoning.",
             "priority": "medium"
         })
@@ -1126,7 +1142,7 @@ class ReasoningBrain:
 
         return solutions
 
-    def identify_missing_information(self, domain, intent, terms, facts):
+    def identify_missing_information(self, report, domain, intent, terms, facts):
 
         missing = []
 
@@ -1136,7 +1152,9 @@ class ReasoningBrain:
         if not facts:
             missing.append("No facts were provided.")
 
-        if domain == "code" and not any(term in terms for term in ["python", "javascript", "java", "html", "css", "sql"]):
+        code_context = report.get("code_context", {}) if isinstance(report, dict) else {}
+        code_context = code_context if isinstance(code_context, dict) else {}
+        if domain == "code" and not code_context.get("language_hints"):
             missing.append("Programming language is unclear.")
 
         if intent in ["research", "question"] and len(facts) < 2:
@@ -1161,33 +1179,16 @@ class ReasoningBrain:
 
         return round(max(0, min(confidence, 100)), 2)
 
-    def suggested_next_brains(self, domain, intent, confidence, contradictions, missing_information):
+    def suggested_next_brains(self, report, confidence, contradictions, missing_information):
 
-        next_brains = []
-
-        if intent == "planning" or domain in ["code", "game"]:
-            next_brains.append("Planner_brain")
-
-        domain_map = {
-            "code": ["Code_brain", "Security_brain"],
-            "science": ["Science_brain", "Fact_Check_brain"],
-            "language": ["Language_brain"],
-            "geography": ["Geography_brain", "Research_brain"],
-            "technology": ["Technology_brain", "Research_brain"],
-            "history": ["History_brain", "Research_brain"],
-            "math": ["Math_brain"],
-            "security": ["Security_brain"],
-            "story": ["Creative_brain", "Story_brain"],
-            "game": ["Game_brain", "Code_brain"]
-        }
-
-        next_brains.extend(domain_map.get(domain, []))
+        next_brains = [
+            str(brain)
+            for brain in report.get("routing_hints", [])
+            if str(brain).endswith("_brain")
+        ]
 
         if confidence < 55 or missing_information:
             next_brains.append("Research_brain")
-
-        if domain in {"story", "game", "creative", "image_generation"}:
-            next_brains.append("Creative_brain")
 
         if contradictions:
             next_brains.append("Fact_Check_brain")
@@ -1325,6 +1326,7 @@ class ReasoningBrain:
         rule = self.select_rule(domain, intent, mode)
 
         missing_information = self.identify_missing_information(
+            report,
             domain,
             intent,
             terms,
@@ -1369,6 +1371,7 @@ class ReasoningBrain:
         )
 
         solutions = self.generate_solutions(
+            report,
             domain,
             intent,
             mode,
@@ -1465,8 +1468,7 @@ class ReasoningBrain:
             },
             "confidence": confidence,
             "suggested_next_brains": self.suggested_next_brains(
-                domain,
-                intent,
+                report,
                 confidence,
                 contradictions,
                 missing_information

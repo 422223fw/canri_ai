@@ -24,6 +24,16 @@ except (ImportError, ModuleNotFoundError):
     build_shared_data_context = None
     context_view_for_brain = None
 
+try:
+    from domain_packages.creativity.naming import ContextualNamingEngine
+except (ImportError, ModuleNotFoundError):
+    ContextualNamingEngine = None
+
+try:
+    from Semantic_router import load_semantic_profiles
+except (ImportError, ModuleNotFoundError):
+    load_semantic_profiles = None
+
 
 DATA_DIR = Path(__file__).parent / "data"
 SEEDS_FILE = DATA_DIR / "Creative_seed_bank.json"
@@ -33,182 +43,6 @@ STATS_FILE = DATA_DIR / "Creative_statistics.json"
 MEMORY_FILE = DATA_DIR / "Creative_memory.json"
 WRITING_RULES_FILE = DATA_DIR / "Creative_writing_rules.json"
 
-ALWAYS_CANRI_DATA_FILES = [
-    "Learning_history.json",
-    "Learning_statistics.json",
-    "Improvement_queue.json",
-    "Brain_performance.json",
-    "Memory_database.json",
-    "Planner_task_templates.json",
-    "Planner_dependency_graph.json",
-    "Planner_quality_patterns.json",
-    "Reasoning_patterns.json",
-    "Knowledge_index.json",
-    "Knowledge_statistics.json",
-]
-
-DOMAIN_CANRI_DATA_FILES = {
-    "code": [
-        "code.json",
-        "Code_terms_dictionary.json",
-        "Punctuation_dictionary.json",
-        "Code_dependency_graph.json",
-        "Code_composition_tables.json",
-        "Code_assembly_patterns.json",
-        "Code_project_recipes.json",
-        "Library_functions.json",
-        "Code_library_templates.json",
-        "Code_statistics.json",
-        "Technology_terms.json",
-        "Technical_terms.json"
-    ],
-    "game": [
-        "Game_types.json",
-        "Game_mechanics.json",
-        "Game_systems.json",
-        "Game_balance_rules.json",
-        "Game_design_graph.json",
-        "Game_statistics.json",
-        "Story_templates.json",
-        "Character_templates.json",
-        "World_templates.json"
-    ],
-    "story": [
-        "Story_templates.json",
-        "Story_structures.json",
-        "Story_genres.json",
-        "Character_templates.json",
-        "Character_traits.json",
-        "World_templates.json",
-        "World_rules.json",
-        "Emotion_patterns.json"
-    ],
-    "science": [
-        "Articles.json",
-        "Articles_statistics.json",
-        "Technical_terms.json",
-        "Units_dictionary.json",
-        "research_sources.json"
-    ],
-    "technology": [
-        "Technology_terms.json",
-        "Hardware_dictionary.json",
-        "Tech_stack_templates.json",
-        "Technical_terms.json",
-        "Abbreviations.json"
-    ],
-    "language": [
-        "Punctuation_dictionary.json",
-        "Translation_dictionary.json",
-        "Synonyms.json",
-        "Antonyms.json",
-        "Idioms.json",
-        "Slang_dictionary.json",
-        "Language_examples.json",
-        "Language_models.json",
-        "Language_rules.json"
-    ],
-    "geography": [
-        "Geography_places.json",
-        "Geography_concepts.json",
-        "Geography_regions.json",
-        "Geography_index.json",
-        "Geography_relations.json",
-        "Geography_query_patterns.json",
-        "Geography_creative_profiles.json",
-        "Geography_statistics.json",
-        "research_sources.json"
-    ],
-    "history": [
-        "history_knowledge.json",
-        "history_sources.json",
-        "History_events.json",
-        "History_figures.json",
-        "History_timelines.json",
-        "History_index.json",
-        "Articles.json",
-        "research_sources.json"
-    ],
-    "math": [
-        "Math_formulas.json",
-        "Math_problem_patterns.json",
-        "Math_examples.json",
-        "Math_index.json",
-        "Units_dictionary.json",
-        "Math_statistics.json"
-    ],
-    "security": [
-        "research_sources.json",
-        "Technical_terms.json",
-        "Code_dependency_graph.json"
-    ],
-    "emotion": [
-        "Emotion_patterns.json",
-        "Emotion_response_styles.json",
-        "Conversation_patterns.json",
-        "Emotional_support_strategies.json"
-    ],
-    "image_generation": [
-        "Image_styles.json",
-        "Image_subject_templates.json",
-        "Image_prompt_templates.json",
-        "Image_composition_rules.json",
-        "Image_generation_profiles.json",
-        "Image_history.json"
-    ],
-    "movie": [
-        "Movie_genres.json",
-        "Movie_cinematic_profiles.json",
-        "Movie_render_profiles.json",
-        "Movie_production_templates.json",
-        "Company_products.json",
-        "Story_templates.json",
-        "Story_structures.json",
-        "Story_genres.json",
-        "Character_templates.json",
-        "Character_traits.json",
-        "World_templates.json",
-        "World_rules.json",
-        "Image_styles.json",
-        "Image_prompt_templates.json",
-        "Voice_audio_profiles.json",
-        "Technology_terms.json"
-    ],
-    "vision": [
-        "Vision_file_profiles.json",
-        "Vision_magic_signatures.json",
-        "Media_analysis_profiles.json"
-    ],
-    "voice": [
-        "Voice_audio_profiles.json",
-        "Voice_magic_signatures.json",
-        "Voice_processing_tasks.json",
-        "Audio_analysis_profiles.json"
-    ],
-    "general": [
-        "Company_products.json",
-        "Punctuation_dictionary.json",
-        "Translation_dictionary.json",
-        "Synonyms.json",
-        "Articles.json",
-        "Technical_terms.json"
-    ]
-}
-
-CANRI_DATA_FILES = [
-    "Planner_task_templates.json",
-    "Planner_dependency_graph.json",
-    "Planner_quality_patterns.json",
-    "Reasoning_patterns.json",
-    "Code_dependency_graph.json",
-    "Code_project_recipes.json",
-    "Library_functions.json",
-    "Code_library_templates.json",
-    "Translation_dictionary.json",
-    "Synonyms.json",
-    "Articles.json",
-    "Knowledge_index.json"
-]
 
 # Rules control behavior and must not be treated as creative source material.
 # Quality patterns are evidence/checklists, not executable policy, so they stay available.
@@ -217,12 +51,6 @@ CREATIVE_DATA_EXCLUDED_FILES = {
     "Creative_scoring_rules.json",
     "Learning_rules.json",
     "Reasoning_rules.json",
-}
-
-GENERIC_TERMS = {
-    "the", "and", "for", "with", "that", "this", "what", "how",
-    "why", "create", "make", "build", "thing", "idea",
-    "תעשה", "תכין", "לי", "של", "את", "מה", "איך", "זה"
 }
 
 UNSAFE_TERMS = {
@@ -248,7 +76,7 @@ class CreativeCodeAssembler:
         memory_report = self.creative_brain.get_memory_report(request)
         text = self.creative_brain.extract_text(request, report)
         terms = self.creative_brain.collect_terms(report, memory_report, text)
-        language = self.detect_language(text, terms)
+        language = self.detect_language(report)
         canri_context = self.creative_brain.collect_canri_context(
             "code",
             terms,
@@ -281,24 +109,27 @@ class CreativeCodeAssembler:
             "confidence": self.estimate_confidence(terms, graph_plan, canri_context)
         }
 
-    def detect_language(self, text, terms):
+    def detect_language(self, report):
 
-        lowered = f"{text.lower()} {' '.join(terms)}"
-
-        language_rules = [
-            ("python", ["python", "py", "tkinter", "pygame", "fastapi", "django"]),
-            ("javascript", ["javascript", "js", "node", "react", "express"]),
-            ("java", ["java", "spring", "minecraft"]),
-            ("html", ["html", "css", "website", "page"]),
-            ("csharp", ["c#", "csharp", "unity"]),
-            ("cpp", ["c++", "cpp", "unreal"])
+        report = report if isinstance(report, dict) else {}
+        code_context = report.get("code_context", {})
+        code_context = code_context if isinstance(code_context, dict) else {}
+        language_hints = [
+            str(item).strip().casefold()
+            for item in code_context.get("language_hints", [])
+            if str(item or "").strip()
         ]
+        if language_hints:
+            return language_hints[0]
 
-        for language, keywords in language_rules:
-            if any(keyword in lowered for keyword in keywords):
-                return language
-
-        return "python"
+        contract = report.get("request_contract", {})
+        contract = contract if isinstance(contract, dict) else {}
+        requested_language = str(
+            contract.get("programming_language")
+            or report.get("programming_language")
+            or ""
+        ).strip().casefold()
+        return requested_language or "python"
 
     def build_code_graph(self, terms, canri_context):
 
@@ -1151,10 +982,23 @@ class EvolutionaryTextComposer:
         modes.extend(self.DEFAULT_MODES)
         return list(dict.fromkeys(modes))[:9]
 
-    def score_variant(self, variant, request_text, source_count, fact_profile):
+    def score_variant(
+        self,
+        variant,
+        request_text,
+        source_count,
+        fact_profile,
+        report=None,
+    ):
+        report = report if isinstance(report, dict) else {}
+        stop_terms = {
+            str(item.get("word") or "").casefold()
+            for item in report.get("words", [])
+            if isinstance(item, dict) and item.get("is_stop_word")
+        }
         request_terms = {
             term for term in re.findall(r"[a-z][a-z-]{2,}", request_text.lower())
-            if term not in GENERIC_TERMS
+            if term not in stop_terms
         }
         output_terms = set(re.findall(r"[a-z][a-z-]{2,}", variant["text"].lower()))
         coverage = len(request_terms.intersection(output_terms)) / max(len(request_terms), 1)
@@ -1224,7 +1068,13 @@ class EvolutionaryTextComposer:
                     "sources": list(dict.fromkeys(item["source"] for item in ordered))
                 }
                 candidates.append(
-                    self.score_variant(candidate, text, len(sources), fact_profile)
+                    self.score_variant(
+                        candidate,
+                        text,
+                        len(sources),
+                        fact_profile,
+                        report,
+                    )
                 )
 
         candidates.sort(key=lambda item: item["scores"]["total"], reverse=True)
@@ -1259,7 +1109,13 @@ class EvolutionaryTextComposer:
                     "parent_id": elite["id"],
                     "evolution_stage": round_number
                 }
-                child = self.score_variant(child, text, len(sources), fact_profile)
+                child = self.score_variant(
+                    child,
+                    text,
+                    len(sources),
+                    fact_profile,
+                    report,
+                )
                 if child["roles"] and child["roles"][0] == "definition_or_overview":
                     child["scores"]["total"] = min(100, child["scores"]["total"] + 3)
                 children.append(child)
@@ -1334,6 +1190,11 @@ class CreativeBrain:
         self.code_assembler = CreativeCodeAssembler(self)
         self.dictionary_composer = DictionaryGuidedComposer(self.writing_rules)
         self.text_composer = EvolutionaryTextComposer()
+        self.naming_engine = (
+            ContextualNamingEngine()
+            if ContextualNamingEngine is not None
+            else None
+        )
 
         print("Creative Brain Loaded")
 
@@ -1383,7 +1244,6 @@ class CreativeBrain:
                     "sample_terms": [
                         term
                         for term in re.findall(r"[a-zA-Z][a-zA-Z0-9_-]{2,}", path.stem.lower())
-                        if term not in GENERIC_TERMS
                     ],
                     "indexed": True,
                     "loaded": False
@@ -1407,14 +1267,12 @@ class CreativeBrain:
         return not lowered.endswith(CREATIVE_DATA_EXCLUDED_SUFFIXES)
 
     def all_creative_data_files(self):
-
-        file_names = list(ALWAYS_CANRI_DATA_FILES) + list(CANRI_DATA_FILES)
-        for domain_files in DOMAIN_CANRI_DATA_FILES.values():
-            file_names.extend(domain_files)
         return [
-            file_name
-            for file_name in self.unique_files(file_names)
-            if self.is_creative_data_file(file_name)
+            path.name
+            for path in sorted(DATA_DIR.iterdir())
+            if path.is_file()
+            and path.suffix.lower() in {".json", ".jsonl"}
+            and self.is_creative_data_file(path.name)
         ]
 
     def unique_files(self, file_names):
@@ -1497,32 +1355,34 @@ class CreativeBrain:
 
         return str(item)[:80] if item else ""
 
-    def relevant_canri_files(self, domain, data=None):
+    def relevant_canri_files(self, domain, data=None, terms=None):
 
-        data = data or {}
-        file_names = list(ALWAYS_CANRI_DATA_FILES)
-        file_names.extend(DOMAIN_CANRI_DATA_FILES.get(domain, []))
-        file_names.extend(DOMAIN_CANRI_DATA_FILES.get("general", []))
-
-        source_brain = ""
-        if isinstance(data, dict):
-            source_brain = str(data.get("source_brain", "")).lower()
-
-        for known_domain, known_files in DOMAIN_CANRI_DATA_FILES.items():
-            if known_domain in source_brain:
-                file_names.extend(known_files)
-
-        return [
-            file_name
-            for file_name in self.unique_files(file_names)
-            if self.is_creative_data_file(file_name)
-        ]
+        query_terms = list(dict.fromkeys([
+            str(domain or "").lower(),
+            *[str(term).lower() for term in (terms or []) if str(term).strip()],
+        ]))
+        ranked = []
+        for file_name in self.all_creative_data_files():
+            normalized_name = re.sub(r"[^a-z0-9]+", " ", file_name.lower())
+            index_entry = self.canri_index.get(file_name, {})
+            indexed_terms = set(index_entry.get("sample_terms", []))
+            score = sum(
+                8 if term in normalized_name else 2 if term in indexed_terms else 0
+                for term in query_terms[:60]
+                if term
+            )
+            if score:
+                ranked.append((score, file_name))
+        ranked.sort(key=lambda item: (item[0], item[1]), reverse=True)
+        if ranked:
+            return [file_name for _, file_name in ranked[:20]]
+        return self.all_creative_data_files()[:8]
 
     def collect_canri_context(self, domain, terms, data=None):
 
         context = {}
 
-        for file_name in self.relevant_canri_files(domain, data):
+        for file_name in self.relevant_canri_files(domain, data, terms):
             context[file_name] = self.summarize_canri_file(
                 file_name,
                 terms,
@@ -1546,7 +1406,11 @@ class CreativeBrain:
             and build_shared_data_context is not None
         ):
             query = " ".join(str(term) for term in terms[:60])
-            indexed = build_shared_data_context(query, limit=16)
+            indexed = build_shared_data_context(
+                query,
+                limit=16,
+                understanding=report,
+            )
 
         if isinstance(indexed, dict) and context_view_for_brain is not None:
             indexed = context_view_for_brain(
@@ -1747,7 +1611,7 @@ class CreativeBrain:
         clean = []
         for term in terms:
             term = re.sub(r"\s+", " ", str(term).lower()).strip()
-            if term and term not in clean and term not in GENERIC_TERMS:
+            if term and term not in clean:
                 clean.append(term)
 
         return clean[:120]
@@ -1829,7 +1693,7 @@ class CreativeBrain:
             if not isinstance(word_data, dict):
                 continue
 
-            if word_data.get("word"):
+            if word_data.get("word") and not word_data.get("is_stop_word"):
                 terms.append(str(word_data["word"]))
 
             for connection in word_data.get("connections", [])[:10]:
@@ -1852,10 +1716,15 @@ class CreativeBrain:
         )
 
         clean = []
+        stop_terms = {
+            str(item.get("word") or "").casefold()
+            for item in report.get("words", [])
+            if isinstance(item, dict) and item.get("is_stop_word")
+        }
         for term in terms:
             term = re.sub(r"\s+", " ", str(term).lower()).strip()
             term = term.replace("_", " ")
-            if term and len(term) > 1 and term not in GENERIC_TERMS and term not in clean:
+            if term and len(term) > 1 and term not in stop_terms and term not in clean:
                 clean.append(term)
 
         return clean[:120]
@@ -1864,19 +1733,60 @@ class CreativeBrain:
 
     def detect_domain(self, report, terms, text):
 
-        topic = str(report.get("main_topic", "")).lower()
-        lowered = f"{text.lower()} {' '.join(terms)}"
-
-        for domain in ["movie", "story", "code", "game", "science", "technology", "language", "geography", "history", "math", "security"]:
-            if topic == domain or domain in lowered:
+        report = report if isinstance(report, dict) else {}
+        contract = report.get("request_contract", {})
+        contract = contract if isinstance(contract, dict) else {}
+        candidates = [
+            report.get("main_topic"),
+            contract.get("topic"),
+        ]
+        candidates.extend(
+            item.get("domain") if isinstance(item, dict) else item
+            for item in report.get("central_domains", [])
+        )
+        candidates.extend(
+            item.get("domain") if isinstance(item, dict) else item
+            for item in report.get("semantic_domain_profiles", [])
+        )
+        for candidate in candidates:
+            domain = str(candidate or "").casefold().strip()
+            if domain and domain not in {"unknown", "request"}:
                 return domain
+        return "general"
 
-        if "character" in lowered:
-            return "story"
-        if "function" in lowered or "python" in lowered:
-            return "code"
+    def brain_owners_for_domains(self, report, domains):
+        """Resolve domain owners from Understanding and discovered brain profiles."""
 
-        return "story" if "creative" in lowered else "general"
+        report = report if isinstance(report, dict) else {}
+        requested = {
+            str(domain or "").casefold().strip()
+            for domain in domains
+            if str(domain or "").strip()
+        }
+        owners = []
+        details = [
+            *report.get("central_domain_details", []),
+            *report.get("semantic_domain_profiles", []),
+        ]
+        for item in details:
+            if not isinstance(item, dict):
+                continue
+            domain = str(item.get("domain") or "").casefold().strip()
+            brain_name = str(item.get("brain") or "").strip()
+            if domain in requested and brain_name.endswith("_brain"):
+                owners.append(brain_name)
+
+        if load_semantic_profiles is not None:
+            try:
+                profiles = load_semantic_profiles()
+            except Exception:
+                profiles = {}
+            for domain in requested:
+                profile = profiles.get(domain, {})
+                brain_name = str(profile.get("brain") or "").strip()
+                if brain_name.endswith("_brain"):
+                    owners.append(brain_name)
+        return list(dict.fromkeys(owners))
 
     def analyze_direction(self, report, memory_report, terms, text, domain):
 
@@ -3034,7 +2944,7 @@ class CreativeBrain:
 
         return "code" in task_type or any(marker in lowered for marker in markers)
 
-    def extract_story_name(self, text):
+    def extract_story_name(self, text, report=None):
 
         text = str(text or "")
         named = re.search(r"\bnamed\s+([A-Z][a-zA-Z]{1,30})\b", text)
@@ -3048,14 +2958,11 @@ class CreativeBrain:
         if about_name:
             return about_name.group(1)
 
-        if re.search(r"\bpatient\b", text, re.IGNORECASE):
-            return "Elias"
-        if re.search(r"\bboy\b", text, re.IGNORECASE):
-            return "Leo"
-        if re.search(r"\bgirl\b", text, re.IGNORECASE):
-            return "Maya"
+        if self.naming_engine is not None:
+            return self.naming_engine.choose_character_name(text, report)
 
-        return "Ari"
+        digest = __import__("hashlib").sha256(text.encode("utf-8")).digest()
+        return "".join(chr(97 + byte % 26) for byte in digest[:5]).capitalize()
 
     def story_elements_from_text(self, text):
 
@@ -3095,10 +3002,10 @@ class CreativeBrain:
 
         return elements
 
-    def build_story_output(self, text, best=None):
+    def build_story_output(self, text, best=None, report=None):
 
         sentence_count = self.requested_sentence_count(text, default=6)
-        name = self.extract_story_name(text)
+        name = self.extract_story_name(text, report)
         elements = self.story_elements_from_text(text)
         lowered = str(text or "").lower()
         lexical_plan = (
@@ -3149,7 +3056,7 @@ class CreativeBrain:
                 "At the center of the city, a silver clock showed his own heartbeat instead of the time.",
                 f"{name} understood that waking the city too quickly might break the spell that kept it safe.",
                 "He chose to light one small tower first and wait until the sleepers opened their eyes on their own.",
-                "By morning, the door was still there, and Leo knew the city trusted him to return.",
+                f"By morning, the door was still there, and {name} knew the city trusted him to return.",
             ]
             return " ".join(sentences[:sentence_count])
 
@@ -3213,7 +3120,8 @@ class CreativeBrain:
         domain,
         best=None,
         source_brain="Creative_brain",
-        task_type="creative_generation"
+        task_type="creative_generation",
+        report=None,
     ):
 
         best = best or {}
@@ -3225,7 +3133,7 @@ class CreativeBrain:
                     return value.strip()
 
         if self.is_story_request(text, task_type, source_brain) or domain == "story":
-            return self.build_story_output(text, best)
+            return self.build_story_output(text, best, report)
 
         if self.is_code_request(text, task_type, source_brain) or domain == "code":
             code_result = self.code_assembler.assemble({
@@ -3257,26 +3165,20 @@ class CreativeBrain:
             domains.insert(0, selected_domain)
         return list(dict.fromkeys(domains))[:4]
 
-    def build_follow_up_tasks(self, text, domains, best, canri_context):
+    def build_follow_up_tasks(
+        self,
+        text,
+        domains,
+        best,
+        canri_context,
+        report=None,
+    ):
         """Create bounded, testable next tasks without exposing evolution internals."""
 
         domains = [domain for domain in domains if domain not in {"general", "unknown"}]
         if len(domains) < 2:
             return []
 
-        brain_for_domain = {
-            "code": "Code_brain",
-            "science": "Science_brain",
-            "technology": "Technology_brain",
-            "math": "Math_brain",
-            "security": "Security_brain",
-            "game": "Game_brain",
-            "story": "Story_brain",
-            "movie": "Movie_brain",
-            "geography": "Geography_brain",
-            "history": "History_brain",
-            "language": "Language_brain",
-        }
         goal = self.extract_primary_goal(
             {},
             str(text or "the current request"),
@@ -3288,11 +3190,7 @@ class CreativeBrain:
             for item in canri_context.values()
             if isinstance(item, dict) and item.get("source_group")
         })[:6]
-        owners = list(dict.fromkeys(
-            brain_for_domain.get(domain)
-            for domain in domains
-            if brain_for_domain.get(domain)
-        ))
+        owners = self.brain_owners_for_domains(report, domains)
         tasks = [{
             "id": "cross_domain_integration",
             "title": f"Integrate {', '.join(domains)} into one verified result",
@@ -3317,15 +3215,16 @@ class CreativeBrain:
                 "id": "prototype_validation",
                 "title": "Validate the generated prototype against real interfaces",
                 "goal": goal,
-                "owner_brains": [
-                    name for name in [
-                        "Code_brain",
-                        "Technology_brain" if "technology" in domains else None,
-                        "Science_brain" if "science" in domains else None,
-                        "Quality_Control_brain",
-                    ]
-                    if name
-                ],
+                "owner_brains": list(dict.fromkeys([
+                    *self.brain_owners_for_domains(
+                        report,
+                        [
+                            domain for domain in domains
+                            if domain in {"code", "technology", "science"}
+                        ],
+                    ),
+                    "Quality_Control_brain",
+                ])),
                 "acceptance_checks": checks,
                 "evidence_groups": evidence_groups,
             })
@@ -3351,27 +3250,10 @@ class CreativeBrain:
         scored,
         best,
         canri_context,
-        execution_policy
+        execution_policy,
+        report=None,
     ):
-
-        brain_for_domain = {
-            "code": "Code_brain",
-            "science": "Science_brain",
-            "technology": "Technology_brain",
-            "math": "Math_brain",
-            "story": "Story_brain",
-            "movie": "Movie_brain",
-            "game": "Game_brain",
-            "security": "Security_brain",
-            "geography": "Geography_brain",
-            "history": "History_brain",
-            "language": "Language_brain",
-        }
-        owners = list(dict.fromkeys(
-            brain_for_domain.get(domain)
-            for domain in domains
-            if brain_for_domain.get(domain)
-        ))
+        owners = self.brain_owners_for_domains(report, domains)
         alternatives = []
         for candidate in scored[:5]:
             if not isinstance(candidate, dict):
@@ -3402,33 +3284,35 @@ class CreativeBrain:
             ],
         }
 
-    def creative_execution_policy(self, report, text, detected_domain):
+    def creative_execution_policy(self, report, text, detected_domain, results=None):
 
         report = report if isinstance(report, dict) else {}
-        intent = str(report.get("intent", "")).lower()
-        topic = str(report.get("main_topic", "")).lower()
-        lowered = str(text or "").lower()
-        explicit_story = intent == "story_creation" or topic == "story" or any(
-            marker in lowered
-            for marker in ["write a story", "create a story", "continue the story", "chapter", "narrative"]
+        contract = report.get("request_contract", {})
+        contract = contract if isinstance(contract, dict) else {}
+        routes = {
+            str(item)
+            for item in report.get("routing_hints", [])
+            if str(item).endswith("_brain")
+        }
+        explicit_story = "Story_brain" in routes
+        explicit_movie = "Movie_brain" in routes
+        explicit_code = "Code_brain" in routes
+        results = results if isinstance(results, dict) else {}
+        emotion_result = results.get("Emotion_brain", {})
+        emotion_result = emotion_result if isinstance(emotion_result, dict) else {}
+        report_topic = str(report.get("main_topic") or contract.get("topic") or "").casefold()
+        report_intent = str(report.get("intent") or contract.get("intent") or "").casefold()
+        emotional_conversation = bool(
+            "Emotion_brain" in routes
+            or (
+                emotion_result.get("support_response")
+                and (report_topic == "emotion" or report_intent == "conversation")
+            )
         )
-        explicit_movie = intent == "movie_creation" or topic == "movie" or any(
-            marker in lowered
-            for marker in ["create a movie", "make a movie", "generate a movie", "produce a film", "render movie"]
+        creative_requested = "Creative_brain" in routes and (
+            explicit_story or explicit_movie or bool(contract.get("action"))
         )
-        explicit_code = intent in {"code_generation", "code_analysis"} or topic == "code"
-        emotional_conversation = topic == "emotion" or any(
-            marker in lowered
-            for marker in [
-                "i feel", "can we talk", "listen to me", "need someone",
-                "having a hard time", "\u05e7\u05e9\u05d4 \u05dc\u05d9", "\u05d0\u05e4\u05e9\u05e8 \u05dc\u05d3\u05d1\u05e8",
-                "\u05d0\u05e0\u05d9 \u05de\u05e8\u05d2\u05d9\u05e9", "\u05d0\u05e0\u05d9 \u05de\u05e8\u05d2\u05d9\u05e9\u05d4"
-            ]
-        )
-        factual = intent in {"question", "research"} and not any(
-            marker in lowered
-            for marker in ["brainstorm", "invent", "creative idea", "imagine"]
-        )
+        factual = "Fact_Check_brain" in routes and not creative_requested
 
         if explicit_code:
             return {
@@ -3612,7 +3496,8 @@ class CreativeBrain:
         execution_policy = self.creative_execution_policy(
             report,
             text,
-            domain
+            domain,
+            task_report.get("results", {}) if isinstance(task_report, dict) else {},
         )
         domain = execution_policy["domain"]
         best = rescue.get("best_idea", {})
@@ -3621,7 +3506,8 @@ class CreativeBrain:
             domain,
             best,
             source_brain,
-            task_type
+            task_type,
+            report,
         )
         confidence = rescue.get("confidence", 0)
         answer_for_source = self.answer_payload(
@@ -3631,6 +3517,16 @@ class CreativeBrain:
             task_type,
             confidence,
             best
+        )
+        naming_suggestions = (
+            {
+                "project": self.naming_engine.project_names(text, report),
+                "characters": self.naming_engine.character_candidates(
+                    text, report, count=8
+                ),
+            }
+            if self.naming_engine is not None
+            else {}
         )
 
         return {
@@ -3643,6 +3539,7 @@ class CreativeBrain:
             "story": answer_for_source.get("story"),
             "generated_code": answer_for_source.get("generated_code"),
             "suggested_actions": rescue.get("rescue_plan", []),
+            "naming_suggestions": naming_suggestions,
             "simulation_summary": {
                 "mode": "brain_rescue",
                 "selected_idea": best.get("title") if isinstance(best, dict) else None,
@@ -3809,7 +3706,8 @@ class CreativeBrain:
         execution_policy = self.creative_execution_policy(
             report,
             text,
-            domain
+            domain,
+            data.get("results", {}) if isinstance(data, dict) else {},
         )
         domain = execution_policy["domain"]
         central_domains = self.central_domains_for_request(
@@ -3869,7 +3767,8 @@ class CreativeBrain:
             domain,
             best,
             "Creative_brain",
-            "creative_generation"
+            "creative_generation",
+            report,
         )
         if execution_policy.get("mode") == "conversation_support":
             results = data.get("results", {}) if isinstance(data, dict) else {}
@@ -3904,7 +3803,8 @@ class CreativeBrain:
             text,
             central_domains,
             best,
-            canri_context
+            canri_context,
+            report,
         )
 
         specialist_support = self.build_specialist_support_packet(
@@ -3912,7 +3812,18 @@ class CreativeBrain:
             scored,
             best,
             canri_context,
-            execution_policy
+            execution_policy,
+            report,
+        )
+        naming_suggestions = (
+            {
+                "project": self.naming_engine.project_names(text, report),
+                "characters": self.naming_engine.character_candidates(
+                    text, report, count=8
+                ),
+            }
+            if self.naming_engine is not None
+            else {}
         )
         publish_output = execution_policy.get("mode") != "support_only"
         proposed_output = final_output
@@ -3942,6 +3853,7 @@ class CreativeBrain:
             "answer": final_output,
             "proposed_output": proposed_output,
             "specialist_support": specialist_support,
+            "naming_suggestions": naming_suggestions,
             "story": final_output if domain == "story" else None,
             "generated_code": final_output if domain == "code" else None,
             "best_idea": best,

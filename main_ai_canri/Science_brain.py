@@ -34,6 +34,7 @@ from pathlib import Path
 
 from Brain_storage import atomic_write_json, load_json_resilient
 from Scanner_knowledge import scanner_evidence
+from domain_packages.understanding.context import stop_terms as understanding_stop_terms
 
 
 DATA_DIR = Path(__file__).parent / "data"
@@ -53,12 +54,6 @@ MIN_USABLE_CONFIDENCE = 15
 STATISTICS_WEIGHT = 0.25
 QUALITY_WEIGHT = 0.2
 
-STOP_WORDS = {
-    "the", "and", "for", "with", "that", "this", "what", "how", "why",
-    "are", "is", "was", "were", "does", "did", "can", "could", "should",
-    "about", "into", "from", "של", "את", "על", "מה", "איך", "למה"
-}
-
 GENERIC_SCIENCE_TERMS = {
     "science", "scientific", "evidence", "model", "models", "measurement",
     "measurements", "application", "applications", "concept", "concepts",
@@ -67,10 +62,6 @@ GENERIC_SCIENCE_TERMS = {
     "general", "knowledge", "process", "processes"
 }
 
-STOP_WORDS.update({
-    "explain", "accurately", "clear", "clearly", "sentence", "sentences",
-    "student", "students", "give", "show"
-})
 GENERIC_SCIENCE_TERMS.update({
     "answer", "question", "simple", "brief", "short", "detailed",
     "accurate", "accuracy"
@@ -114,8 +105,26 @@ class ScienceBrain:
             for key in ["original_text", "corrected_text", "main_topic", "intent"]:
                 if not report.get(key) and data.get(key):
                     report[key] = data.get(key)
+        else:
+            report = dict(data)
+
+        if report.get("words") and report.get("request_contract"):
             return report
-        return data
+
+        text = report.get("corrected_text") or report.get("original_text") or ""
+        if not str(text).strip():
+            return report
+        try:
+            from Understanding_brain import brain as understanding_brain
+
+            enriched = understanding_brain.process({
+                "original_text": report.get("original_text") or text,
+                "corrected_text": report.get("corrected_text") or text,
+                "attached_files": report.get("attached_files", []),
+            })
+            return enriched if isinstance(enriched, dict) else report
+        except Exception:
+            return report
 
     # ---------- ניתוח ה-report ----------
 
@@ -126,6 +135,7 @@ class ScienceBrain:
         לא מתבסס רק על main_topic.
         """
         keywords = set()
+        blocked = understanding_stop_terms(report)
 
         main_topic = report.get("main_topic")
         if main_topic and main_topic != "unknown":
@@ -139,42 +149,66 @@ class ScienceBrain:
             if not word_data.get("exists"):
                 continue
 
-            keywords.add(word_data["word"].lower())
+            if not word_data.get("is_stop_word"):
+                keywords.add(word_data["word"].lower())
 
             for connection in word_data.get("connections", []):
                 keywords.add(connection.lower())
 
         original_text = report.get("original_text", "")
         for token in re.findall(r"[a-zA-Z][a-zA-Z\-]{2,}", original_text.lower()):
-            if token not in STOP_WORDS:
+            if token not in blocked:
                 keywords.add(token)
 
         return {
             keyword
             for keyword in keywords
-            if keyword not in STOP_WORDS
+            if keyword not in blocked
             and keyword not in GENERIC_SCIENCE_TERMS
             and len(keyword) > 2
         }
 
     def _collect_direct_keywords(self, report):
         """Terms written by the user get more weight than graph expansions."""
+        contract = report.get("request_contract", {})
+        contract = contract if isinstance(contract, dict) else {}
+        meaning_frame = report.get("meaning_frame", {})
+        meaning_frame = meaning_frame if isinstance(meaning_frame, dict) else {}
+        target = str(
+            contract.get("target")
+            or meaning_frame.get("object")
+            or ""
+        )
         original_text = str(report.get("original_text", ""))
+        blocked = understanding_stop_terms(report)
+        target_terms = {
+            token
+            for token in re.findall(r"[a-zA-Z][a-zA-Z\-]{2,}", target.lower())
+            if token not in blocked
+        }
+        if target_terms:
+            return target_terms
         return {
             token
             for token in re.findall(r"[a-zA-Z][a-zA-Z\-]{2,}", original_text.lower())
-            if token not in STOP_WORDS
+            if token not in blocked
             and token not in GENERIC_SCIENCE_TERMS
         }
 
     def _collect_direct_phrases(self, report):
+        contract = report.get("request_contract", {})
+        contract = contract if isinstance(contract, dict) else {}
+        target = re.sub(r"\s+", " ", str(contract.get("target") or "").lower()).strip()
+        if target:
+            return {target} if len(target.split()) >= 2 else set()
+        blocked = understanding_stop_terms(report)
         tokens = [
             token
             for token in re.findall(
                 r"[a-zA-Z][a-zA-Z\-]{2,}",
                 str(report.get("original_text", "")).lower()
             )
-            if token not in STOP_WORDS
+            if token not in blocked
             and token not in GENERIC_SCIENCE_TERMS
         ]
         phrases = set()
@@ -232,19 +266,19 @@ class ScienceBrain:
         content = str(article.get("content", "")).lower()
         for keyword in direct_keywords:
             if keyword in title:
-                score += 12
+                score += 60
             elif keyword in article_keywords:
-                score += 8
+                score += 45
             elif keyword in content:
-                score += 2
+                score += 18
 
         for phrase in direct_phrases or set():
             if phrase in title:
-                score += 40
+                score += 160
             elif phrase in article_keywords:
-                score += 35
+                score += 140
             elif phrase in content:
-                score += 30
+                score += 100
 
         return score, matched_by_field
 
@@ -383,7 +417,7 @@ class ScienceBrain:
             return None
         return max(1, min(int(match.group(1)), 12))
 
-    def build_answer(self, matches, scanner_articles, original_text):
+    def build_answer(self, matches, scanner_articles, original_text, report=None):
         source_blocks = []
         for match in matches[:3]:
             source_blocks.extend([
@@ -410,10 +444,13 @@ class ScienceBrain:
         if not sentences:
             return ""
 
-        query_terms = {
-            token for token in re.findall(r"[a-zA-Z][a-zA-Z\-]{2,}", str(original_text).lower())
-            if token not in STOP_WORDS and token not in GENERIC_SCIENCE_TERMS
-        }
+        blocked = understanding_stop_terms(report)
+        query_terms = self._collect_direct_keywords(report or {})
+        if not query_terms:
+            query_terms = {
+                token for token in re.findall(r"[a-zA-Z][a-zA-Z\-]{2,}", str(original_text).lower())
+                if token not in blocked and token not in GENERIC_SCIENCE_TERMS
+            }
         lowered_request = str(original_text).lower()
         desired_markers = []
         if any(marker in lowered_request for marker in ["why", "cause", "effect"]):
@@ -578,7 +615,7 @@ class ScienceBrain:
             "source": source,
             "confidence": confidence,
             "summary": summary,
-            "answer": self.build_answer(matches, scanner_articles, original_text),
+            "answer": self.build_answer(matches, scanner_articles, original_text, report),
             "articles_found": len(matches),
             "scanner_articles_found": len(scanner_articles),
             "scanner_evidence": scanner_articles,

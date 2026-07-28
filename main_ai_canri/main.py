@@ -54,7 +54,14 @@ from Planner_brain import brain as planner_brain
 from Emotion_brain import brain as emotion_brain
 from Answer_Enrichment_brain import brain as answer_enrichment_brain
 from Project_context_brain import brain as project_context_brain
+from Local_LLM_brain import brain as local_llm_brain
 from Agent_brain import brain as agent_brain
+
+try:
+    from Semantic_router import rank_semantic_domains, routes_for_domains
+except Exception:
+    rank_semantic_domains = None
+    routes_for_domains = None
 
 from Security_brain import brain as security_brain
 from Knowledge_collector import start_background_collector
@@ -229,6 +236,11 @@ def _register_all_brains_legacy():
     )
 
     manager_brain.register_brain(
+        "Local_LLM_brain",
+        local_llm_brain
+    )
+
+    manager_brain.register_brain(
         "Agent_brain",
         agent_brain
     )
@@ -262,52 +274,55 @@ def build_basic_understanding(message, corrected_text):
 
     text = corrected_text or message or ""
     lowered = text.lower()
+    words = re.findall(r"[A-Za-z\u0590-\u05FF][A-Za-z0-9_\-\u0590-\u05FF']*", lowered)
+    word_reports = []
+    sentence_graph = {}
+    try:
+        word_reports = understanding_brain.analyze_words(words)
+        sentence_graph = understanding_brain.build_sentence_graph(words, word_reports)
+    except Exception:
+        word_reports = []
+        sentence_graph = {}
 
-    topic_rules = [
-        ("code", ["code", "python", "javascript", "java", "function", "api", "json"]),
-        ("game", ["game", "player", "level", "inventory", "enemy"]),
-        ("movie", [
-            "movie", "film", "feature film", "short film", "screenplay",
-            "cinematography", "shot list", "render movie", "create movie",
-            "\u05e1\u05e8\u05d8", "\u05e7\u05d5\u05dc\u05e0\u05d5\u05e2", "\u05ea\u05e1\u05e8\u05d9\u05d8"
-        ]),
-        ("science", [
-            "science", "physics", "chemistry", "biology", "gravity", "atom",
-            "photosynthesis", "dna", "water cycle", "electric current", "volcano",
-            "immune system", "sound wave", "climate change", "cellular respiration",
-            "plate tectonics", "natural selection", "nervous system", "chemical bond",
-            "carbon cycle", "vaccine", "phases of the moon", "renewable energy",
-            "ocean current",
-        ]),
-        ("language", ["translate", "translation", "grammar", "synonym", "antonym", "language"]),
-        ("geography", ["country", "city", "capital", "map", "gps", "river", "mountain"]),
-        ("technology", ["technology", "hardware", "cpu", "gpu", "computer", "robot"]),
-        ("history", ["history", "war", "empire", "ancient"]),
-        ("math", ["math", "calculate", "equation", "number"]),
-        ("security", ["security", "password", "hack", "bomb", "suicide"]),
-        ("image_generation", ["generate image", "create image", "make image", "draw", "illustration", "poster", "logo"]),
-        ("vision", ["image", "photo", "picture", "video", "file"]),
-        ("voice", ["audio", "voice", "sound", "recording"]),
-        ("story", ["story", "character", "world", "plot"])
-    ]
+    ranked = []
+    if rank_semantic_domains is not None:
+        try:
+            ranked = rank_semantic_domains(
+                text,
+                word_reports=word_reports,
+                scanner_matches=[],
+                code_context={"has_code": bool(re.search(r"```|\bdef\s+\w+\s*\(|\bclass\s+\w+", text))},
+                limit=6,
+            )
+        except Exception:
+            ranked = []
+    main_topic = str(ranked[0].get("domain") or "general") if ranked else "general"
+    try:
+        intent, intent_confidence, intent_hits = understanding_brain.detect_intent(
+            text,
+            words,
+            main_topic,
+        )
+        requested_action = understanding_brain.detect_requested_action(
+            text,
+            words,
+            word_reports,
+            sentence_graph,
+            main_topic,
+            intent,
+        )
+        intent = requested_action.get("intent_override") or intent
+    except Exception:
+        intent = "question" if "?" in text else "request"
+        intent_confidence = 35
+        intent_hits = {}
+        requested_action = {
+            "is_action_request": False,
+            "action_word": None,
+            "target": None,
+        }
 
-    main_topic = "general"
-    for topic, keywords in topic_rules:
-        if any(keyword in lowered for keyword in keywords):
-            main_topic = topic
-            break
-
-    intent = "question" if "?" in text or any(word in lowered for word in ["what", "how", "why", "מה", "איך", "למה"]) else "request"
-    if main_topic == "code" and any(word in lowered for word in ["build", "write", "create", "implement", "fix", "improve"]):
-        intent = "code_generation"
-    elif main_topic == "math" and any(word in lowered for word in ["solve", "calculate", "equation"]):
-        intent = "math"
-    elif main_topic == "story" and any(word in lowered for word in ["write", "create", "continue", "story"]):
-        intent = "story_creation"
-    elif main_topic == "movie":
-        intent = "movie_creation"
-
-    first_word = re.findall(r"[A-Za-z\u0590-\u05FF]+", text.lower())
+    routes = routes_for_domains(ranked[:1]) if routes_for_domains and ranked else []
     only_match = re.search(r"only\s+output\s+(?:the\s+)?([^\n.!?]{2,100})", lowered)
     fallback_requirements = []
     for line in text.splitlines():
@@ -327,19 +342,19 @@ def build_basic_understanding(message, corrected_text):
         "corrected_text": corrected_text,
         "main_topic": main_topic,
         "intent": intent,
-        "words": [
-            {
-                "word": word,
-                "exists": True,
-                "connections": []
-            }
-            for word in text.split()[:40]
-        ],
+        "intent_confidence": intent_confidence,
+        "intent_hits": intent_hits,
+        "requested_action": requested_action,
+        "words": word_reports[:40],
+        "semantic_domain_profiles": ranked,
+        "central_domains": [main_topic] if main_topic != "general" else [],
+        "central_domain_details": ranked[:1],
+        "routing_hints": list(dict.fromkeys(["Memory_brain", *routes, "Response_brain"])),
         "possible_tasks": [
             intent
         ],
         "request_contract": {
-            "action": first_word[0] if first_word else None,
+            "action": requested_action.get("action_word"),
             "topic": main_topic,
             "intent": intent,
             "requirements": fallback_requirements,

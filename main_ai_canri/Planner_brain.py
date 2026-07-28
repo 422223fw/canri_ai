@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from Brain_storage import atomic_write_json
+from Semantic_router import load_semantic_profiles
 
 
 DATA_DIR = Path(__file__).parent / "data"
@@ -26,13 +27,6 @@ QUALITY_PATTERNS_FILE = DATA_DIR / "Planner_quality_patterns.json"
 STATS_FILE = DATA_DIR / "Planner_statistics.json"
 
 MAX_MATCHES = 8
-
-GENERIC_TERMS = {
-    "the", "and", "for", "with", "that", "this", "what", "how",
-    "why", "make", "create", "build", "do", "task", "plan",
-    "תעשה", "תכין", "לי", "של", "את", "מה", "איך", "זה"
-}
-
 
 class PlannerBrain:
 
@@ -202,7 +196,7 @@ class PlannerBrain:
                 continue
 
             word = word_data.get("word")
-            if word:
+            if word and not word_data.get("is_stop_word"):
                 terms.append(str(word))
 
             for connection in word_data.get("connections", [])[:8]:
@@ -223,6 +217,11 @@ class PlannerBrain:
         )
 
         clean_terms = []
+        stop_terms = {
+            str(item.get("word") or "").casefold()
+            for item in report.get("words", [])
+            if isinstance(item, dict) and item.get("is_stop_word")
+        }
 
         for term in terms:
             term = re.sub(r"\s+", " ", str(term).lower()).strip()
@@ -231,7 +230,7 @@ class PlannerBrain:
             if (
                 term
                 and len(term) > 1
-                and term not in GENERIC_TERMS
+                and term not in stop_terms
                 and term not in clean_terms
             ):
                 clean_terms.append(term)
@@ -301,21 +300,18 @@ class PlannerBrain:
 
     def detect_output(self, report, contract, intent):
         constraints = contract.get("output_constraints", {}) if isinstance(contract, dict) else {}
-        requested = str(constraints.get("requested_format") or "").strip().lower()
-        if requested:
-            return requested
-        intent_outputs = {
-            "code_generation": "code",
-            "code_analysis": "code_review",
-            "translation": "translation",
-            "comparison": "comparison_table",
-            "learning": "lesson",
-            "research": "report",
-            "story_creation": "story",
-            "image_generation": "image",
-            "movie_creation": "movie_project",
-        }
-        return intent_outputs.get(intent, "implementation_plan")
+        global_picture = contract.get("global_picture", {}) if isinstance(contract, dict) else {}
+        candidates = [
+            constraints.get("requested_format"),
+            report.get("output_format") if isinstance(report, dict) else None,
+            contract.get("expected_output") if isinstance(contract, dict) else None,
+            global_picture.get("expected_output") if isinstance(global_picture, dict) else None,
+        ]
+        for candidate in candidates:
+            value = str(candidate or "").strip().lower()
+            if value and value not in {"answer", "unknown", "request"}:
+                return value
+        return "implementation_plan"
 
     # ---------- template search ----------
 
@@ -516,19 +512,16 @@ class PlannerBrain:
             if str(item).endswith("_brain")
             and str(item) not in {"Planner_brain", "Response_brain", "Manager_brain"}
         ]
-        domain_owner = {
-            "code": "Code_brain",
-            "science": "Science_brain",
-            "technology": "Technology_brain",
-            "math": "Math_brain",
-            "game": "Game_brain",
-            "story": "Story_brain",
-            "creative": "Creative_brain",
-            "history": "History_brain",
-            "geography": "Geography_brain",
-            "language": "Language_brain",
-            "security": "Security_brain",
-        }.get(domain)
+        domain_owner = None
+        for detail in report.get("semantic_domain_profiles", []):
+            if not isinstance(detail, dict):
+                continue
+            if str(detail.get("domain", "")).casefold() == str(domain).casefold():
+                domain_owner = str(detail.get("brain") or "").strip()
+                break
+        if not domain_owner:
+            profile = load_semantic_profiles().get(str(domain).casefold(), {})
+            domain_owner = str(profile.get("brain") or "").strip()
         if domain_owner:
             routed.insert(0, domain_owner)
         return list(dict.fromkeys(routed or ["Reasoning_brain"]))

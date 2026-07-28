@@ -8,11 +8,17 @@ can target corrections without loading every project data file.
 import json
 import re
 from pathlib import Path
+from domain_packages.understanding.context import stop_terms as understanding_stop_terms
 
 try:
     from Cognitive_workspace import CognitiveWorkspace
 except Exception:
     CognitiveWorkspace = None
+
+try:
+    from Semantic_router import load_semantic_profiles
+except Exception:
+    load_semantic_profiles = None
 
 
 DATA_DIR = Path(__file__).parent / "data"
@@ -59,24 +65,36 @@ class NervousSystemBrain:
         return ""
 
     def owner_brains(self, report):
-        topic = str(report.get("main_topic", "general")).lower()
-        domains = report.get("domains", [])
-        if not domains:
-            domains = report.get("central_domains", [])
-        requested = [topic]
-        if isinstance(domains, list):
-            requested.extend(
-                str(item.get("domain") if isinstance(item, dict) else item).lower()
-                for item in domains
-            )
+        report = report if isinstance(report, dict) else {}
+        owners = [
+            str(brain_name)
+            for brain_name in report.get("routing_hints", [])
+            if str(brain_name).endswith("_brain")
+            and str(brain_name) not in {
+                "Manager_brain", "Memory_brain", "Response_brain",
+                "Quality_Control_brain", "Learning_brain",
+                "Nervous_system_brain",
+            }
+        ]
 
-        owners = []
-        table = self.profile.get("domain_owners", {})
-        for domain in requested:
-            for brain_name in table.get(domain, []):
-                if brain_name not in owners:
+        if load_semantic_profiles is not None:
+            contract = report.get("request_contract", {})
+            contract = contract if isinstance(contract, dict) else {}
+            domain_candidates = [
+                report.get("main_topic"),
+                contract.get("topic"),
+            ]
+            domain_candidates.extend(report.get("central_domains", []))
+            domain_candidates.extend(contract.get("central_domains", []))
+            profiles = load_semantic_profiles()
+            for candidate in domain_candidates:
+                domain = candidate.get("domain") if isinstance(candidate, dict) else candidate
+                profile = profiles.get(str(domain or "").casefold().strip())
+                brain_name = str(profile.get("brain") or "") if isinstance(profile, dict) else ""
+                if brain_name.endswith("_brain") and brain_name not in owners:
                     owners.append(brain_name)
-        return owners or list(table.get("general", []))
+
+        return list(dict.fromkeys(owners))[:12] or ["Reasoning_brain"]
 
     def active_brain_states(self, results):
         states = []
@@ -163,11 +181,8 @@ class NervousSystemBrain:
         ranked.sort(key=lambda item: item["score"], reverse=True)
         return ranked[0] if ranked else None, ranked[:8]
 
-    def requirement_terms(self, requirement):
-        ignored = {
-            "the", "and", "for", "with", "from", "into", "only", "output",
-            "final", "working", "program", "code", "user", "must", "should",
-        }
+    def requirement_terms(self, requirement, report=None):
+        ignored = understanding_stop_terms(report)
         return [
             term for term in re.findall(r"[a-z][a-z0-9_]{2,}", str(requirement).lower())
             if term not in ignored
@@ -235,7 +250,7 @@ class NervousSystemBrain:
                 feature = None
             if isinstance(item, dict):
                 feature = item.get("feature")
-            terms = self.requirement_terms(text)
+            terms = self.requirement_terms(text, report)
             matches = [term for term in terms if term in specialist_text]
             checkable = kind in {"feature", "output_constraint"} or bool(terms)
             possible_ids = [
@@ -484,7 +499,15 @@ class NervousSystemBrain:
                 } if isinstance(data, dict) else {},
                 request_id=workspace.get("request_id") if isinstance(workspace, dict) else None,
             )
-        owners = workspace.get("owner_brains", []) or self.owner_brains(report)
+        workspace_owners = (
+            workspace.get("owner_brains", [])
+            if isinstance(workspace, dict)
+            else []
+        )
+        owners = list(dict.fromkeys(
+            self.owner_brains(report)
+            + [str(owner) for owner in workspace_owners if owner]
+        ))[:12]
         workspace_ranked = workspace.get("candidates", []) if isinstance(workspace, dict) else []
         if workspace_ranked:
             ranked = workspace_ranked[:8]

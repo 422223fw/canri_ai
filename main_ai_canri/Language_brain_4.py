@@ -292,6 +292,7 @@ class DictionaryEngine:
         antonyms,
         technical_terms,
         abbreviations,
+        scanner_definitions,
         definitions,
         connections,
     ):
@@ -303,6 +304,7 @@ class DictionaryEngine:
         score += len(antonyms) * 10
         score += len(technical_terms) * 15
         score += len(abbreviations) * 15
+        score += len(scanner_definitions) * 8
         score += len(definitions) * 10
         score += len(connections) * 5
         max_score = max(len(words) * 20, 1)
@@ -338,6 +340,7 @@ class DictionaryEngine:
             antonyms,
             technical_terms,
             abbreviations,
+            scanner_matches,
         )
 
         return {

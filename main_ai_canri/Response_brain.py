@@ -161,6 +161,31 @@ class ResponseBrain:
         # keyword scores. Preserve one complete user message instead.
         return next((value for value in candidates if value), "")
 
+    def complete_understanding_report(self, report, user_text):
+        """Upgrade legacy partial reports through the central understanding brain."""
+
+        current = report if isinstance(report, dict) else {}
+        if not str(user_text or "").strip():
+            return current
+        contract = current.get("request_contract")
+        if isinstance(contract, dict) and contract and current.get("routing_hints"):
+            return current
+        try:
+            from Understanding_brain import brain as understanding_brain
+
+            parsed = understanding_brain.process(str(user_text))
+        except Exception:
+            return current
+        if not isinstance(parsed, dict):
+            return current
+        merged = dict(parsed)
+        for key, value in current.items():
+            if key == "request_contract" and not value:
+                continue
+            if value is not None:
+                merged[key] = value
+        return merged
+
     def user_focus_terms(self, text):
 
         stop_words = {
@@ -200,21 +225,10 @@ class ResponseBrain:
 
         return sorted(items, key=score, reverse=True)
 
-    def is_capability_question(self, text):
+    def is_capability_question(self, text, report=None):
 
-        lowered = str(text).lower()
-
-        patterns = [
-            "what can you do",
-            "what are you able to do",
-            "what can canri do",
-            "what can u do",
-            "tell me what you can do",
-            "מה אתה יכול לעשות",
-            "מה אתה יודע לעשות"
-        ]
-
-        return any(pattern in lowered for pattern in patterns)
+        report = report if isinstance(report, dict) else {}
+        return str(report.get("intent", "")).casefold() == "capability_question"
 
     def capability_answer(self):
 
@@ -334,82 +348,35 @@ class ResponseBrain:
         if isinstance(requested_action, dict) and requested_action.get("is_action_request"):
             return True
 
-        intent = str(
-            report.get(
-                "intent",
-                ""
-            )
-        ).lower()
-
-        return intent in {
-            "code_generation",
-            "code_analysis",
-            "story_creation",
-            "creative_generation",
-            "game_design",
-            "planning",
-            "math",
-            "translation",
-            "correction",
-            "request"
-        }
+        contract = report.get("request_contract", {})
+        return bool(
+            isinstance(contract, dict)
+            and (contract.get("action") or contract.get("action_kind"))
+        )
 
     def is_definition_or_explanation_request(self, text, report):
 
-        lowered = str(text).lower()
         intent = str(report.get("intent", "")).lower()
+        contract = report.get("request_contract", {})
+        contract = contract if isinstance(contract, dict) else {}
+        action = str(contract.get("action") or "").casefold()
+        action_kind = str(contract.get("action_kind") or "").casefold()
+        return intent in {"question", "research"} or action in {
+            "explain", "define", "research", "verify"
+        } or action_kind in {"explain", "research", "question"}
 
-        if intent in {"question", "research"}:
-            return True
+    def is_greeting(self, text, report=None):
 
-        markers = [
-            "what is",
-            "what are",
-            "explain what",
-            "explain",
-            "define",
-            "meaning of",
-            "check if",
-            "reliable"
-        ]
-
-        return any(marker in lowered for marker in markers)
-
-    def is_greeting(self, text):
-
-        lowered = str(text).strip().lower()
-
-        if not lowered:
+        report = report if isinstance(report, dict) else {}
+        if str(report.get("intent", "")).casefold() != "greeting":
             return False
-
-        greetings = {
-            "hello",
-            "hi",
-            "hey",
-            "shalom",
-            "שלום",
-            "היי",
-            "הי"
-        }
-
-        cleaned = re.sub(r"[^\w\u0590-\u05FF\s]", "", lowered).strip()
-        words = cleaned.split()
-
-        if cleaned in greetings:
-            return True
-
-        greeting_position = next(
-            (index for index, word in enumerate(words[:3]) if word in greetings),
-            None
-        )
-        if greeting_position is None:
+        if self.is_action_request(report):
             return False
-
-        technical_markers = {
-            "code", "program", "solve", "equation", "story", "image",
-            "analyze", "explain", "calculate", "python", "science"
-        }
-        return len(words) <= 12 and not technical_markers.intersection(words)
+        substantive_routes = set(self.routed_brains(report)).difference({
+            "Response_brain", "Language_brain", "Emotion_brain",
+            "Memory_brain", "Understanding_brain",
+        })
+        return not substantive_routes
 
     def greeting_answer(self, text=""):
 
@@ -484,7 +451,30 @@ class ResponseBrain:
 
     # ---------- selection ----------
 
-    def result_score(self, brain_name, result):
+    def routed_brains(self, report):
+
+        if not isinstance(report, dict):
+            return []
+        central_domains = {
+            str(item.get("domain") if isinstance(item, dict) else item).casefold()
+            for item in report.get("central_domains", [])
+            if str(item.get("domain") if isinstance(item, dict) else item).strip()
+        }
+        routes = []
+        for item in report.get("semantic_domain_profiles", []):
+            if not isinstance(item, dict):
+                continue
+            domain = str(item.get("domain") or "").casefold()
+            if central_domains and domain not in central_domains:
+                continue
+            routes.append(str(item.get("brain") or ""))
+            routes.extend(str(brain) for brain in item.get("supporting_brains", []) if brain)
+        routes.extend(str(brain) for brain in report.get("routing_hints", []) if brain)
+        return list(dict.fromkeys(
+            brain for brain in routes if brain.endswith("_brain")
+        ))
+
+    def result_score(self, brain_name, result, route_rank=None):
 
         if not isinstance(result, dict):
             return 0
@@ -541,30 +531,14 @@ class ResponseBrain:
         if result.get("generated_code"):
             score += 15
 
+        if brain_name == "Local_LLM_brain" and result.get("final_output"):
+            score += 28
+
         if brain_name != "Code_brain" and result.get("local_matches") and not result.get("answer"):
             score -= 12
 
-        priority = {
-            "Code_brain": 24,
-            "Game_brain": 13,
-            "Movie_brain": 18,
-            "Image_brain": 13,
-            "Science_brain": 12,
-            "Technology_brain": 12,
-            "Geography_brain": 12,
-            "History_brain": 12,
-            "Language_brain": 12,
-            "Math_brain": 12,
-            "Story_brain": 12,
-            "Emotion_brain": 14,
-            "Creative_brain": 10,
-            "Research_brain": 9,
-            "Reasoning_brain": 8,
-            "Planner_brain": 7,
-            "Memory_brain": 4
-        }
-
-        score += priority.get(brain_name, 0)
+        if isinstance(route_rank, int):
+            score += max(4, 24 - route_rank * 2)
 
         return score
 
@@ -572,18 +546,10 @@ class ResponseBrain:
 
         candidates = []
         report = report or {}
-        topic = str(report.get("main_topic", "")).lower()
-        intent = str(report.get("intent", "")).lower()
-        allow_creative = topic in {"story", "creative", "game"} or intent in {
-            "story_creation",
-            "creative_generation",
-            "game_design",
-            "image_generation"
-        }
-        allow_code = intent in {"code_generation", "code_analysis"} or (
-            topic == "code"
-            and intent not in {"question", "research"}
-        )
+        routed = self.routed_brains(report)
+        route_rank = {brain: index for index, brain in enumerate(routed)}
+        allow_creative = not routed or "Creative_brain" in route_rank
+        allow_code = not routed or "Code_brain" in route_rank
 
         for brain_name, result in results.items():
             if brain_name in {
@@ -603,7 +569,7 @@ class ResponseBrain:
                 continue
 
             candidates.append((
-                self.result_score(brain_name, result),
+                self.result_score(brain_name, result, route_rank.get(brain_name)),
                 brain_name,
                 result
             ))
@@ -619,33 +585,12 @@ class ResponseBrain:
 
         if not isinstance(workspace, dict):
             return None, {}
-        topic = str(report.get("main_topic", "general")).lower()
-        intent = str(report.get("intent", "unknown")).lower()
-        allowed = {
-            "code": {"Code_brain"},
-            "math": {"Math_brain"},
-            "story": {"Story_brain", "Creative_brain"},
-            "movie": {"Movie_brain"},
-            "science": {"Science_brain", "Research_brain"},
-            "knowledge": {"Research_brain", "Fact_Check_brain"},
-            "technology": {"Technology_brain", "Research_brain"},
-            "geography": {"Geography_brain", "Research_brain"},
-            "history": {"History_brain", "Research_brain"},
-            "emotion": {"Emotion_brain"},
-            "language": {"Language_brain", "Spelling_brain"},
-            "image_generation": {"Image_brain", "Creative_brain"},
-            "vision": {"Vision_brain"},
-            "voice": {"Voice_brain"},
-            "game": {"Game_brain", "Code_brain"},
+        permitted = {
+            brain for brain in self.routed_brains(report)
+            if brain not in INTERNAL_ONLY_BRAINS and brain != "Response_brain"
         }
-        if intent in {"code_generation", "code_analysis"}:
-            permitted = {"Code_brain"}
-        elif intent == "story_creation":
-            permitted = {"Story_brain", "Creative_brain"}
-        elif intent == "movie_creation":
-            permitted = {"Movie_brain"}
-        else:
-            permitted = allowed.get(topic)
+        if not permitted:
+            permitted = None
 
         ranked = []
         selected = workspace.get("selected_candidate")
@@ -668,72 +613,22 @@ class ResponseBrain:
 
     def choose_domain_result(self, report, results, user_text):
 
-        topic = str(report.get("main_topic", "")).lower()
-        intent = str(report.get("intent", "")).lower()
-        lowered = str(user_text).lower()
-
-        preferred = []
-
-        emotion_result = results.get("Emotion_brain", {})
-        conversation_intent = ""
-        if isinstance(emotion_result, dict):
-            conversation_intent = str(
-                emotion_result.get("conversation_intent", "")
-            ).lower()
-
-        if topic == "emotion" and conversation_intent not in {"", "none"}:
-            preferred.append("Emotion_brain")
-
-        is_code_request = intent in {"code_generation", "code_analysis"} or (
-            topic == "code" and intent not in {"question", "research"}
-        )
-        if is_code_request:
-            preferred.append("Code_brain")
-
-        simple_math_expression = bool(re.fullmatch(
-            r"\s*[-+]?\d+(?:\.\d+)?\s*[+\-*/]\s*[-+]?\d+(?:\.\d+)?\s*\??\s*",
-            lowered
-        ))
-        if not is_code_request and (topic == "math" or intent == "math" or simple_math_expression or (
-            re.search(r"\d|\bx\b", lowered)
-            and (
-                "=" in lowered
-                or "^" in lowered
-                or "**" in lowered
-                or any(term in lowered for term in ["solve", "calculate", "step by step"])
+        preferred = self.routed_brains(report)
+        local_result = results.get("Local_LLM_brain", {})
+        reviewed_code_available = (
+            "Code_brain" in preferred
+            and self.has_user_facing_output(
+                "Code_brain",
+                results.get("Code_brain", {}),
             )
-        )):
-            preferred.append("Math_brain")
-
-        if topic == "story" or intent == "story_creation":
-            preferred.extend(["Story_brain", "Creative_brain"])
-
-        if topic == "movie" or intent == "movie_creation":
-            preferred.append("Movie_brain")
-
-        if topic == "image_generation" or intent == "image_generation":
-            preferred.append("Image_brain")
-
-        if topic == "language" or intent in {"translation", "correction"}:
-            preferred.append("Language_brain")
-
-        domain_map = {
-            "science": "Science_brain",
-            "technology": "Technology_brain",
-            "geography": "Geography_brain",
-            "history": "History_brain",
-            "game": "Game_brain",
-            "movie": "Movie_brain",
-            "image_generation": "Image_brain",
-            "vision": "Vision_brain",
-            "voice": "Voice_brain",
-        }
-
-        if topic in domain_map:
-            preferred.append(domain_map[topic])
-
-        if intent in {"question", "research"}:
-            preferred.extend(["Research_brain", "Reasoning_brain"])
+        )
+        if (
+            isinstance(local_result, dict)
+            and local_result.get("status") == "completed"
+            and local_result.get("final_output")
+            and not reviewed_code_available
+        ):
+            preferred.insert(0, "Local_LLM_brain")
 
         for brain_name in list(dict.fromkeys(preferred)):
             result = results.get(brain_name)
@@ -767,26 +662,29 @@ class ResponseBrain:
         if not str(emotion.get("support_response") or "").strip():
             return False
 
-        topic = str(report.get("main_topic", "")).lower()
-        intent = str(report.get("intent", "")).lower()
-        if topic in {
-            "code", "math", "story", "image_generation", "vision", "voice",
-            "science", "technology", "geography", "history", "game"
-        }:
-            return False
-        if intent in {
-            "code_generation", "code_analysis", "math", "story_creation",
-            "image_generation", "research"
-        }:
+        non_emotional_results = {
+            "Emotion_brain", "Creative_brain", "Language_brain",
+            "Response_brain", "Memory_brain", "Understanding_brain",
+            "Manager_brain", "Reasoning_brain", "Planner_brain",
+            "Security_brain", "Quality_Control_brain", "Learning_brain",
+            "Nervous_system_brain", "Collaboration_brain",
+            "Fact_Check_brain", "Answer_Enrichment_brain",
+        }
+        if any(
+            brain_name not in non_emotional_results
+            and self.has_user_facing_output(brain_name, result)
+            for brain_name, result in results.items()
+        ):
             return False
 
-        lowered = str(user_text or "").lower()
-        technical_markers = [
-            "write code", "build a program", "solve this", "calculate",
-            "write a story", "create an image", "analyze this file",
-            "explain this code", "fact check"
-        ]
-        return not any(marker in lowered for marker in technical_markers)
+        substantive_routes = set(self.routed_brains(report)).difference({
+            "Emotion_brain", "Creative_brain", "Language_brain",
+            "Response_brain", "Memory_brain", "Understanding_brain",
+            "Manager_brain", "Reasoning_brain", "Planner_brain",
+            "Security_brain", "Quality_Control_brain", "Learning_brain",
+            "Nervous_system_brain", "Collaboration_brain",
+        })
+        return not substantive_routes
 
     # ---------- formatting ----------
 
@@ -1442,31 +1340,9 @@ class ResponseBrain:
 
     def should_skip_verification_note(self, report, primary_brain):
 
-        topic = str(report.get("main_topic", "")).lower()
-        intent = str(report.get("intent", "")).lower()
-
-        creative_or_build_request = (
-            topic in {"code", "game", "story", "creative", "image_generation"}
-            or intent in {
-                "code_generation",
-                "code_analysis",
-                "game_design",
-                "story_creation",
-                "creative_generation",
-                "image_generation",
-                "request"
-            }
-            or primary_brain in {
-                "Code_brain",
-                "Game_brain",
-                "Creative_brain",
-                "Story_brain",
-                "Image_brain",
-                "Planner_brain"
-            }
-        )
-
-        return creative_or_build_request
+        _ = primary_brain
+        routes = set(self.routed_brains(report))
+        return "Fact_Check_brain" not in routes
 
     def add_verification_note(self, text, results, report=None, primary_brain=None):
 
@@ -1573,26 +1449,21 @@ class ResponseBrain:
 
         contract = report.get("request_contract", {}) if isinstance(report, dict) else {}
         constraints = contract.get("output_constraints", {}) if isinstance(contract, dict) else {}
-        lowered = str(user_text).lower()
-        return bool(
-            constraints.get("only_output")
-            or any(
-                marker in lowered
-                for marker in [
-                    "only output", "only return", "code only",
-                    "not a plan or explanation", "without explanation", "no explanation"
-                ]
-            )
+        return bool(constraints.get("only_output"))
+
+    def requests_verification_status(self, user_text, report=None):
+
+        _ = user_text
+        report = report if isinstance(report, dict) else {}
+        contract = report.get("request_contract", {})
+        contract = contract if isinstance(contract, dict) else {}
+        action = str(contract.get("action") or "").casefold()
+        action_kind = str(contract.get("action_kind") or "").casefold()
+        return (
+            "Fact_Check_brain" in set(self.routed_brains(report))
+            or action in {"verify", "fact_check", "research"}
+            or action_kind in {"verify", "fact_check", "research"}
         )
-
-    def requests_verification_status(self, user_text):
-
-        lowered = str(user_text or "").lower()
-        markers = [
-            "reliable", "reliability", "fact check", "check if", "verify",
-            "sources", "source", "confidence", "\u05d1\u05d3\u05d5\u05e7 \u05e2\u05d5\u05d1\u05d3\u05d5\u05ea", "\u05de\u05e7\u05d5\u05e8\u05d5\u05ea", "\u05d0\u05de\u05d9\u05e0\u05d5\u05ea"
-        ]
-        return any(marker in lowered for marker in markers)
 
     def strip_internal_output(self, text):
 
@@ -1665,7 +1536,21 @@ class ResponseBrain:
         cognitive_workspace = self.get_cognitive_workspace(data)
         dictionary = self.get_dictionary_context(data)
         user_text = self.extract_user_text(data, report)
+        report = self.complete_understanding_report(report, user_text)
         self._active_focus_terms = self.user_focus_terms(user_text)
+        routed_brains = set(self.routed_brains(report))
+        infrastructure_brains = {
+            "Memory_brain",
+            "Understanding_brain",
+            "Response_brain",
+            "Language_brain",
+            "Reasoning_brain",
+            "Emotion_brain",
+            "Security_brain",
+            "Learning_brain",
+            "Fact_Check_brain",
+        }
+        domain_specialists = routed_brains.difference(infrastructure_brains)
         safety = self.safety_status(results)
         strict_output = self.strict_output_request(report, user_text)
         citations = self.source_citations(results)
@@ -1692,11 +1577,11 @@ class ResponseBrain:
             display_text = str(agent_result.get("display_text", "")).strip()
             primary_brain = "Agent_brain"
             confidence = agent_result.get("confidence", 85)
-        elif self.is_greeting(user_text):
+        elif self.is_greeting(user_text, report):
             display_text = self.greeting_answer(user_text)
             primary_brain = "Response_brain"
             confidence = 95
-        elif self.is_capability_question(user_text):
+        elif self.is_capability_question(user_text, report):
             display_text = self.capability_answer()
             primary_brain = "Response_brain"
             confidence = 95
@@ -1712,13 +1597,8 @@ class ResponseBrain:
         elif (
             not self.is_action_request(report)
             and self.is_definition_or_explanation_request(user_text, report)
-            and str(report.get("main_topic", "")).lower() not in {
-                "science", "technology", "history", "geography", "math",
-            }
-            and not any(
-                marker in user_text.lower()
-                for marker in ["reliable", "fact check", "check if", "local knowledge", "use local knowledge"]
-            )
+            and not domain_specialists
+            and not self.requests_verification_status(user_text, report)
             and self.dictionary_answer(user_text, dictionary)
         ):
             display_text = self.dictionary_answer(user_text, dictionary)
@@ -1727,11 +1607,8 @@ class ResponseBrain:
         else:
             code_result = results.get("Code_brain", {})
             is_code_request = (
-                str(report.get("intent", "")).lower() in {"code_generation", "code_analysis"}
-                or (
-                    str(report.get("main_topic", "")).lower() == "code"
-                    and str(report.get("intent", "")).lower() not in {"question", "research"}
-                )
+                "Code_brain" in routed_brains
+                and self.is_action_request(report)
             )
 
             if (
@@ -1794,7 +1671,7 @@ class ResponseBrain:
                 display_text = self.user_facing_fallback(report)
 
             if not strict_output:
-                if self.requests_verification_status(user_text):
+                if self.requests_verification_status(user_text, report):
                     display_text = self.add_verification_note(
                         display_text,
                         results,

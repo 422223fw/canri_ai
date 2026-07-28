@@ -25,12 +25,6 @@ STATS_FILE = DATA_DIR / "Game_statistics.json"
 
 MAX_MATCHES = 8
 
-GENERIC_TERMS = {
-    "game", "make", "create", "build", "the", "and", "for", "with",
-    "תעשה", "תכין", "לי", "משחק", "של", "את"
-}
-
-
 class GameBrain:
 
     def __init__(self):
@@ -133,7 +127,7 @@ class GameBrain:
             if not isinstance(word_data, dict):
                 continue
 
-            if word_data.get("word"):
+            if word_data.get("word") and not word_data.get("is_stop_word"):
                 terms.append(str(word_data["word"]))
 
             terms.extend(str(x) for x in word_data.get("connections", [])[:8])
@@ -148,9 +142,14 @@ class GameBrain:
         )
 
         clean = []
+        stop_terms = {
+            str(item.get("word") or "").casefold()
+            for item in report.get("words", [])
+            if isinstance(item, dict) and item.get("is_stop_word")
+        }
         for term in terms:
             term = re.sub(r"\s+", " ", str(term).lower()).strip().replace("_", " ")
-            if term and len(term) > 1 and term not in GENERIC_TERMS and term not in clean:
+            if term and len(term) > 1 and term not in stop_terms and term not in clean:
                 clean.append(term)
 
         return clean[:100]
@@ -159,45 +158,60 @@ class GameBrain:
 
     def detect_game_type(self, terms, text):
 
-        lowered = f"{text.lower()} {' '.join(terms)}"
+        request_terms = set(re.findall(
+            r"[a-z0-9]+",
+            f"{text.casefold()} {' '.join(terms).casefold()}",
+        ))
+        profiles = {}
+        records = self.types.values() if isinstance(self.types, dict) else self.types
+        for record in records:
+            if not isinstance(record, dict):
+                continue
+            game_type = str(record.get("game_type") or "").casefold().strip()
+            if not game_type:
+                continue
+            vocabulary = profiles.setdefault(game_type, set())
+            vocabulary.update(re.findall(r"[a-z0-9]+", game_type.replace("_", " ")))
+            for field in ("core_loop", "required_systems"):
+                for value in record.get(field, []):
+                    vocabulary.update(re.findall(
+                        r"[a-z0-9]+",
+                        str(value).casefold().replace("_", " "),
+                    ))
 
-        aliases = {
-            "platformer": ["platformer", "jump", "platform", "mario"],
-            "rpg": ["rpg", "role", "quest", "level up", "inventory"],
-            "puzzle": ["puzzle", "solve", "logic", "brain"],
-            "survival": ["survival", "craft", "hunger", "survive"],
-            "strategy": ["strategy", "resource", "units", "base"],
-            "shooter": ["shooter", "gun", "aim", "fps"],
-            "racing": ["racing", "car", "track", "speed"],
-            "simulation": ["simulation", "simulator", "manage"],
-            "card_game": ["card", "deck", "cards"],
-            "adventure": ["adventure", "explore", "story"]
-        }
+        ranked = sorted(
+            (
+                len(request_terms.intersection(vocabulary)),
+                game_type,
+            )
+            for game_type, vocabulary in profiles.items()
+        )
+        if ranked and ranked[-1][0] > 0:
+            return ranked[-1][1]
+        return next(iter(profiles), "game")
 
-        for game_type, words in aliases.items():
-            if any(word in lowered for word in words):
-                return game_type
+    def detect_perspective(self, terms, text, game_type=None):
 
-        return "rpg" if "game" in lowered else "adventure"
-
-    def detect_perspective(self, terms, text):
-
-        lowered = f"{text.lower()} {' '.join(terms)}"
-
-        for perspective in [
-            "first_person", "third_person", "top_down", "side_scroller",
-            "isometric", "text_based", "grid_based", "turn_based",
-            "real_time", "2d"
-        ]:
-            if perspective.replace("_", " ") in lowered or perspective in lowered:
+        lowered = re.sub(
+            r"[^a-z0-9]+",
+            " ",
+            f"{text.casefold()} {' '.join(terms).casefold()}",
+        ).strip()
+        records = self.types.values() if isinstance(self.types, dict) else self.types
+        perspectives = []
+        for record in records:
+            if not isinstance(record, dict):
+                continue
+            if game_type and str(record.get("game_type") or "").casefold() != game_type:
+                continue
+            perspective = str(record.get("perspective") or "").casefold().strip()
+            if perspective:
+                perspectives.append(perspective)
+        for perspective in dict.fromkeys(perspectives):
+            normalized = perspective.replace("_", " ")
+            if re.search(rf"\b{re.escape(normalized)}\b", lowered):
                 return perspective
-
-        if "2d" in lowered:
-            return "2d"
-        if "turn" in lowered:
-            return "turn_based"
-
-        return "2d"
+        return perspectives[0] if perspectives else "unspecified"
 
     def detect_target(self, terms, text):
 
@@ -516,7 +530,7 @@ class GameBrain:
         terms = self.collect_terms(report, memory_report, text)
 
         game_type = self.detect_game_type(terms, text)
-        perspective = self.detect_perspective(terms, text)
+        perspective = self.detect_perspective(terms, text, game_type)
         target = self.detect_target(terms, text)
         difficulty = self.detect_difficulty(terms, text)
 

@@ -17,6 +17,7 @@ from uuid import uuid4
 
 from Agent_settings import load_agent_profiles, normalize_agent_settings
 from Brain_storage import atomic_write_json, load_json_resilient
+from domain_packages.code.capabilities import CodeCapabilityDetector
 
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
@@ -31,23 +32,9 @@ class AgentPolicyError(RuntimeError):
 class AgentBrain:
     """Reads, edits, and validates one selected workspace for Canri."""
 
-    MUTATION_MARKERS = (
-        "edit the project", "modify the project", "update the project", "fix the project",
-        "write to the project", "create the file", "write the file", "save the code",
-        "apply the changes", "implement in", "inside the project", "in the project",
-        "continue the project", "continue from", "continue the same", "same project",
-        "improve the project", "improve the same", "update the existing", "modify the existing",
-        "תשנה את הפרויקט", "תעדכן את הפרויקט", "תתקן את הפרויקט", "תכתוב בפרויקט",
-        "תיצור קובץ", "תכתוב בקובץ", "שמור את הקוד", "תיישם", "בפרויקט",
-    )
-    TEST_MARKERS = (
-        "run tests", "run the tests", "test the project", "verify the project",
-        "syntax check", "check syntax", "compile the project", "validate the files",
-        "תריץ בדיקות", "הרץ בדיקות", "תבדוק את הפרויקט",
-    )
-
     def __init__(self) -> None:
         self.profiles = load_agent_profiles()
+        self.capability_detector = CodeCapabilityDetector()
         print("Agent Brain Loaded")
 
     @staticmethod
@@ -438,11 +425,13 @@ class AgentBrain:
 
         lowered = text.casefold()
         mutation_requested = self._mutation_requested(data, lowered)
-        test_requested = any(marker.casefold() in lowered for marker in self.TEST_MARKERS)
-        syntax_requested = any(
-            marker in lowered
-            for marker in ("syntax check", "check syntax", "compile the project", "validate the files")
+        report = data.get("understanding", {})
+        report = report if isinstance(report, dict) else {}
+        capabilities = self.capability_detector.detect(text, report=report)
+        test_requested = bool(
+            capabilities.get("tests") or capabilities.get("syntax_validation")
         )
+        syntax_requested = bool(capabilities.get("syntax_validation"))
         results = data.get("results", {})
         code_result = results.get("Code_brain", {}) if isinstance(results, dict) else {}
         creative_result = results.get("Creative_brain", {}) if isinstance(results, dict) else {}
@@ -559,34 +548,27 @@ class AgentBrain:
         continuation = continuation if isinstance(continuation, dict) else {}
         requested_action = report.get("requested_action", {})
         requested_action = requested_action if isinstance(requested_action, dict) else {}
-        semantic = report.get("semantic_frame", {})
-        semantic = semantic if isinstance(semantic, dict) else {}
-
-        structured_actions = {
-            str(contract.get("action", "")).casefold(),
-            str(requested_action.get("action_word", "")).casefold(),
-            str(semantic.get("main_action", "")).casefold(),
-        }
-        for action in semantic.get("actions", []):
-            if isinstance(action, dict):
-                structured_actions.add(str(action.get("word", "")).casefold())
-
-        mutating_actions = {
-            "add", "apply", "build", "change", "continue", "create", "edit",
-            "fix", "generate", "implement", "improve", "modify", "replace",
-            "save", "update", "write",
-        }
+        action_kind = str(
+            contract.get("action_kind")
+            or requested_action.get("action_kind")
+            or ""
+        ).casefold()
         intent = str(report.get("intent") or contract.get("intent") or "").casefold()
+        routed = {
+            str(item)
+            for item in report.get("routing_hints", [])
+            if str(item).endswith("_brain")
+        }
         structured_request = bool(
-            structured_actions.intersection(mutating_actions)
+            action_kind in {"build", "generate", "modify", "continue", "perform"}
             or continuation.get("requested")
             or (
                 requested_action.get("is_action_request")
-                and intent in {"code_generation", "code_editing", "debugging", "game_creation"}
+                and "Code_brain" in routed
+                and intent not in {"code_analysis", "question", "research"}
             )
         )
-        marker_request = any(marker.casefold() in lowered_text for marker in self.MUTATION_MARKERS)
-        return structured_request or marker_request
+        return structured_request
 
     @staticmethod
     def _explicit_agent_request(data: dict[str, Any], text: str) -> bool:

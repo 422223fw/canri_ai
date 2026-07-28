@@ -53,7 +53,11 @@ powershell -ExecutionPolicy Bypass -File .\push_canri.ps1
   and correction routing across specialist brains. It never writes the final
   user-facing answer.
 - `Understanding_brain.py`: whole-request intent, entities, requirements, and
-  sentence graph.
+  sentence graph. Domain selection is discovered from installed brains,
+  package manifests, dictionary relations, and indexed evidence; duplicate
+  keyword-to-brain tables are not used by the active routing path.
+- `Semantic_router.py`: builds cached semantic profiles from the brains and
+  their declared data instead of maintaining another domain hint dictionary.
 - `domain_packages/`: active packages for code, science, technology,
   creativity, math, and user understanding. Each package keeps the established
   root brain intact, adds a manifest and bounded runtime context, and defines
@@ -61,8 +65,9 @@ powershell -ExecutionPolicy Bypass -File .\push_canri.ps1
   conservative editor for existing Agent projects.
 - `Data_context.py`: bounded retrieval from dictionaries, memory, scanners,
   and local knowledge indexes.
-- `Brain_runtime.py`: uniform result contract, timeouts, safe errors, request
-  IDs, and runtime telemetry.
+- `Brain_runtime.py`: uniform result contract, safe errors, request IDs,
+  runtime telemetry, and an optional emergency watchdog. Ordinary requests
+  have no default thinking deadline.
 - `Brain_storage.py`: resilient reads and atomic JSON writes.
 - `Canri_self_profile.json`: versioned self-description of Canri's purpose,
   brains, capabilities, workflows, limits, and user-facing features. It is
@@ -81,6 +86,10 @@ powershell -ExecutionPolicy Bypass -File .\push_canri.ps1
   summaries, verification details, and run instructions when the user's output
   contract permits them. Strict output requests always disable these additions.
 - `Response_brain.py`: clean final user output without internal reports.
+- `Local_LLM_brain.py`: optional on-device generation through a configured
+  GGUF model or local Ollama installation. It is disabled by default, uses no
+  cloud API, cannot execute its own output, and is reviewed by the normal code
+  and quality pipeline before an Agent may write files.
 
 `Code_brain.py` uses a multidimensional quality score. Single-file Python code
 is scored for syntax, request coverage, implementation completeness, runnable
@@ -88,12 +97,40 @@ entry point, safety, and maintainability. Multi-file projects also score
 architecture and preservation of existing files. A high total cannot hide a
 blocking syntax error or a missing explicit requirement.
 
+Code generation and quality control share
+`data/Code_capability_ontology.json` and `data/Code_program_specs.json` through
+`domain_packages/code/capabilities.py` and `domain_packages/code/program_specs.py`.
+This keeps feature detection, program classification, generation, and review
+on one request-derived interpretation instead of separate keyword tables.
+
 Quality failures are sent back to the responsible specialist with the exact
 missing requirement. Canri can retry a specialist up to 20 times. If no
 candidate reaches every advisory quality check, `Response_brain` still returns
 the strongest usable result while keeping diagnostics in Thinking details.
 Passed requirements are carried into later attempts so a correction should
 not remove behavior that already worked.
+
+## Optional Local Language Model
+
+The deterministic brains can route, retrieve, validate, and generate the
+program types implemented by the project, but they are not a replacement for
+a trained general-purpose language model. For request-specific conversation,
+creative writing, and unfamiliar software architectures, Canri can use a
+model that runs locally without a cloud API.
+
+Edit `main_ai_canri/data/Local_model_settings.json` and choose one backend:
+
+1. Install `llama-cpp-python`, set `model_path` to a local GGUF file, and set
+   `backend` to `llama_cpp`.
+2. Install Ollama locally, download a model with Ollama, set `ollama_model` to
+   its installed name, and set `backend` to `ollama`.
+3. Set `enabled` to `true` only after the model is available.
+
+`timeout_seconds: 0` means no generation deadline. Prompt and output sizes are
+still bounded to protect memory and prevent an accidental multi-gigabyte
+response. Model files are not bundled with this repository. Their licenses,
+RAM requirements, quality, and disk size vary. Enabling a small local model
+does not by itself make Canri equal to Claude or another frontier model.
 
 `Planner_brain.py` builds executable steps from the current structured request
 contract. Stored templates are used only as quality and risk references; they
@@ -109,6 +146,9 @@ do not decide the request domain or replace the user's requirements.
   bounded relevant records instead of loading an entire database per request.
 - `Nervous_system_profiles.json` configures domain owners, internal-only
   brains, candidate fields, and the correction-cycle limit.
+- `Emotion_language_rules.json` keeps emotion-language rules in data, while
+  `Emotion_brain.py` uses direct text plus `Understanding_brain` definitions;
+  broad dictionary associations are not treated as direct emotional evidence.
 - Runtime-created data is written atomically where replacement is supported.
 
 Do not edit a large JSON file while Canri or a scanner is writing to it.

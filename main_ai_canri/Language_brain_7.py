@@ -527,18 +527,6 @@ class LanguageAnalysisEngine:
             elif role == "number":
                 numbers.append(word)
 
-        lower = str(text).lower()
-        requested_output = "answer"
-
-        if "code" in lower or "program" in lower:
-            requested_output = "code"
-        elif "story" in lower:
-            requested_output = "story"
-        elif "translate" in lower:
-            requested_output = "translation"
-        elif "step by step" in lower or "solve" in lower:
-            requested_output = "solution"
-
         language_data = language_data or {}
         precision = self.get_precision_data(language_data)
         quantified_constraints = self.extract_quantities(text, language_data)
@@ -557,20 +545,14 @@ class LanguageAnalysisEngine:
         if contract_target and contract_target not in targets:
             targets.insert(0, contract_target)
 
-        intent = str(understanding.get("intent") or contract.get("intent") or "").lower()
-        intent_outputs = {
-            "code_generation": "code",
-            "code_editing": "code",
-            "code_analysis": "code_review",
-            "image_generation": "image",
-            "math": "solution",
-            "movie_creation": "movie",
-            "story_creation": "story",
-            "translation": "translation",
-        }
         requested_format = contract.get("output_constraints", {}).get("requested_format") \
             if isinstance(contract.get("output_constraints"), dict) else None
-        requested_output = requested_format or intent_outputs.get(intent, requested_output)
+        requested_output = (
+            requested_format
+            or understanding.get("output_format")
+            or contract.get("expected_output")
+            or "answer"
+        )
 
         contract_continuation = contract.get("continuation", {})
         if isinstance(contract_continuation, dict) and contract_continuation.get("requested"):

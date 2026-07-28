@@ -24,26 +24,6 @@ INTERNAL_BRAINS = {
     "Answer_Enrichment_brain",
 }
 
-DOMAIN_OWNERS = {
-    "code": ["Code_brain", "Technology_brain"],
-    "math": ["Math_brain"],
-    "movie": ["Movie_brain", "Creative_brain", "Story_brain", "Character_brain", "World_brain"],
-    "story": ["Story_brain", "Creative_brain", "Character_brain", "World_brain"],
-    "science": ["Science_brain", "Research_brain", "Fact_Check_brain"],
-    "knowledge": ["Research_brain", "Fact_Check_brain"],
-    "technology": ["Technology_brain", "Research_brain", "Fact_Check_brain"],
-    "geography": ["Geography_brain", "Research_brain", "Fact_Check_brain"],
-    "history": ["History_brain", "Research_brain", "Fact_Check_brain"],
-    "emotion": ["Emotion_brain"],
-    "language": ["Language_brain", "Spelling_brain"],
-    "image_generation": ["Image_brain", "Creative_brain"],
-    "vision": ["Vision_brain"],
-    "voice": ["Voice_brain"],
-    "game": ["Game_brain", "Code_brain", "Creative_brain"],
-    "planning": ["Planner_brain", "Reasoning_brain"],
-    "general": ["Research_brain", "Fact_Check_brain"],
-}
-
 OUTPUT_FIELDS = (
     "final_output",
     "generated_code",
@@ -64,10 +44,6 @@ OUTPUT_FIELDS = (
     "generated_image_prompt",
     "movie_project",
 )
-
-FACTUAL_DOMAINS = {
-    "science", "knowledge", "technology", "geography", "history", "health",
-}
 
 INTERNAL_REPORT_MARKERS = (
     "goal:",
@@ -149,7 +125,7 @@ class CognitiveWorkspace:
         contexts = _as_dict(contexts)
         contract = _as_dict(report.get("request_contract"))
         domains = self._domains(report, contract)
-        owners = self._owners(domains)
+        owners = self._owners(report)
         requirements = self._requirements(contract, previous, owners)
         checks = self._requirement_checks(results)
         requirements = self._apply_checks(requirements, checks)
@@ -267,11 +243,8 @@ class CognitiveWorkspace:
             owned = requirements
 
         evidence = _as_list(workspace.get("evidence"))
-        domain = str(workspace.get("primary_domain", "general"))
-        if domain not in FACTUAL_DOMAINS and brain_name not in {
-            "Research_brain", "Fact_Check_brain", "Science_brain",
-            "Technology_brain", "Geography_brain", "History_brain",
-        }:
+        factual_request = "Fact_Check_brain" in _as_list(workspace.get("owner_brains"))
+        if not factual_request:
             evidence = evidence[:8]
 
         packets = [
@@ -338,32 +311,32 @@ class CognitiveWorkspace:
             *(_as_list(contract.get("central_domains"))),
             *(_as_list(report.get("domains"))),
         ]:
-            clean = str(value or "").strip().lower()
+            domain = value.get("domain") if isinstance(value, dict) else value
+            clean = str(domain or "").strip().lower()
             if clean and clean not in {"unknown", "request", "memory_context"}:
                 values.append(clean)
         return list(dict.fromkeys(values))[:4] or ["general"]
 
-    def _owners(self, domains):
-        owners = []
-        for domain in domains:
-            for brain_name in DOMAIN_OWNERS.get(domain, []):
-                if brain_name not in owners:
-                    owners.append(brain_name)
-        return owners or list(DOMAIN_OWNERS["general"])
+    def _owners(self, report):
+        owners = [
+            str(brain_name)
+            for brain_name in _as_list(report.get("routing_hints"))
+            if str(brain_name).endswith("_brain")
+            and str(brain_name) not in {
+                "Manager_brain", "Memory_brain", "Response_brain",
+                "Quality_Control_brain", "Learning_brain",
+            }
+        ]
+        return list(dict.fromkeys(owners))[:12] or ["Reasoning_brain"]
 
     def _requirement_owner(self, item, owners):
-        text = str(item.get("text", "")).lower()
-        feature = str(item.get("feature", "")).lower()
-        if any(term in f"{text} {feature}" for term in [
-            "python", "function", "class", "json", "api", "database", "runnable",
-        ]):
-            return ["Code_brain"]
-        if any(term in text for term in ["equation", "calculate", "math", "percent"]):
-            return ["Math_brain"]
-        if any(term in text for term in ["story", "character", "chapter", "sentence"]):
-            return ["Story_brain", "Creative_brain"]
-        if any(term in text for term in ["movie", "film", "screenplay", "cinematography", "shot list"]):
-            return ["Movie_brain"]
+        explicit = item.get("owners") or item.get("owner_brains") or item.get("target_brain")
+        if isinstance(explicit, str):
+            explicit = [explicit]
+        if isinstance(explicit, list):
+            selected = [str(name) for name in explicit if str(name).endswith("_brain")]
+            if selected:
+                return list(dict.fromkeys(selected))[:6]
         return owners[:4]
 
     def _requirements(self, contract, previous, owners):
@@ -541,7 +514,7 @@ class CognitiveWorkspace:
 
     def _candidates(self, results, domains, owners, requirements, checks, evidence, contract):
         candidates = []
-        factual = any(domain in FACTUAL_DOMAINS for domain in domains)
+        factual = "Fact_Check_brain" in owners
         continuation = bool(_as_dict(contract.get("continuation")).get("requested"))
         quality = _as_dict(results.get("Quality_Control_brain"))
         retry_targets = {
@@ -761,14 +734,43 @@ class CognitiveWorkspace:
             grouped[target].append(item)
 
         quality = _as_dict(results.get("Quality_Control_brain"))
-        existing = {
-            item.get("target_brain"): item
+        retry_requests = [
+            item
             for item in _as_list(quality.get("retry_requests"))
             if isinstance(item, dict) and item.get("target_brain")
-        }
+        ]
+        existing = {item.get("target_brain"): item for item in retry_requests}
         passed = [item.get("id") for item in requirements if item.get("status") == "passed"]
         packets = []
+
+        # Quality control has inspected the concrete candidate, so an explicit
+        # repair target is stronger evidence than an owner inferred from the
+        # request contract. Preserve that handoff even when the contract did
+        # not assign an owner to the failed requirement.
+        for request in retry_requests:
+            failed_ids = (
+                _as_list(request.get("failed_requirement_checks"))
+                or _as_list(request.get("failed_requirement_ids"))
+                or _as_list(request.get("failed_requirements"))
+            )
+            packets.append({
+                "target_brain": request.get("target_brain"),
+                "problem": request.get("problem") or "Quality control rejected the candidate",
+                "instruction": request.get("instruction") or (
+                    "Correct the rejected candidate and preserve every requirement that passed."
+                ),
+                "failed_requirement_ids": failed_ids[:40],
+                "failed_requirements": failed_ids[:40],
+                "preserve_requirement_ids": passed[:80],
+                "required_features": _as_list(request.get("required_features"))[:40],
+                "force_regeneration": bool(request.get("force_regeneration")),
+                "expected_program_kind": request.get("expected_program_kind"),
+            })
+
+        explicit_targets = {packet.get("target_brain") for packet in packets}
         for target, items in grouped.items():
+            if target in explicit_targets:
+                continue
             quality_request = _as_dict(existing.get(target))
             packets.append({
                 "target_brain": target,

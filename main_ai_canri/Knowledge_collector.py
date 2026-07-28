@@ -108,7 +108,7 @@ SEED_TOPICS = [
     "Astronomy"
 ]
 
-STOP_WORDS = {
+INDEX_NOISE_TERMS = {
     "the", "and", "for", "with", "that", "this", "from", "into", "about",
     "what", "when", "where", "which", "while", "there", "their", "have",
     "has", "are", "was", "were", "will", "would", "can", "could", "should",
@@ -136,7 +136,7 @@ def text_terms(text: str, limit: int = 80) -> List[str]:
     clean = []
     for word in words:
         word = word.strip("-")
-        if word and word not in STOP_WORDS and word not in clean:
+        if word and word not in INDEX_NOISE_TERMS and word not in clean:
             clean.append(word)
         if len(clean) >= limit:
             break

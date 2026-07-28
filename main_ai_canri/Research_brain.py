@@ -21,6 +21,9 @@ try:
 except Exception:
     scanner_evidence = None
 
+from Semantic_router import semantic_tokens
+from domain_packages.understanding.context import content_terms as understanding_content_terms
+
 
 DATA_DIR = Path(__file__).parent / "data"
 SOURCES_FILE = DATA_DIR / "research_sources.json"
@@ -367,159 +370,48 @@ class ResearchBrain:
         self,
         report
     ):
-
-        if not report:
-
+        if not isinstance(report, dict):
             return None
-
-        main_topic = str(
-            report.get(
-                "main_topic",
-                ""
-            )
-        ).lower()
-
-        topic_map = {
-            "history": "history",
-            "geography": "maps",
-            "map": "maps",
-            "gps": "maps",
-            "health": "health",
-            "medicine": "health",
-            "biology": "science",
-            "physics": "science",
-            "chemistry": "science",
-            "science": "science",
-            "technology": "technology",
-            "code": "technology",
-            "programming": "technology",
-            "security": "technology",
-            "data": "data",
-            "statistics": "data",
-            "news": "news"
-        }
-
-        if main_topic in topic_map:
-
-            return topic_map[main_topic]
-
-        topics = report.get(
-            "topics",
-            {}
-        )
-
-        if isinstance(
-            topics,
-            dict
-        ):
-
-            for topic in topics:
-
-                topic = str(
-                    topic
-                ).lower()
-
-                if topic in topic_map:
-
-                    return topic_map[topic]
-
-        return None
+        values = understanding_content_terms(report, limit=80)
+        values.extend([
+            report.get("main_topic"),
+            report.get("intent"),
+            *report.get("central_domains", []),
+        ])
+        return self.detect_category(" ".join(str(value) for value in values if value))
 
     def detect_category(
         self,
         text
     ):
-
-        lowered = text.lower()
-
-        category_keywords = {
-            "maps": [
-                "gps",
-                "location",
-                "map",
-                "where is",
-                "coordinates",
-                "geography"
-            ],
-            "health": [
-                "health",
-                "disease",
-                "medicine",
-                "medical",
-                "virus",
-                "symptom",
-                "vaccine"
-            ],
-            "history": [
-                "history",
-                "war",
-                "ancient",
-                "empire",
-                "revolution",
-                "archive",
-                "primary source"
-            ],
-            "science": [
-                "science",
-                "space",
-                "climate",
-                "weather",
-                "earthquake",
-                "biology",
-                "physics",
-                "chemistry"
-            ],
-            "technology": [
-                "python",
-                "code",
-                "programming",
-                "security",
-                "standard",
-                "software",
-                "api"
-            ],
-            "data": [
-                "population",
-                "statistics",
-                "country data",
-                "economy",
-                "gdp",
-                "world bank",
-                "un data"
-            ],
-            "news": [
-                "today",
-                "latest",
-                "current",
-                "news",
-                "recent"
-            ]
-        }
-
-        scores = {}
-
-        for category, keywords in category_keywords.items():
-
-            score = 0
-
-            for keyword in keywords:
-
-                if keyword in lowered:
-
-                    score += 1
-
-            if score:
-
-                scores[category] = score
-
-        if not scores:
-
+        query_terms = set(semantic_tokens(text))
+        if not query_terms:
             return "general"
 
-        return max(
-            scores,
-            key=scores.get
-        )
+        scores = {}
+        for source in self.sources:
+            if not isinstance(source, dict):
+                continue
+            category = str(source.get("category") or "general").casefold()
+            profile_values = [
+                category,
+                source.get("name"),
+                source.get("source_type"),
+                *source.get("strengths", []),
+                *source.get("domains", []),
+            ]
+            profile_terms = set(semantic_tokens(" ".join(
+                str(value) for value in profile_values if value
+            )))
+            overlap = query_terms.intersection(profile_terms)
+            if not overlap:
+                continue
+            score = len(overlap) * 3
+            if category in query_terms:
+                score += 8
+            scores[category] = scores.get(category, 0) + score
+
+        return max(scores, key=scores.get) if scores else "general"
 
     def get_source_domain_score(
         self,

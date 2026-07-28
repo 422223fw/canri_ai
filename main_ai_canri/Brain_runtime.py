@@ -58,6 +58,7 @@ DEFAULT_PROFILES = {
     "Image_brain": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": False},
     "Movie_brain": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": False},
     "Project_context_brain": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": False},
+    "Local_LLM_brain": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": False},
     "Agent_brain": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": True},
     "Vision_brain": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": False},
     "Voice_brain": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": False},

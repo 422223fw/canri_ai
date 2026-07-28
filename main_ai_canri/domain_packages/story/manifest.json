@@ -1,0 +1,45 @@
+{
+  "id": "story",
+  "name": "Canri Story Composition Package",
+  "primary_brain": "Story_brain",
+  "supporting_brains": [
+    "Creative_brain",
+    "Character_brain",
+    "World_brain",
+    "Emotion_brain",
+    "Quality_Control_brain"
+  ],
+  "semantic_routing": {
+    "select_as_user_domain": true,
+    "auto_supporting_brains": ["Creative_brain"]
+  },
+  "capabilities": [
+    "original story generation",
+    "continuation without rewriting prior events",
+    "named-character preservation",
+    "plot progression and coherent endings",
+    "requested sentence and tone constraints"
+  ],
+  "context_inputs": [
+    "Understanding request contract",
+    "active conversation story artifact",
+    "Creative candidate direction",
+    "character and world context when requested"
+  ],
+  "data_sources": [
+    "Story_structures.json",
+    "Story_genres.json",
+    "Story_templates.json",
+    "Creative_writing_rules.json"
+  ],
+  "acceptance_checks": [
+    "The final output is a story rather than a plan",
+    "Every explicit character and setting detail is preserved",
+    "Continuation advances the existing story",
+    "Requested length and output constraints are honored"
+  ],
+  "handoff": {
+    "before": ["Understanding_brain", "Memory_brain", "Creative_brain"],
+    "after": ["Quality_Control_brain", "Response_brain"]
+  }
+}

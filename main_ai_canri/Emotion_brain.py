@@ -24,49 +24,7 @@ STYLES_PATH = DATA_DIR / "Emotion_response_styles.json"
 STATISTICS_PATH = DATA_DIR / "Emotion_statistics.json"
 CONVERSATION_PATTERNS_PATH = DATA_DIR / "Conversation_patterns.json"
 SUPPORT_STRATEGIES_PATH = DATA_DIR / "Emotional_support_strategies.json"
-
-NEGATION_WORDS = {
-    "not",
-    "no",
-    "never",
-    "לא",
-    "בלי",
-    "אין"
-}
-
-INTENSIFIERS = {
-    "very": 12,
-    "really": 10,
-    "so": 8,
-    "extremely": 18,
-    "too": 8,
-    "מאוד": 12,
-    "ממש": 10,
-    "כל כך": 12,
-    "יותר מדי": 12
-}
-
-SOFTENERS = {
-    "a little": -10,
-    "slightly": -8,
-    "kind of": -6,
-    "קצת": -12,
-    "טיפה": -10,
-    "מעט": -8
-}
-
-EMOTION_VALENCE = {
-    "joy": "positive",
-    "curiosity": "positive",
-    "confusion": "uncertain",
-    "urgency": "activated",
-    "sadness": "negative",
-    "anger": "negative",
-    "fear": "negative",
-    "self_harm_distress": "crisis",
-    "neutral": "neutral"
-}
-
+LANGUAGE_RULES_PATH = DATA_DIR / "Emotion_language_rules.json"
 
 class EmotionBrain:
 
@@ -96,6 +54,13 @@ class EmotionBrain:
             SUPPORT_STRATEGIES_PATH,
             {}
         )
+
+        self.language_rules = self._load_json(
+            LANGUAGE_RULES_PATH,
+            {}
+        )
+
+        self.conversation_intent_index = self._build_conversation_intent_index()
 
         print("Emotion Brain Loaded")
 
@@ -127,6 +92,29 @@ class EmotionBrain:
     def _save_statistics(self):
 
         atomic_write_json(STATISTICS_PATH, self.statistics)
+
+    def _build_conversation_intent_index(self):
+
+        index = {}
+        if not isinstance(self.conversation_patterns, list):
+            return index
+
+        for pattern in self.conversation_patterns:
+            if not isinstance(pattern, dict):
+                continue
+            intent = str(pattern.get("intent") or "").strip()
+            if not intent:
+                continue
+            bucket = index.setdefault(intent, set())
+            for term in pattern.get("trigger_terms", []):
+                normalized = re.sub(r"\s+", " ", str(term).lower()).strip()
+                if normalized:
+                    bucket.add(normalized)
+
+        return {
+            intent: sorted(terms, key=lambda item: (-len(item), item))
+            for intent, terms in index.items()
+        }
 
     # ---------- report handling ----------
 
@@ -437,9 +425,10 @@ class EmotionBrain:
             ):index
         ]
 
+        negations = self.language_rules.get("negations", [])
         return any(
-            negation in window.split()
-            for negation in NEGATION_WORDS
+            str(negation).lower() in window.split()
+            for negation in negations
         )
 
     def intensity_bonus(
@@ -450,12 +439,12 @@ class EmotionBrain:
         lowered = text.lower()
         bonus = 0
 
-        for word, value in INTENSIFIERS.items():
+        for word, value in self.language_rules.get("intensifiers", {}).items():
 
             if word in lowered:
                 bonus += value
 
-        for word, value in SOFTENERS.items():
+        for word, value in self.language_rules.get("softeners", {}).items():
 
             if word in lowered:
                 bonus += value
@@ -493,13 +482,50 @@ class EmotionBrain:
             -20
         )
 
+    @staticmethod
+    def _phrase_in_text(text, phrase):
+
+        normalized = re.sub(r"\s+", " ", str(phrase or "").lower()).strip()
+        if not normalized:
+            return False
+        parts = [re.escape(part) for part in normalized.split(" ") if part]
+        if not parts:
+            return False
+        pattern = r"(?<!\w)" + r"\s+".join(parts) + r"(?!\w)"
+        return re.search(pattern, str(text or "").lower(), flags=re.UNICODE) is not None
+
+    def _definition_evidence(self, report, semantic_cues):
+
+        matches = []
+        cues = [
+            str(cue).lower().strip()
+            for cue in semantic_cues
+            if str(cue).strip()
+        ]
+        if not cues or not isinstance(report, dict):
+            return matches
+
+        for token in report.get("advanced_word_tags", []):
+            if not isinstance(token, dict):
+                continue
+            definition = str(token.get("definition_hint") or "").lower()
+            source_word = str(token.get("word") or "").strip()
+            if not definition or not source_word:
+                continue
+            for cue in cues:
+                if cue in definition:
+                    matches.append(f"{source_word}: {cue}")
+                    break
+        return matches
+
     def detect_emotions(
         self,
         text,
-        terms
+        terms,
+        report=None
     ):
 
-        lowered = text.lower()
+        _ = terms
         scores = {}
         evidence = {}
 
@@ -515,10 +541,7 @@ class EmotionBrain:
 
                 keyword_lower = keyword.lower()
 
-                matched = (
-                    keyword_lower in lowered
-                    or keyword_lower in terms
-                )
+                matched = self._phrase_in_text(text, keyword_lower)
 
                 if not matched:
                     continue
@@ -544,26 +567,20 @@ class EmotionBrain:
                         keyword
                     )
 
+            semantic_matches = self._definition_evidence(
+                report,
+                pattern.get("semantic_cues", [])
+            )
+            if semantic_matches:
+                score += len(semantic_matches) * (
+                    pattern.get("default_intensity", 50) / 25
+                )
+                matches.extend(semantic_matches)
+
             if score > 0:
 
                 scores[emotion_id] = score
                 evidence[emotion_id] = matches
-
-        unicode_emotion_terms = {
-            "sadness": [
-                "\u05e2\u05e6\u05d5\u05d1", "\u05e2\u05e6\u05d5\u05d1\u05d4", "\u05db\u05d5\u05d0\u05d1", "\u05d1\u05d5\u05d3\u05d3", "\u05d1\u05d5\u05d3\u05d3\u05d4",
-                "\u05dc\u05d1\u05d3", "\u05dc\u05d1\u05d3\u05d4", "\u05e7\u05e9\u05d4 \u05dc\u05d9", "\u05d9\u05d5\u05dd \u05e7\u05e9\u05d4", "\u05de\u05e2\u05d9\u05d9\u05e3", "\u05de\u05e2\u05d9\u05d9\u05e4\u05ea", "\u05e2\u05d9\u05d9\u05e3", "\u05e2\u05d9\u05d9\u05e4\u05d4"
-            ],
-            "fear": ["\u05de\u05e4\u05d7\u05d3", "\u05de\u05e4\u05d7\u05d3\u05ea", "\u05d7\u05d5\u05e9\u05e9", "\u05d7\u05d5\u05e9\u05e9\u05ea", "\u05d3\u05d5\u05d0\u05d2", "\u05d3\u05d5\u05d0\u05d2\u05ea"],
-            "anger": ["\u05db\u05d5\u05e2\u05e1", "\u05db\u05d5\u05e2\u05e1\u05ea", "\u05de\u05ea\u05d5\u05e1\u05db\u05dc", "\u05de\u05ea\u05d5\u05e1\u05db\u05dc\u05ea", "\u05e0\u05de\u05d0\u05e1 \u05dc\u05d9"],
-            "confusion": ["\u05de\u05d1\u05d5\u05dc\u05d1\u05dc", "\u05de\u05d1\u05d5\u05dc\u05d1\u05dc\u05ea", "\u05dc\u05d0 \u05de\u05d1\u05d9\u05df", "\u05dc\u05d0 \u05de\u05d1\u05d9\u05e0\u05d4"],
-            "joy": ["\u05e9\u05de\u05d7", "\u05e9\u05de\u05d7\u05d4", "\u05d4\u05e6\u05dc\u05d7\u05ea\u05d9", "\u05d7\u05d3\u05e9\u05d5\u05ea \u05d8\u05d5\u05d1\u05d5\u05ea"]
-        }
-        for emotion_id, keywords in unicode_emotion_terms.items():
-            matches = [keyword for keyword in keywords if keyword in lowered]
-            if matches:
-                scores[emotion_id] = scores.get(emotion_id, 0) + len(matches) * 6
-                evidence.setdefault(emotion_id, []).extend(matches)
 
         if not scores:
 
@@ -700,7 +717,7 @@ class EmotionBrain:
         sensitivity
     ):
 
-        valence = EMOTION_VALENCE.get(
+        valence = self.language_rules.get("valence", {}).get(
             primary_emotion,
             "neutral"
         )
@@ -790,68 +807,71 @@ class EmotionBrain:
 
     # ---------- conversation support ----------
 
-    def detect_conversation_intent(self, text, primary_emotion, sensitivity):
+    def _conversation_intent_from_context(
+        self,
+        text,
+        primary_emotion,
+        sensitivity,
+        report
+    ):
 
-        lowered = str(text or "").lower()
         if sensitivity == "crisis":
             return "crisis_support"
 
-        unicode_marker_groups = {
-            "emotional_support": [
-                "\u05e7\u05e9\u05d4 \u05dc\u05d9", "\u05d0\u05e0\u05d9 \u05e2\u05e6\u05d5\u05d1", "\u05d0\u05e0\u05d9 \u05e2\u05e6\u05d5\u05d1\u05d4",
-                "\u05d0\u05e0\u05d9 \u05dc\u05d1\u05d3", "\u05d0\u05e4\u05e9\u05e8 \u05dc\u05d3\u05d1\u05e8", "\u05d0\u05e0\u05d9 \u05e6\u05e8\u05d9\u05da \u05dc\u05d3\u05d1\u05e8",
-                "\u05d0\u05e0\u05d9 \u05e6\u05e8\u05d9\u05db\u05d4 \u05dc\u05d3\u05d1\u05e8"
-            ],
-            "reassurance": [
-                "\u05d0\u05e0\u05d9 \u05d3\u05d5\u05d0\u05d2", "\u05d0\u05e0\u05d9 \u05d3\u05d5\u05d0\u05d2\u05ea", "\u05d0\u05e0\u05d9 \u05de\u05e4\u05d7\u05d3", "\u05d0\u05e0\u05d9 \u05de\u05e4\u05d7\u05d3\u05ea"
-            ],
-            "venting": [
-                "\u05e0\u05de\u05d0\u05e1 \u05dc\u05d9", "\u05d0\u05e0\u05d9 \u05de\u05ea\u05d5\u05e1\u05db\u05dc", "\u05d0\u05e0\u05d9 \u05de\u05ea\u05d5\u05e1\u05db\u05dc\u05ea", "\u05d4\u05db\u05d5\u05dc \u05d4\u05e9\u05ea\u05d1\u05e9"
-            ],
-            "celebration": [
-                "\u05d4\u05e6\u05dc\u05d7\u05ea\u05d9", "\u05d7\u05d3\u05e9\u05d5\u05ea \u05d8\u05d5\u05d1\u05d5\u05ea", "\u05d0\u05e0\u05d9 \u05d2\u05d0\u05d4", "\u05d0\u05e0\u05d9 \u05d2\u05d0\u05d4 \u05d1\u05e2\u05e6\u05de\u05d9"
-            ],
-            "small_talk": [
-                "\u05de\u05d4 \u05e9\u05dc\u05d5\u05de\u05da", "\u05d1\u05d5\u05d0 \u05e0\u05d3\u05d1\u05e8", "\u05d1\u05d5\u05d0\u05d9 \u05e0\u05d3\u05d1\u05e8", "\u05e1\u05e4\u05e8 \u05dc\u05d9 \u05de\u05e9\u05d4\u05d5"
-            ],
-        }
-        for intent, markers in unicode_marker_groups.items():
-            if any(marker in lowered for marker in markers):
-                return intent
+        scores = {}
+        for intent, triggers in self.conversation_intent_index.items():
+            matches = [
+                trigger
+                for trigger in triggers
+                if self._phrase_in_text(text, trigger)
+            ]
+            if matches:
+                scores[intent] = sum(max(1, len(item.split())) for item in matches)
 
-        marker_groups = {
-            "emotional_support": [
-                "i feel", "i'm sad", "i am sad", "i'm lonely", "i am lonely",
-                "having a hard time", "need someone", "can we talk", "listen to me",
-                "קשה לי", "אני עצוב", "אני עצובה", "אני לבד", "אפשר לדבר",
-                "אני צריך לדבר", "אני צריכה לדבר"
-            ],
-            "reassurance": [
-                "am i good enough", "will it be okay", "i'm worried", "i am worried",
-                "i'm scared", "i am scared", "תרגיע", "אני דואג", "אני דואגת", "אני מפחד"
-            ],
-            "venting": [
-                "so frustrated", "i hate this", "everything went wrong", "need to vent",
-                "נמאס לי", "אני מתוסכל", "אני מתוסכלת", "הכול השתבש"
-            ],
-            "celebration": [
-                "i did it", "i succeeded", "great news", "i'm proud", "i am proud",
-                "הצלחתי", "חדשות טובות", "אני גאה"
-            ],
-            "small_talk": [
-                "how are you", "what are you doing", "let's talk", "tell me something",
-                "מה שלומך", "בוא נדבר", "ספר לי משהו"
-            ],
-        }
-        for intent, markers in marker_groups.items():
-            if any(marker in lowered for marker in markers):
-                return intent
+        if scores:
+            return max(scores, key=scores.get)
 
-        if primary_emotion in {"sadness", "fear", "anger", "confusion"}:
+        defaults = self.language_rules.get("default_intent_by_emotion", {})
+        if primary_emotion in defaults:
+            return str(defaults[primary_emotion])
+
+        report = report if isinstance(report, dict) else {}
+        routes = {
+            str(route)
+            for route in report.get("routing_hints", [])
+            if route
+        }
+        requested_action = report.get("requested_action", {})
+        contract = report.get("request_contract", {})
+        action_requested = bool(
+            isinstance(requested_action, dict)
+            and requested_action.get("is_action_request")
+        ) or bool(
+            isinstance(contract, dict)
+            and contract.get("action_kind")
+        )
+        if (
+            report.get("main_topic") == "emotion"
+            or "Emotion_brain" in routes
+        ) and action_requested:
             return "emotional_support"
-        if primary_emotion == "joy":
-            return "celebration"
+
         return "none"
+
+    def detect_conversation_intent(
+        self,
+        text,
+        primary_emotion,
+        sensitivity,
+        report=None
+    ):
+
+        return self._conversation_intent_from_context(
+            text,
+            primary_emotion,
+            sensitivity,
+            report
+        )
 
     def conversation_continuity(self, memory_report):
 
@@ -933,52 +953,6 @@ class EmotionBrain:
             response = prefix + response
         return response
 
-        if sensitivity == "crisis":
-            if hebrew:
-                return "אני שומע שיש כאן מצוקה רצינית. חשוב לערב עכשיו אדם אמיתי שאתה סומך עליו או שירות חירום מקומי; אני אשאר איתך ואעזור בצעד הבא."
-            return (
-                "I hear that this is serious distress. Please involve a trusted person or local emergency/crisis service now; "
-                "I can stay with you and help with the next immediate step."
-            )
-
-        responses = {
-            "sadness": (
-                "זה נשמע כואב, ולא צריך לפתור הכול ברגע אחד. מה החלק שהכי מכביד עליך עכשיו?"
-                if hebrew else
-                "That sounds painful, and you do not have to solve all of it at once. What part feels heaviest right now?"
-            ),
-            "fear": (
-                "הדאגה נשמעת אמיתית. בוא נפריד בין מה שקורה עכשיו לבין מה שאתה חושש שיקרה, ואז נבחר צעד קטן אחד."
-                if hebrew else
-                "The worry sounds real. Let us separate what is happening now from what you fear might happen, then choose one small step."
-            ),
-            "anger": (
-                "מובן שאתה מתוסכל. אפשר קודם לזהות מה בדיוק השתבש, ואז לבחור פעולה אחת שלא תחמיר את המצב."
-                if hebrew else
-                "It makes sense that you are frustrated. We can first name exactly what went wrong, then choose one action that will not make it worse."
-            ),
-            "confusion": (
-                "לא חייבים להבין הכול בבת אחת. כתוב לי מה ידוע לך ומה לא ברור, ונעשה בזה סדר יחד."
-                if hebrew else
-                "You do not have to understand everything at once. Tell me what you know and what is unclear, and we can sort it out together."
-            ),
-            "joy": (
-                "זה באמת משמח. מה היה הדבר שעזר לך להצליח?"
-                if hebrew else
-                "That is genuinely good news. What helped you make it happen?"
-            ),
-            "neutral": (
-                "אני כאן. אפשר לדבר על מה שמעסיק אותך, לפתור בעיה או פשוט לחשוב יחד."
-                if hebrew else
-                "I am here. We can talk through what is on your mind, solve a problem, or simply think together."
-            ),
-        }
-        response = responses.get(emotion, responses["neutral"])
-        if continuing and intent not in {"small_talk", "celebration"}:
-            prefix = "אני ממשיך איתך מאותה שיחה. " if hebrew else "I am continuing with you from the same conversation. "
-            response = prefix + response
-        return response
-
     # ---------- process ----------
 
     def process(
@@ -1004,7 +978,8 @@ class EmotionBrain:
 
         detected = self.detect_emotions(
             text,
-            terms
+            terms,
+            report
         )
 
         primary_emotion = detected["primary_emotion"]
@@ -1040,7 +1015,8 @@ class EmotionBrain:
         conversation_intent = self.detect_conversation_intent(
             text,
             primary_emotion,
-            sensitivity
+            sensitivity,
+            report
         )
         continuity = self.conversation_continuity(memory_report)
         support_response = ""

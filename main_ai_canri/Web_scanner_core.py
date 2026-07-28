@@ -13,6 +13,7 @@ import socket
 import sqlite3
 import threading
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from html import unescape
@@ -34,7 +35,7 @@ DEFAULT_HOST_DELAY_SECONDS = 2.0
 USER_AGENT = "CanriKnowledgeScanner/1.0 (+local educational knowledge index)"
 
 TOKEN_PATTERN = re.compile(r"[a-zA-Z][a-zA-Z0-9_+.#-]{1,48}")
-STOP_WORDS = {
+INDEX_NOISE_TERMS = {
     "the", "and", "for", "with", "that", "this", "from", "into", "about",
     "what", "when", "where", "which", "while", "there", "their", "have",
     "has", "are", "was", "were", "will", "would", "can", "could", "should",
@@ -69,7 +70,7 @@ def text_terms(value: Any, limit: int = 80) -> list[str]:
     terms = []
     for match in TOKEN_PATTERN.findall(str(value or "").lower()):
         term = match.strip("-_.")
-        if len(term) < 2 or term in STOP_WORDS or term in terms:
+        if len(term) < 2 or term in INDEX_NOISE_TERMS or term in terms:
             continue
         terms.append(term)
         if len(terms) >= limit:
@@ -422,8 +423,19 @@ class IndexedJsonlStore:
         connection.execute("PRAGMA synchronous=NORMAL")
         return connection
 
+    @contextmanager
+    def _connection(self):
+        """Commit or roll back a short operation and always close SQLite."""
+
+        connection = self._connect()
+        try:
+            with connection:
+                yield connection
+        finally:
+            connection.close()
+
     def _initialize_index(self) -> None:
-        with self._connect() as connection:
+        with self._connection() as connection:
             connection.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS records (
@@ -465,12 +477,12 @@ class IndexedJsonlStore:
             return 0
 
     def count(self) -> int:
-        with self._connect() as connection:
+        with self._connection() as connection:
             row = connection.execute("SELECT COUNT(*) AS count FROM records").fetchone()
         return int(row["count"] if row else 0)
 
     def state(self, record_id: str) -> dict[str, Any]:
-        with self._connect() as connection:
+        with self._connection() as connection:
             row = connection.execute(
                 "SELECT * FROM records WHERE record_id = ?",
                 (str(record_id),),
@@ -537,7 +549,7 @@ class IndexedJsonlStore:
         with self._lock:
             previous = self.state(normalized["record_id"])
             if previous and previous.get("content_hash") == digest:
-                with self._connect() as connection:
+                with self._connection() as connection:
                     connection.execute(
                         """
                         UPDATE records
@@ -584,7 +596,7 @@ class IndexedJsonlStore:
 
             metadata = fitted.get("metadata", {})
             metadata_json = json.dumps(metadata, ensure_ascii=False, separators=(",", ":"))
-            with self._connect() as connection:
+            with self._connection() as connection:
                 connection.execute("PRAGMA foreign_keys = ON")
                 connection.execute(
                     """
@@ -628,7 +640,7 @@ class IndexedJsonlStore:
         etag: str | None = None,
         last_modified: str | None = None,
     ) -> None:
-        with self._connect() as connection:
+        with self._connection() as connection:
             connection.execute(
                 """
                 UPDATE records
@@ -654,7 +666,7 @@ class IndexedJsonlStore:
             ORDER BY search_score DESC, matched_terms DESC, r.stored_utc DESC
             LIMIT ?
         """
-        with self._connect() as connection:
+        with self._connection() as connection:
             rows = connection.execute(
                 sql,
                 (*terms, self.collection, max(1, int(limit)) * 4),
@@ -708,7 +720,7 @@ class IndexedJsonlStore:
     def compact(self) -> dict[str, Any]:
         """Rewrite only latest indexed versions so update checks can continue at quota."""
         with self._lock:
-            with self._connect() as connection:
+            with self._connection() as connection:
                 rows = connection.execute(
                     "SELECT record_id, byte_offset, byte_length FROM records ORDER BY record_id"
                 ).fetchall()
@@ -730,7 +742,7 @@ class IndexedJsonlStore:
                         output.write(raw)
                         offsets[row["record_id"]] = (offset, len(raw))
                 temporary.replace(self.database_path)
-                with self._connect() as connection:
+                with self._connection() as connection:
                     connection.executemany(
                         "UPDATE records SET byte_offset = ?, byte_length = ? WHERE record_id = ?",
                         [

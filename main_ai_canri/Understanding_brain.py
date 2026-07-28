@@ -19,6 +19,17 @@ except Exception:
     search_scanner_knowledge = None
 
 try:
+    from Semantic_router import (
+        load_semantic_profiles,
+        rank_semantic_domains,
+        routes_for_domains,
+    )
+except Exception:
+    load_semantic_profiles = None
+    rank_semantic_domains = None
+    routes_for_domains = None
+
+try:
     import UnderstandingDk as dk
 except Exception:
     dk = None
@@ -28,6 +39,15 @@ WORD_RE = re.compile(r"[A-Za-z\u0590-\u05FF][A-Za-z0-9_\-\u0590-\u05FF']*")
 DATA_DIR = Path(__file__).parent / "data"
 PUNCTUATION_FILE = DATA_DIR / "Punctuation_dictionary.json"
 DISCOURSE_PATTERNS_FILE = DATA_DIR / "Language_discourse_patterns.json"
+
+
+def word_type_is(value, label):
+    """Match a dictionary part of speech without confusing adverb with verb."""
+
+    return bool(re.search(
+        rf"(?<![A-Za-z]){re.escape(str(label).casefold())}(?![A-Za-z])",
+        str(value or "").casefold(),
+    ))
 
 CODE_KEYWORDS = {
     "and", "as", "assert", "async", "await", "break", "case", "catch",
@@ -86,103 +106,6 @@ AUXILIARY_VERBS = {
 
 QUESTION_WORDS = {
     "what", "who", "where", "when", "why", "how"
-}
-
-DOMAIN_RULES = {
-    "code": [
-        "code", "python", "javascript", "java", "function", "class", "api",
-        "json", "program", "script", "bug", "debug", "working code",
-        "analyze code", "explain code", "review code", "what this code does",
-        "קוד", "פייתון", "פונקציה", "מחלקה"
-    ],
-    "game": [
-        "game", "rpg", "player", "enemy", "inventory", "level", "quest",
-        "combat", "save", "load", "משחק", "שחקן", "אויב", "שלב"
-    ],
-    "movie": [
-        "movie", "film", "feature film", "short film", "screenplay",
-        "cinematography", "shot list", "storyboard", "movie production",
-        "render movie", "create movie", "make movie", "generate movie",
-        "\u05e1\u05e8\u05d8", "\u05e7\u05d5\u05dc\u05e0\u05d5\u05e2", "\u05ea\u05e1\u05e8\u05d9\u05d8", "\u05e6\u05d9\u05dc\u05d5\u05dd \u05e1\u05e8\u05d8"
-    ],
-    "science": [
-        "science", "physics", "chemistry", "biology", "gravity", "atom", "atoms",
-        "photosynthesis", "dna", "water cycle", "electric current", "volcano",
-        "immune system", "sound wave", "climate change", "cellular respiration",
-        "plate tectonics", "natural selection", "nervous system", "chemical bond",
-        "carbon cycle", "vaccine", "phases of the moon", "renewable energy",
-        "ocean current",
-        "photosynthesis", "dna", "genetics", "evolution", "ecosystem",
-        "water cycle", "volcano", "immune system", "electric current",
-        "sound wave", "climate",
-        "energy", "force", "cell", "מדע", "פיזיקה", "כימיה", "ביולוגיה"
-    ],
-    "technology": [
-        "technology", "hardware", "software", "cpu", "gpu", "computer",
-        "robot", "network", "device", "טכנולוגיה", "חומרה", "מחשב"
-    ],
-    "geography": [
-        "geography", "country", "city", "capital", "map", "gps", "river",
-        "mountain", "location", "located", "where", "france", "paris",
-        "גיאוגרפיה", "מדינה", "עיר", "מפה"
-    ],
-    "history": [
-        "history", "historical", "historically", "war", "empire", "ancient", "king", "century",
-        "revolution", "renaissance", "printing press", "silk road", "moon landing",
-        "invention of writing", "development of the internet", "timeline",
-        "היסטוריה", "מלחמה", "אימפריה", "עתיק"
-    ],
-    "language": [
-        "language", "translate", "translation", "grammar", "synonym",
-        "antonym", "word", "sentence", "שפה", "תרגם", "תרגום", "דקדוק"
-    ],
-    "math": [
-        "solve", "step by step", "x^2", "x**2",
-        "math", "calculate", "equation", "number", "algebra", "geometry",
-        "probability", "מתמטיקה", "חשב", "משוואה", "מספר"
-    ],
-    "security": [
-        "security", "password", "hack", "malware", "token", "encrypt",
-        "suicide", "bomb", "אבטחה", "סיסמה", "פצצה", "התאבד"
-    ],
-    "emotion": [
-        "feel", "feeling", "sad", "lonely", "anxious", "worried",
-        "scared", "afraid", "angry", "upset", "frustrated", "overwhelmed",
-        "emotional support", "can we talk", "listen to me", "need someone",
-        "\u05de\u05e8\u05d2\u05d9\u05e9", "\u05de\u05e8\u05d2\u05d9\u05e9\u05d4", "\u05e2\u05e6\u05d5\u05d1", "\u05e2\u05e6\u05d5\u05d1\u05d4",
-        "\u05d1\u05d5\u05d3\u05d3", "\u05d1\u05d5\u05d3\u05d3\u05d4", "\u05d3\u05d5\u05d0\u05d2", "\u05d3\u05d5\u05d0\u05d2\u05ea", "\u05de\u05e4\u05d7\u05d3",
-        "\u05db\u05d5\u05e2\u05e1", "\u05db\u05d5\u05e2\u05e1\u05ea", "\u05de\u05ea\u05d5\u05e1\u05db\u05dc", "\u05de\u05ea\u05d5\u05e1\u05db\u05dc\u05ea", "\u05e7\u05e9\u05d4 \u05dc\u05d9"
-    ],
-    "image_generation": [
-        "generate image", "create image", "make image", "draw image",
-        "draw", "illustration", "poster", "logo", "icon", "concept art",
-        "image prompt", "visual design", "picture of", "image of"
-    ],
-    "vision": [
-        "image", "photo", "picture", "video", "file", "pdf", "png", "jpg",
-        "תמונה", "וידאו", "קובץ"
-    ],
-    "voice": [
-        "voice", "audio", "sound", "recording", "microphone", "speech",
-        "קול", "אודיו", "הקלטה", "סאונד"
-    ],
-    "story": [
-        "story", "character", "plot", "world", "scene", "dialogue",
-        "סיפור", "דמות", "עלילה", "עולם"
-    ],
-    "creative": [
-        "creative", "idea", "invent", "brainstorm", "original", "stuck",
-        "יצירתי", "רעיון", "להמציא"
-    ],
-    "code_analysis": [
-        "analyze code", "analyze this code", "explain code", "explain this code",
-        "what this code does", "what does this code do", "review this code",
-        "walk me through this code"
-    ],
-    "planning": [
-        "plan", "steps", "roadmap", "structure", "architecture",
-        "תוכנית", "שלבים", "מבנה", "תכנון"
-    ]
 }
 
 INTENT_RULES = {
@@ -603,6 +526,31 @@ class UnderstandingBrain:
             )
         }
 
+    def instruction_text_without_code(self, text, code_context=None):
+        """Return the user's instructions while masking embedded code payloads."""
+
+        raw = str(text or "")
+        fragments = (code_context or {}).get("fragments", [])
+        spans = []
+        for fragment in fragments:
+            if fragment.get("kind") not in {"fenced_code_block", "inline_code"}:
+                continue
+            try:
+                start = max(0, int(fragment.get("start", 0)))
+                end = min(len(raw), int(fragment.get("end", start)))
+            except (TypeError, ValueError):
+                continue
+            if end > start:
+                spans.append((start, end))
+
+        if not spans:
+            return raw
+
+        characters = list(raw)
+        for start, end in spans:
+            characters[start:end] = [" "] * (end - start)
+        return "".join(characters)
+
     # ---------- word analysis ----------
 
     def get_word_type(self, word):
@@ -616,25 +564,57 @@ class UnderstandingBrain:
 
         return "unknown"
 
+    def resolve_dictionary_form(self, word):
+        """Resolve a simple inflected form to an existing dictionary entry."""
+
+        value = str(word or "").casefold().strip()
+        if not value or not dk:
+            return value
+        if dk.word_exists(value):
+            return value
+
+        candidates = []
+        if len(value) > 4 and value.endswith("ies"):
+            candidates.append(f"{value[:-3]}y")
+        if len(value) > 3 and value.endswith("es"):
+            candidates.extend([value[:-2], value[:-1]])
+        elif len(value) > 2 and value.endswith("s") and not value.endswith("ss"):
+            candidates.append(value[:-1])
+        if len(value) > 4 and value.endswith("ing"):
+            candidates.extend([value[:-3], f"{value[:-3]}e"])
+        if len(value) > 3 and value.endswith("ed"):
+            candidates.extend([value[:-2], f"{value[:-1]}"])
+
+        for candidate in dict.fromkeys(candidates):
+            if candidate and dk.word_exists(candidate):
+                return candidate
+        return value
+
     def analyze_word(self, word):
 
-        exists = bool(dk and dk.word_exists(word))
-        meanings = dk.get_meanings(word)[:3] if exists else []
-        connections = dk.related(word)[:12] if exists else []
+        resolved_word = self.resolve_dictionary_form(word)
+        exists = bool(dk and dk.word_exists(resolved_word))
+        meanings = dk.get_meanings(resolved_word)[:3] if exists else []
+        connections = dk.related(resolved_word)[:12] if exists else []
         suggestions = [] if exists or not dk else dk.suggest(word, limit=5)
-        forms = dk.get_forms(word) if dk and dk.grammar_exists(word) else {}
+        forms = (
+            dk.get_forms(resolved_word)
+            if dk and dk.grammar_exists(resolved_word)
+            else {}
+        )
         tense = dk.detect_tense(word) if dk else None
 
         return {
             "word": word,
+            "resolved_word": resolved_word,
             "exists": exists,
-            "type": self.get_word_type(word),
+            "type": self.get_word_type(resolved_word),
             "meanings": meanings,
             "connections": connections,
             "suggestions": suggestions,
             "forms": forms,
             "tense": tense,
-            "is_stop_word": word in STOP_WORDS
+            "is_stop_word": word in STOP_WORDS or resolved_word in STOP_WORDS
         }
 
     def analyze_words(self, words):
@@ -705,19 +685,19 @@ class UnderstandingBrain:
         if token.get("is_pronoun"):
             return "pronoun"
 
-        if "adverb" in token_type:
+        if word_type_is(token_type, "adverb"):
             return "adverb"
 
-        if "adjective" in token_type:
+        if word_type_is(token_type, "adjective"):
             return "adjective"
 
-        if "verb" in token_type or self.is_verb_like(token):
+        if word_type_is(token_type, "verb") or self.is_verb_like(token):
             return "verb"
 
-        if "noun" in token_type:
+        if word_type_is(token_type, "noun"):
             return "noun"
 
-        if "number" in token_type:
+        if word_type_is(token_type, "number"):
             return "number"
 
         if token.get("is_stop_word"):
@@ -818,7 +798,7 @@ class UnderstandingBrain:
         if token.get("is_preposition") or token.get("is_possessive"):
             return False
         return (
-            "noun" in token_type
+            word_type_is(token_type, "noun")
             or token.get("is_pronoun")
             or token_type in {"proper noun", "unknown"}
             and not token.get("is_stop_word")
@@ -829,13 +809,13 @@ class UnderstandingBrain:
         word = token.get("word", "")
         token_type = str(token.get("type", "")).lower()
         if (
-            "adverb" in token_type
+            word_type_is(token_type, "adverb")
             or token.get("is_preposition")
             or (word.endswith("ly") and len(word) > 4)
         ):
             return False
         if (
-            "adjective" in token_type
+            word_type_is(token_type, "adjective")
             and token.get("tense") not in {"past", "past_participle"}
             and not (word.endswith("ed") and len(word) > 4)
         ):
@@ -857,7 +837,7 @@ class UnderstandingBrain:
             for base_guess in base_guesses:
                 entries = dk.search_word(base_guess)
                 if any(
-                    "verb" in str(entry.get("type", "")).lower()
+                    word_type_is(entry.get("type"), "verb")
                     for entry in entries
                     if isinstance(entry, dict)
                 ):
@@ -865,7 +845,7 @@ class UnderstandingBrain:
                     break
 
         return (
-            "verb" in token_type
+            word_type_is(token_type, "verb")
             or (word.endswith("ed") and len(word) > 4)
             or (word.endswith("ing") and len(word) > 5)
             or base_is_verb
@@ -880,8 +860,8 @@ class UnderstandingBrain:
         if self.is_verb_like(token):
             return False
         return (
-            "adjective" in token_type
-            or "adverb" in token_type
+            word_type_is(token_type, "adjective")
+            or word_type_is(token_type, "adverb")
             or word.endswith("ly")
             or word in {"small", "big", "tiny", "quiet", "glowing", "final", "simple", "real"}
         )
@@ -892,7 +872,7 @@ class UnderstandingBrain:
         word = token.get("word", "")
         if token.get("is_preposition"):
             return False
-        return "adverb" in token_type or word.endswith("ly")
+        return word_type_is(token_type, "adverb") or word.endswith("ly")
 
     def nearest_before(self, tokens, index, predicate):
 
@@ -928,6 +908,25 @@ class UnderstandingBrain:
         # In noun phrases like "Python game" or "Python to-do list program",
         # prefer the phrase head, which is usually the last close noun.
         return candidates[-1]
+
+    def object_phrase_after_action(self, tokens, action, object_token):
+
+        if not action or not object_token:
+            return None
+
+        selected = [object_token]
+        for token in reversed(tokens[action["index"] + 1:object_token["index"]]):
+            if token.get("is_stop_word"):
+                continue
+            if token.get("is_preposition"):
+                break
+            if self.is_modifier_like(token) or self.is_noun_like(token):
+                selected.insert(0, token)
+                continue
+            break
+
+        phrase = " ".join(str(token.get("word") or "") for token in selected).strip()
+        return phrase or object_token.get("word")
 
     def add_edge(self, edges, source, relation, target, confidence=70, evidence=None):
 
@@ -1051,6 +1050,11 @@ class UnderstandingBrain:
             "subject": subject.get("word") if subject else None,
             "action": main_action.get("word") if main_action else None,
             "object": object_token.get("word") if object_token else None,
+            "object_phrase": self.object_phrase_after_action(
+                tokens,
+                main_action,
+                object_token
+            ),
             "question_focus": question_focus,
             "content_terms": [token.get("word") for token in content_tokens[:30]]
         }
@@ -1138,103 +1142,103 @@ class UnderstandingBrain:
 
         return scores, hits
 
-    def detect_topics(self, text, words, word_reports):
+    def detect_topics_from_project_knowledge(
+        self,
+        text,
+        words,
+        word_reports,
+        scanner_context=None,
+        code_context=None,
+    ):
+        """Classify from discovered brains and data instead of local hint maps."""
 
-        scores, hits = self.score_rules(text, words, DOMAIN_RULES)
-        lowered = text.lower()
-        word_set = set(words)
-
-        if (
-            re.search(r"\d|\bx\b", lowered)
-            and (
-                "=" in lowered
-                or "^" in lowered
-                or "**" in lowered
-                or any(term in lowered for term in ["solve", "calculate", "step by step"])
-            )
-        ):
-            scores["math"] = scores.get("math", 0) + 18
-            hits.setdefault("math", []).append("math_expression")
-
-        if re.fullmatch(
-            r"\s*[-+]?\d+(?:\.\d+)?\s*[+\-*/]\s*[-+]?\d+(?:\.\d+)?\s*\??\s*",
-            lowered
-        ):
-            scores["math"] = scores.get("math", 0) + 24
-            hits.setdefault("math", []).append("simple_arithmetic_expression")
-
-        hebrew_science_markers = [
-            "\u05db\u05d5\u05d7 \u05d4\u05de\u05e9\u05d9\u05db\u05d4", "\u05db\u05d5\u05d7 \u05db\u05d1\u05d9\u05d3\u05d4", "\u05db\u05d5\u05db\u05d1\u05d9\u05dd", "\u05e4\u05d9\u05d6\u05d9\u05e7\u05d4", "\u05de\u05d3\u05e2"
+        self._semantic_domain_details = []
+        if rank_semantic_domains is None:
+            return "general", {}, {}
+        instruction_text = self.instruction_text_without_code(text, code_context)
+        instruction_words = set(self.extract_words(instruction_text))
+        instruction_reports = [
+            report
+            for report in word_reports
+            if str(report.get("word", "")).lower() in instruction_words
         ]
-        matched_science = [marker for marker in hebrew_science_markers if marker in lowered]
-        if matched_science:
-            scores["science"] = scores.get("science", 0) + 22 + len(matched_science) * 3
-            hits.setdefault("science", []).extend(matched_science)
-
-        hebrew_story_markers = [
-            "\u05e1\u05d9\u05e4\u05d5\u05e8", "\u05ea\u05e6\u05d5\u05e8 \u05dc\u05d9 \u05e1\u05d9\u05e4\u05d5\u05e8", "\u05db\u05ea\u05d5\u05d1 \u05dc\u05d9 \u05e1\u05d9\u05e4\u05d5\u05e8"
-        ]
-        matched_story = [marker for marker in hebrew_story_markers if marker in lowered]
-        if matched_story:
-            scores["story"] = scores.get("story", 0) + 24 + len(matched_story) * 3
-            hits.setdefault("story", []).extend(matched_story)
-
-        if self.has_code_payload(text):
-            scores["code"] = scores.get("code", 0) + 14
-            hits.setdefault("code", []).append("code_payload")
-
-        emotion_phrases = [
-            "i feel", "can we talk", "listen to me", "having a hard time",
-            "need someone", "\u05e7\u05e9\u05d4 \u05dc\u05d9", "\u05d0\u05e0\u05d9 \u05de\u05e8\u05d2\u05d9\u05e9", "\u05d0\u05e0\u05d9 \u05de\u05e8\u05d2\u05d9\u05e9\u05d4",
-            "\u05d0\u05e4\u05e9\u05e8 \u05dc\u05d3\u05d1\u05e8", "\u05d0\u05e0\u05d9 \u05e6\u05e8\u05d9\u05da \u05dc\u05d3\u05d1\u05e8", "\u05d0\u05e0\u05d9 \u05e6\u05e8\u05d9\u05db\u05d4 \u05dc\u05d3\u05d1\u05e8"
-            ,"\u05d9\u05d5\u05dd \u05e7\u05e9\u05d4", "\u05de\u05e2\u05d9\u05d9\u05e3", "\u05de\u05e2\u05d9\u05d9\u05e4\u05ea", "\u05e2\u05d9\u05d9\u05e3", "\u05e2\u05d9\u05d9\u05e4\u05d4"
-        ]
-        matched_emotion = [marker for marker in emotion_phrases if marker in lowered]
-        if matched_emotion:
-            scores["emotion"] = scores.get("emotion", 0) + 18 + len(matched_emotion) * 3
-            hits.setdefault("emotion", []).extend(matched_emotion)
-
-        if (
-            "capital" in word_set
-            or "located" in word_set
-            or "where" in word_set
-            or any(term in lowered for term in ["where is", "capital of", "located in"])
-        ):
-            scores["geography"] = scores.get("geography", 0) + 10
-            hits.setdefault("geography", []).append("geography_context")
-
-        history_markers = [
-            "historically", "historical importance", "history of", "timeline of",
-            "printing press", "renaissance", "silk road", "moon landing",
-            "ancient egypt", "roman empire", "industrial revolution",
-            "french revolution", "invention of writing", "development of the internet"
-        ]
-        matched_history = [marker for marker in history_markers if marker in lowered]
-        if matched_history:
-            scores["history"] = scores.get("history", 0) + 20 + len(matched_history) * 3
-            hits.setdefault("history", []).extend(matched_history)
-
-        for report in word_reports:
-            for connection in report.get("connections", [])[:8]:
-                connection = str(connection).lower()
-                for domain, keywords in DOMAIN_RULES.items():
-                    if connection in keywords:
-                        scores[domain] = scores.get(domain, 0) + 0.25
-                        hits.setdefault(domain, []).append(f"related:{connection}")
-
-        if not scores:
+        ranked = rank_semantic_domains(
+            instruction_text,
+            word_reports=instruction_reports,
+            scanner_matches=scanner_context or [],
+            code_context=code_context or {},
+            limit=8,
+        )
+        structural_math = bool(
+            re.search(r"\d", instruction_text)
+            and re.search(r"(?:=|\^|\*\*|[+\-*/])", instruction_text)
+        )
+        if structural_math:
+            ranked = [
+                {
+                    "domain": "math",
+                    "brain": "Math_brain",
+                    "score": max(
+                        [float(item.get("score", 0)) for item in ranked] or [0]
+                    ) + 35.0,
+                    "direct_evidence": ["parsed_math_expression"],
+                    "dictionary_evidence": [],
+                    "scanner_evidence": [],
+                    "supporting_brains": ["Reasoning_brain", "Quality_Control_brain"],
+                    "data_sources": [],
+                    "packages": [],
+                    "source": "sentence_structure",
+                },
+                *[item for item in ranked if item.get("domain") != "math"],
+            ][:8]
+        if not ranked:
             return "general", {}, {}
 
-        sorted_scores = sorted(scores.items(), key=lambda item: item[1], reverse=True)
-        main_topic = sorted_scores[0][0]
+        # Scanner excerpts and dictionary definitions enrich a request, but
+        # they must not replace the subject the user actually wrote. A word
+        # such as "Python" can have several dictionary senses; an indirect
+        # sense (for example, a snake description containing "world") must
+        # not outrank the profile supported by the sentence itself.
+        structural_candidates = [
+            item for item in ranked if item.get("source") == "sentence_structure"
+        ]
+        explicit_candidates = [
+            item for item in ranked if item.get("explicit_evidence")
+        ]
+        primary_candidate = (
+            structural_candidates[0]
+            if structural_candidates
+            else max(
+                explicit_candidates,
+                key=lambda item: (
+                    float(item.get("score", 0)),
+                    len(item.get("explicit_evidence", [])),
+                ),
+                default=ranked[0],
+            )
+        )
 
-        total = max(sum(scores.values()), 1)
-        topic_confidence = {
-            topic: round((score / total) * 100, 2)
-            for topic, score in sorted_scores[:8]
+        scores = {
+            item["domain"]: float(item.get("score", 0))
+            for item in ranked
+            if item.get("domain")
         }
-
-        return main_topic, topic_confidence, hits
+        total = max(sum(scores.values()), 1.0)
+        confidence = {
+            domain: round(score / total * 100.0, 2)
+            for domain, score in scores.items()
+        }
+        hits = {
+            item["domain"]: list(dict.fromkeys([
+                *item.get("direct_evidence", []),
+                *[f"dictionary:{value}" for value in item.get("dictionary_evidence", [])],
+                *[f"scanner:{value}" for value in item.get("scanner_evidence", [])],
+            ]))[:24]
+            for item in ranked
+            if item.get("domain")
+        }
+        self._semantic_domain_details = ranked
+        return primary_candidate["domain"], confidence, hits
 
     def select_central_domains(
         self,
@@ -1245,6 +1249,92 @@ class UnderstandingBrain:
         limit=4
     ):
         """Keep several meaningful domains instead of collapsing the request to one label."""
+
+        semantic_details = [
+            item
+            for item in getattr(self, "_semantic_domain_details", [])
+            if isinstance(item, dict) and item.get("domain")
+        ]
+        if semantic_details:
+            if (
+                main_topic
+                and all(item.get("domain") != main_topic for item in semantic_details)
+                and load_semantic_profiles is not None
+            ):
+                profile = load_semantic_profiles().get(str(main_topic), {})
+                if profile:
+                    semantic_details.append({
+                        "domain": main_topic,
+                        "brain": profile.get("brain"),
+                        "score": max(
+                            [float(item.get("score", 0)) for item in semantic_details]
+                            or [1.0]
+                        ),
+                        "direct_evidence": list(
+                            dict.fromkeys((topic_hits or {}).get(main_topic, []))
+                        )[:12],
+                        "explicit_evidence": [],
+                        "inferred_evidence": [],
+                        "dictionary_evidence": [],
+                        "scanner_evidence": [],
+                        "supporting_brains": profile.get("supporting_brains", [])[:12],
+                        "auto_supporting_brains": profile.get(
+                            "auto_supporting_brains", []
+                        )[:8],
+                        "data_sources": profile.get("data_sources", [])[:12],
+                        "packages": profile.get("packages", [])[:8],
+                        "source": "understanding_action_and_discovered_profile",
+                    })
+            semantic_details = sorted(
+                semantic_details,
+                key=lambda item: item.get("domain") != main_topic,
+            )
+            top_raw = max(float(item.get("score", 0)) for item in semantic_details)
+            primary_detail = next(
+                (
+                    item for item in semantic_details
+                    if item.get("domain") == main_topic
+                ),
+                semantic_details[0],
+            )
+            primary_evidence = set(primary_detail.get("direct_evidence", []))
+            selected_details = []
+            for item in semantic_details:
+                domain = str(item.get("domain") or "")
+                raw_score = float(item.get("score", 0))
+                direct = set(item.get("direct_evidence", []))
+                explicit_domain_name = domain in set(item.get("explicit_evidence", []))
+                unique_direct = set(item.get("explicit_evidence", [])) - set(
+                    primary_detail.get("explicit_evidence", [])
+                )
+                structural = item.get("source") == "sentence_structure"
+                if domain != main_topic and not (
+                    structural
+                    or explicit_domain_name
+                    or (raw_score >= top_raw * 0.82 and len(unique_direct) >= 2)
+                ):
+                    continue
+                selected_details.append({
+                    "domain": domain,
+                    "confidence": round(raw_score / max(top_raw, 1.0) * 100.0, 2),
+                    "rank": len(selected_details) + 1,
+                    "role": "primary" if not selected_details else "supporting",
+                    "evidence": list(dict.fromkeys([
+                        *item.get("direct_evidence", []),
+                        *item.get("dictionary_evidence", []),
+                        *item.get("scanner_evidence", []),
+                    ]))[:16],
+                    "brain": item.get("brain"),
+                    "supporting_brains": item.get("supporting_brains", [])[:12],
+                    "auto_supporting_brains": item.get(
+                        "auto_supporting_brains", []
+                    )[:8],
+                    "packages": item.get("packages", [])[:8],
+                })
+                if len(selected_details) >= max(1, min(int(limit), 4)):
+                    break
+            if selected_details:
+                return selected_details
 
         scores = dict(topic_confidence or {})
         if main_topic and main_topic not in {"general", "unknown"}:
@@ -1537,7 +1627,7 @@ class UnderstandingBrain:
                     )
                 ).lower()
 
-                if word in ACTION_COMMANDS or "verb" in token_type:
+                if word in ACTION_COMMANDS or word_type_is(token_type, "verb"):
                     action_word = word
                     break
 
@@ -1574,7 +1664,7 @@ class UnderstandingBrain:
             }
             report = report_by_word.get(action_word, {})
             token_type = str(report.get("type", "")).lower()
-            if "verb" in token_type:
+            if word_type_is(token_type, "verb"):
                 action_kind = "perform"
 
         if not action_kind:
@@ -1583,7 +1673,7 @@ class UnderstandingBrain:
                 "dictionary_query": dictionary_query,
                 "action_word": action_word,
                 "action_kind": None,
-                "target": meaning_frame.get("object"),
+                "target": meaning_frame.get("object_phrase") or meaning_frame.get("object"),
                 "intent_override": None,
                 "confidence": 45
             }
@@ -1605,7 +1695,7 @@ class UnderstandingBrain:
         confidence = 78
         if lowered.startswith(action_word):
             confidence += 12
-        if meaning_frame.get("object"):
+        if meaning_frame.get("object_phrase") or meaning_frame.get("object"):
             confidence += 6
         if dictionary_query and not lowered.startswith(action_word):
             confidence -= 35
@@ -1615,7 +1705,7 @@ class UnderstandingBrain:
             "dictionary_query": dictionary_query,
             "action_word": action_word,
             "action_kind": action_kind,
-            "target": meaning_frame.get("object"),
+            "target": meaning_frame.get("object_phrase") or meaning_frame.get("object"),
             "intent_override": intent_override if is_action_request else None,
             "confidence": max(
                 35,
@@ -2651,83 +2741,42 @@ class UnderstandingBrain:
 
         return list(dict.fromkeys(tasks))
 
-    def routing_hints(self, main_topic, intent, features, central_domains=None):
+    def routing_hints_from_project_knowledge(self, central_domains=None):
+        """Build routes from the semantic profiles selected for this request."""
 
-        route = ["Memory_brain"]
-
-        if intent in {"question", "research"}:
-            route.extend(["Research_brain", "Reasoning_brain"])
-
-        if intent in {"code_generation", "code_analysis"} or main_topic == "code":
-            route.extend(["Planner_brain", "Code_brain", "Security_brain"])
-
-        if main_topic == "game":
-            route.extend(["Game_brain"])
-            if intent == "code_generation":
-                route.append("Code_brain")
-
-        if main_topic == "story" or intent == "story_creation":
-            route.extend([
-                "Creative_brain",
-                "Story_brain",
-                "Character_brain",
-                "World_brain"
-            ])
-
-        if main_topic == "movie" or intent == "movie_creation":
-            route.extend([
-                "Planner_brain",
-                "Creative_brain",
-                "Character_brain",
-                "World_brain",
-                "Story_brain",
-                "Image_brain",
-                "Voice_brain",
-                "Technology_brain",
-                "Movie_brain",
-                "Security_brain"
-            ])
-
-        if main_topic == "creative" or intent in {"game_design", "creative_generation"}:
-            route.append("Creative_brain")
-
-        if main_topic == "image_generation" or intent == "image_generation":
-            route.extend(["Image_brain", "Creative_brain", "Security_brain"])
-
-        if main_topic in {
-            "science", "technology", "geography", "history", "language", "math", "security"
-        }:
-            route.append(f"{main_topic.capitalize()}_brain")
-
-        specialist_routes = {
-            "code": "Code_brain",
-            "science": "Science_brain",
-            "technology": "Technology_brain",
-            "geography": "Geography_brain",
-            "history": "History_brain",
-            "language": "Language_brain",
-            "math": "Math_brain",
-            "security": "Security_brain",
-            "game": "Game_brain",
-            "movie": "Movie_brain",
-            "vision": "Vision_brain",
-            "voice": "Voice_brain",
-            "image_generation": "Image_brain",
-            "creative": "Creative_brain",
-            "story": "Story_brain"
+        selected_domains = {
+            str(item.get("domain") if isinstance(item, dict) else item).casefold()
+            for item in (central_domains or [])
+            if str(item.get("domain") if isinstance(item, dict) else item).strip()
         }
-        for domain in central_domains or []:
-            domain_name = domain.get("domain") if isinstance(domain, dict) else domain
-            specialist = specialist_routes.get(str(domain_name).lower())
-            if specialist:
-                route.append(specialist)
-
-        if len(central_domains or []) > 1:
-            route.extend(["Reasoning_brain", "Collaboration_brain"])
-
-        route.append("Response_brain")
-
-        return list(dict.fromkeys(route))
+        discovered_details = [
+            item
+            for item in getattr(self, "_semantic_domain_details", [])
+            if isinstance(item, dict)
+            and str(item.get("domain", "")).casefold() in selected_domains
+        ]
+        details = [
+            item for item in (central_domains or [])
+            if isinstance(item, dict) and item.get("brain")
+        ]
+        known_domains = {
+            str(item.get("domain", "")).casefold() for item in details
+        }
+        details.extend(
+            item for item in discovered_details
+            if str(item.get("domain", "")).casefold() not in known_domains
+        )
+        discovered = routes_for_domains(details) if routes_for_domains is not None else []
+        routes = ["Memory_brain", *discovered]
+        if len(selected_domains) > 1:
+            routes.extend(["Reasoning_brain", "Collaboration_brain"])
+        if not any(
+            route not in {"Memory_brain", "Response_brain"}
+            for route in routes
+        ):
+            routes.append("Reasoning_brain")
+        routes.append("Response_brain")
+        return list(dict.fromkeys(routes))
 
     def estimate_confidence(self, words, word_reports, topics, intent_confidence):
 
@@ -2761,10 +2810,12 @@ class UnderstandingBrain:
             except Exception:
                 scanner_context = []
 
-        main_topic, topics, topic_hits = self.detect_topics(
+        main_topic, topics, topic_hits = self.detect_topics_from_project_knowledge(
             text,
             words,
-            word_reports
+            word_reports,
+            scanner_context=scanner_context,
+            code_context=code_context,
         )
 
         intent, intent_confidence, intent_hits = self.detect_intent(
@@ -2871,10 +2922,7 @@ class UnderstandingBrain:
             requested_action
         )
         output_format = OUTPUT_RULES.get(intent, "answer")
-        routes = self.routing_hints(
-            main_topic,
-            intent,
-            features,
+        routes = self.routing_hints_from_project_knowledge(
             central_domain_details
         )
         confidence = self.estimate_confidence(
@@ -2893,6 +2941,11 @@ class UnderstandingBrain:
             "main_topic": main_topic,
             "topics": topics,
             "topic_hits": topic_hits,
+            "semantic_domain_profiles": getattr(
+                self,
+                "_semantic_domain_details",
+                [],
+            ),
             "central_domains": central_domains,
             "central_domain_details": central_domain_details,
             "intent": intent,

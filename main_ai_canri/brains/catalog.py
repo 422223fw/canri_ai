@@ -46,6 +46,7 @@ BRAIN_MODULES = (
     "Answer_Enrichment_brain",
     "Security_brain",
     "Project_context_brain",
+    "Local_LLM_brain",
     "Agent_brain",
 )
 
@@ -65,4 +66,3 @@ def load_brain_registry() -> dict[str, Any]:
             failures[module_name] = f"{type(error).__name__}: {error}"
     registry["_load_failures"] = failures
     return registry
-

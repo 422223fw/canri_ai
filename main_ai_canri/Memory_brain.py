@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from Brain_storage import atomic_write_json, load_json_resilient
+from domain_packages.understanding.context import stop_terms as understanding_stop_terms
 
 
 DATA_DIR = Path(__file__).parent / "data"
@@ -28,15 +29,6 @@ MAX_MATCHES = 12
 MAX_TURNS_PER_SESSION = 2000
 RECENT_CONTEXT_TURNS = 16
 DEFAULT_SESSION_ID = "default_session"
-
-STOP_WORDS = {
-    "the", "and", "for", "with", "that", "this", "what", "where",
-    "how", "why", "is", "are", "was", "were", "does", "did",
-    "about", "from", "into", "code", "create", "make", "build",
-    "של", "את", "על", "מה", "איפה", "איך", "למה", "זה", "אני",
-    "רוצה", "תעשה", "תכין", "לי"
-}
-
 
 class MemoryBrain:
 
@@ -232,6 +224,7 @@ class MemoryBrain:
         )
 
         clean = []
+        blocked = understanding_stop_terms(report)
 
         for keyword in keywords:
             keyword = re.sub(r"\s+", " ", str(keyword).lower()).strip()
@@ -240,7 +233,7 @@ class MemoryBrain:
             if (
                 keyword
                 and len(keyword) > 1
-                and keyword not in STOP_WORDS
+                and keyword not in blocked
                 and keyword not in clean
             ):
                 clean.append(keyword)
@@ -555,10 +548,10 @@ class MemoryBrain:
         counter = Counter()
 
         for turn in turns[-80:]:
-            text = f"{turn.get('user', '')} {turn.get('canri', '')}"
-            for word in re.findall(r"[a-zA-Z\u0590-\u05FF][a-zA-Z0-9_\-\u0590-\u05FF]{2,}", text.lower()):
-                if word not in STOP_WORDS:
-                    counter[word] += 1
+            for word in turn.get("keywords", []):
+                clean = str(word or "").casefold().strip()
+                if clean:
+                    counter[clean] += 1
 
         return [word for word, _ in counter.most_common(30)]
 

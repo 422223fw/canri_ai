@@ -20,6 +20,7 @@ from pathlib import Path
 
 from Brain_runtime import invoke_brain_safely
 from Brain_storage import atomic_write_json
+from domain_packages.understanding.context import stop_terms as understanding_stop_terms
 
 from Scanner_knowledge import scanner_evidence
 
@@ -32,14 +33,6 @@ STATISTICS_PATH = DATA_DIR / "Technology_statistics.json"
 
 LOCAL_CONFIDENCE_THRESHOLD = 55
 MAX_LOCAL_RESULTS = 6
-
-STOP_WORDS = {
-    "the", "and", "for", "with", "that", "this", "what", "how", "why",
-    "are", "is", "was", "were", "does", "did", "can", "could", "should",
-    "about", "into", "from", "של", "את", "על", "מה", "איך", "למה", "אני",
-    "רוצה", "צריך", "תעשה", "האם"
-}
-
 
 class TechnologyBrain:
 
@@ -271,6 +264,7 @@ class TechnologyBrain:
                     "exists",
                     True
                 )
+                and not word_data.get("is_stop_word")
             ):
 
                 terms.append(
@@ -296,6 +290,7 @@ class TechnologyBrain:
             )
 
         clean_terms = []
+        blocked = understanding_stop_terms(report)
 
         for term in terms:
 
@@ -314,7 +309,7 @@ class TechnologyBrain:
             if (
                 term
                 and len(term) > 1
-                and term not in STOP_WORDS
+                and term not in blocked
                 and term not in clean_terms
             ):
 
@@ -340,187 +335,55 @@ class TechnologyBrain:
             )
         ).lower()
 
-        if intent:
+        if intent and intent not in {"unknown", "request"}:
             return intent
 
-        lowered = text.lower()
+        contract = report.get("request_contract", {})
+        contract = contract if isinstance(contract, dict) else {}
+        requested_action = report.get("requested_action", {})
+        requested_action = requested_action if isinstance(requested_action, dict) else {}
+        for value in (
+            requested_action.get("intent_override"),
+            contract.get("intent"),
+            contract.get("action"),
+        ):
+            value = str(value or "").strip().casefold()
+            if value and value not in {"unknown", "request"}:
+                return value
 
-        intent_keywords = {
-            "hardware_recommendation": [
-                "gpu",
-                "cpu",
-                "ram",
-                "computer",
-                "pc",
-                "laptop",
-                "build",
-                "upgrade",
-                "hardware"
-            ],
-            "architecture_planning": [
-                "architecture",
-                "system",
-                "stack",
-                "components",
-                "project",
-                "design"
-            ],
-            "troubleshooting": [
-                "error",
-                "bug",
-                "not working",
-                "problem",
-                "fix",
-                "issue",
-                "slow"
-            ],
-            "comparison": [
-                "vs",
-                "versus",
-                "compare",
-                "better",
-                "difference"
-            ],
-            "explanation": [
-                "what is",
-                "explain",
-                "how does",
-                "מה זה",
-                "תסביר"
-            ]
-        }
-
-        for detected_intent, keywords in intent_keywords.items():
-
-            if any(
-                keyword in lowered
-                or keyword in terms
-                for keyword in keywords
-            ):
-
-                return detected_intent
-
-        return "technology_analysis"
+        return "analysis"
 
     def detect_domain(
         self,
-        terms,
-        text
+        report,
+        local_matches
     ):
-
-        lowered = text.lower()
-
-        domain_keywords = {
-            "hardware": [
-                "hardware",
-                "cpu",
-                "gpu",
-                "ram",
-                "ssd",
-                "motherboard",
-                "power supply",
-                "sensor"
-            ],
-            "software": [
-                "software",
-                "program",
-                "app",
-                "api",
-                "web",
-                "backend",
-                "frontend"
-            ],
-            "networking": [
-                "network",
-                "router",
-                "switch",
-                "wifi",
-                "tcp",
-                "ip",
-                "dns"
-            ],
-            "security": [
-                "security",
-                "cyber",
-                "encryption",
-                "auth",
-                "password",
-                "malware"
-            ],
-            "ai": [
-                "ai",
-                "artificial intelligence",
-                "machine learning",
-                "model",
-                "neural"
-            ],
-            "robotics": [
-                "robot",
-                "robotics",
-                "motor",
-                "actuator",
-                "microcontroller"
-            ],
-            "cloud": [
-                "cloud",
-                "server",
-                "deploy",
-                "hosting",
-                "scale"
-            ],
-            "data": [
-                "database",
-                "data",
-                "sql",
-                "nosql",
-                "json"
-            ],
-            "gaming_technology": [
-                "game",
-                "engine",
-                "rendering",
-                "fps",
-                "physics"
-            ]
-        }
-
-        scores = {}
-
-        for domain, keywords in domain_keywords.items():
-
-            score = 0
-
-            for keyword in keywords:
-
-                if (
-                    keyword in lowered
-                    or keyword in terms
-                ):
-
-                    score += 1
-
-            if score:
-                scores[domain] = score
-
-        if scores:
-            return max(
-                scores,
-                key=scores.get
-            )
-
-        main_topic = ""
-
-        if terms:
-            main_topic = terms[0]
-
-        if main_topic in [
-            "technology",
-            "code",
-            "programming"
+        report = report if isinstance(report, dict) else {}
+        contract = report.get("request_contract", {})
+        contract = contract if isinstance(contract, dict) else {}
+        candidates = []
+        for item in [
+            *report.get("central_domains", []),
+            *contract.get("central_domains", []),
         ]:
+            candidates.append(item.get("domain") if isinstance(item, dict) else item)
+        candidates.extend([report.get("main_topic"), contract.get("topic")])
+        for candidate in candidates:
+            candidate = str(candidate or "").strip().casefold()
+            if candidate not in {"", "unknown", "request", "technology"}:
+                return candidate
 
-            return "software"
-
+        if local_matches:
+            top = local_matches[0]
+            data = top.get("data", {}) if isinstance(top, dict) else {}
+            if isinstance(data, dict):
+                for field in ("domain", "category", "type", "field"):
+                    value = str(data.get(field) or "").strip().casefold()
+                    if value:
+                        return value
+            match_type = str(top.get("type") or "").strip().casefold()
+            if match_type:
+                return match_type.removesuffix("_component").removesuffix("_term")
         return "technology"
 
     # ---------- local search ----------
@@ -1134,19 +997,19 @@ class TechnologyBrain:
             text
         )
 
+        local_matches = self.search_local_knowledge(
+            terms
+        )
+
         domain = self.detect_domain(
-            terms,
-            text
+            report,
+            local_matches
         )
 
         intent = self.detect_intent(
             report,
             terms,
             text
-        )
-
-        local_matches = self.search_local_knowledge(
-            terms
         )
         scanner_articles = scanner_evidence(data, limit=5)
 

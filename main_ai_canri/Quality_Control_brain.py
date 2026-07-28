@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from Brain_storage import atomic_write_json
+from domain_packages.code.capabilities import CodeCapabilityDetector
+from domain_packages.code.program_specs import detect_program_kind
 
 
 DATA_DIR = Path(__file__).parent / "data"
@@ -25,6 +27,7 @@ class QualityControlBrain:
 
     def __init__(self):
         self.statistics = self.load_json(STATS_FILE, {})
+        self.code_capability_detector = CodeCapabilityDetector()
         print("Quality Control Brain Loaded")
 
     # ---------- storage ----------
@@ -152,66 +155,8 @@ class QualityControlBrain:
 
     # ---------- request model ----------
 
-    def advanced_code_capabilities(self, lowered):
-        markers = {
-            "multi_file": [
-                "multi-file", "multiple files", "several files", "large system",
-                "large project", "architecture", "production-ready", "professional project",
-            ],
-            "database": ["database", "sqlite", "sql", "repository"],
-            "api": ["api", "rest", "endpoint", "fastapi", "web service"],
-            "authentication": ["authentication", "authenticate", "login", "bearer token"],
-            "async": ["async", "asynchronous", "await", "non-blocking"],
-            "concurrency": ["concurrent", "parallel", "worker", "thread", "task group"],
-            "security": ["security", "secure", "password hashing", "authorization"],
-            "cryptography": ["cryptography", "encrypt", "encryption", "decrypt", "fernet", "aes"],
-            "tests": ["tests", "testing", "pytest", "test suite", "coverage", "regression"],
-            "dependencies": ["dependencies", "requirements.txt", "pyproject.toml"],
-            "hardware_integration": [
-                "hardware", "arduino", "raspberry pi", "gpio", "sensor",
-                "serial", "microcontroller", "embedded", "firmware", "iot",
-            ],
-            "scientific_computing": [
-                "science", "scientific", "physics", "measurement", "calibration",
-                "experiment", "gravity", "temperature", "voltage", "signal",
-            ],
-        }
-        detected = {
-            name: any(marker in lowered for marker in values)
-            for name, values in markers.items()
-        }
-        advanced_count = sum(
-            detected[name]
-            for name in [
-                "database", "api", "authentication", "async", "concurrency",
-                "security", "cryptography", "tests", "hardware_integration",
-                "scientific_computing",
-            ]
-        )
-        detected["advanced_project"] = (
-            detected["multi_file"]
-            or advanced_count >= 3
-            or detected["hardware_integration"]
-        )
-        if detected["authentication"]:
-            detected["database"] = True
-            detected["api"] = True
-            detected["security"] = True
-        if detected["api"]:
-            detected["database"] = True
-            detected["async"] = True
-            detected["dependencies"] = True
-        if detected["cryptography"]:
-            detected["security"] = True
-            detected["dependencies"] = True
-        if detected["hardware_integration"]:
-            detected["async"] = True
-            detected["concurrency"] = True
-            detected["dependencies"] = True
-            detected["tests"] = True
-        if detected["advanced_project"]:
-            detected["multi_file"] = True
-        return detected
+    def advanced_code_capabilities(self, text, report=None):
+        return self.code_capability_detector.detect(text, report=report)
 
     def project_files_from_result(self, result):
         if not isinstance(result, dict):
@@ -249,7 +194,7 @@ class QualityControlBrain:
 
     def request_requirements(self, text, report):
         lowered = text.lower()
-        advanced_capabilities = self.advanced_code_capabilities(lowered)
+        advanced_capabilities = self.advanced_code_capabilities(text, report)
         topic = str(report.get("main_topic", "")).lower()
         intent = str(report.get("intent", "")).lower()
         contract = report.get("request_contract", {})
@@ -716,44 +661,7 @@ class QualityControlBrain:
         return int(value) if value.isdigit() else number_words.get(value)
 
     def detect_expected_program_kind(self, lowered):
-
-        equation_signals = [
-            "equation calculator", "calculator for equations", "solve equations",
-            "solve an equation", "linear equation calculator",
-            "quadratic equation calculator", "polynomial equation calculator",
-            "\u05de\u05d7\u05e9\u05d1\u05d5\u05df \u05de\u05e9\u05d5\u05d5\u05d0\u05d5\u05ea",
-        ]
-        if any(signal in lowered for signal in equation_signals):
-            return "equation_calculator"
-
-        checks = [
-            ("name_greeter", [
-                "asks for the user's name", "ask for the user's name",
-                "asks for names", "hello, <name>", "hello <name>",
-            ]),
-            ("expense_tracker", ["expense tracker", "expenses", "amount spent", "total amount", "search expenses", "category"]),
-            ("calendar_app", ["calendar", "appointment", "appointments", "event planner", "schedule event"]),
-            ("contact_book", ["contact book", "contacts", "phone book", "address book"]),
-            ("library_manager", ["library manager", "library management", "book management", "book tracker", "book library", "borrowed books", "reading list"]),
-            ("flashcards_app", ["flashcards", "flash cards", "study cards"]),
-            ("shop_inventory", ["shop inventory", "store inventory", "inventory tracker", "stock", "products in stock"]),
-            ("todo_app", ["to-do", "todo", "task list", "tasks", "mark a task"]),
-            ("notes_app", ["note app", "notes app", "notes", "note taking"]),
-            ("temperature_converter", [
-                "temperature converter", "convert temperature", "convert celsius",
-                "convert fahrenheit", "celsius or fahrenheit", "celsius to fahrenheit",
-                "fahrenheit to celsius",
-            ]),
-            ("weather_app", ["weather app", "weather", "humidity", "forecast", "weather api"]),
-            ("calculator", ["calculator", "calculate", "addition", "subtraction", "multiplication", "division"]),
-            ("quiz_game", ["quiz", "multiple choice"]),
-        ]
-
-        for kind, signals in checks:
-            if any(signal in lowered for signal in signals):
-                return kind
-
-        return None
+        return detect_program_kind(lowered)
 
     def extract_requested_code_features(self, lowered, program_kind=None):
 

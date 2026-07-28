@@ -32,55 +32,101 @@ _DATA_PROFILE_CACHE = None
 _DATA_PROFILE_SIGNATURE = None
 
 
-STOP_WORDS = {
-    "the", "and", "for", "with", "that", "this", "from", "into", "about",
-    "what", "when", "where", "which", "while", "there", "their", "have",
-    "has", "are", "was", "were", "will", "would", "can", "could", "should",
-    "you", "your", "how", "why", "who", "its", "not", "also", "does",
-    "make", "made", "give", "tell", "explain", "create", "write"
-}
-
-
-DOMAIN_HINTS = {
-    "code": [
-        "code", "function", "method", "library", "module", "package",
-        "python", "javascript", "api", "json", "class", "template"
-    ],
-    "creative": ["creative", "story", "character", "world", "idea", "plot"],
-    "game": ["game", "player", "enemy", "inventory", "level", "mechanic"],
-    "planner": ["plan", "task", "step", "dependency", "risk", "schedule"],
-    "language": ["language", "translate", "translation", "grammar", "synonym", "antonym"],
-    "knowledge": ["knowledge", "article", "source", "research", "fact", "wiki"],
-    "memory": ["memory", "chat", "conversation", "session"],
-    "science": ["science", "physics", "chemistry", "biology", "experiment"],
-    "geography": ["geography", "country", "city", "place", "map", "region"],
-    "technology": ["technology", "hardware", "software", "cpu", "gpu", "cloud"],
-    "vision": ["vision", "image", "photo", "video", "file"],
-    "voice": ["voice", "audio", "sound", "recording", "speech"],
-    "reasoning": ["reasoning", "logic", "rule", "pattern", "conclusion"],
-    "security": ["security", "risk", "safety", "danger", "policy"],
-    "emotion": ["emotion", "feeling", "support", "sad", "fear", "anger", "conversation"],
-    "image_generation": ["image", "generation", "prompt", "style", "composition", "lighting"],
-    "math": ["math", "number", "equation", "calculate", "unit"],
-    "history": ["history", "historical", "ancient", "medieval", "war", "empire", "timeline"],
-    "canri": ["canri", "assistant", "brain", "capability", "version", "identity", "agent"],
-}
-
-
 def normalize_text(value):
     return re.sub(r"\s+", " ", str(value).replace("_", " ").lower()).strip()
 
 
 def terms_from_text(text, limit=80):
     terms = []
-    for word in re.findall(r"[a-zA-Z][a-zA-Z0-9\-]{2,}", normalize_text(text)):
+    for word in re.findall(
+        r"[A-Za-z\u0590-\u05FF][A-Za-z0-9_\-\u0590-\u05FF]{1,}",
+        normalize_text(text),
+    ):
         word = word.strip("-")
-        if not word or word in STOP_WORDS or word in terms:
+        if not word or word in terms:
             continue
         terms.append(word)
         if len(terms) >= limit:
             break
     return terms
+
+
+def _append_semantic_value(terms, value, limit):
+    if isinstance(value, dict):
+        for key in ("word", "text", "name", "title", "domain", "value"):
+            if value.get(key):
+                _append_semantic_value(terms, value[key], limit)
+        return
+    if isinstance(value, (list, tuple, set)):
+        for item in value:
+            _append_semantic_value(terms, item, limit)
+            if len(terms) >= limit:
+                return
+        return
+    for term in terms_from_text(value, limit=limit):
+        if term not in terms:
+            terms.append(term)
+        if len(terms) >= limit:
+            return
+
+
+def terms_from_understanding(understanding, fallback_text="", limit=80):
+    """Use Understanding_brain's complete semantic report as retrieval input."""
+
+    report = understanding if isinstance(understanding, dict) else {}
+    contract = report.get("request_contract", {})
+    contract = contract if isinstance(contract, dict) else {}
+    frame = report.get("semantic_frame", {})
+    frame = frame if isinstance(frame, dict) else {}
+    terms = []
+
+    for tag in report.get("advanced_word_tags", []):
+        if not isinstance(tag, dict) or tag.get("is_stop_word"):
+            continue
+        if tag.get("semantic_tag") in {
+            "action", "action_command", "target_or_concept",
+            "proper_or_technical_name", "description", "quantity",
+        }:
+            _append_semantic_value(terms, tag.get("word"), limit)
+
+    for value in (
+        report.get("key_terms", []),
+        frame.get("main_action"),
+        frame.get("main_target"),
+        frame.get("targets", []),
+        frame.get("modifiers", []),
+        contract.get("topic"),
+        contract.get("target"),
+        contract.get("entities", []),
+        contract.get("features", []),
+        contract.get("requirements", []),
+    ):
+        _append_semantic_value(terms, value, limit)
+        if len(terms) >= limit:
+            break
+
+    if not terms:
+        _append_semantic_value(terms, fallback_text, limit)
+    return terms[:limit]
+
+
+def domains_from_understanding(understanding):
+    report = understanding if isinstance(understanding, dict) else {}
+    contract = report.get("request_contract", {})
+    contract = contract if isinstance(contract, dict) else {}
+    domains = []
+    values = [
+        report.get("main_topic"),
+        contract.get("topic"),
+        *report.get("central_domains", []),
+        *contract.get("central_domains", []),
+    ]
+    for value in values:
+        domain = value.get("domain") if isinstance(value, dict) else value
+        domain = str(domain or "").strip().lower()
+        if domain and domain not in {"unknown", "request", "memory_context"}:
+            domains.append(domain)
+    return list(dict.fromkeys(domains))[:8]
 
 
 def file_signature():
@@ -275,20 +321,20 @@ def build_data_profile(force=False):
     return profiles
 
 
-def detect_domains(query_terms):
-    domains = []
-    term_set = set(query_terms)
-    for domain, hints in DOMAIN_HINTS.items():
-        if term_set.intersection(hints):
-            domains.append(domain)
-    return domains
-
-
-def search_data_context(query, limit=10):
-    query_terms = terms_from_text(query, limit=60)
-    domains = detect_domains(query_terms)
+def search_data_context(query, limit=10, understanding=None):
+    query_terms = terms_from_understanding(understanding, query, limit=60)
+    domains = domains_from_understanding(understanding)
     profiles = build_data_profile()
     scored = []
+    document_frequency = {
+        term: sum(
+            1
+            for profile in profiles
+            if term in set(profile.get("terms", []))
+            or term in normalize_text(profile.get("file", ""))
+        )
+        for term in query_terms
+    }
 
     for profile in profiles:
         file_terms = set(profile.get("terms", []))
@@ -296,16 +342,17 @@ def search_data_context(query, limit=10):
         score = 0
 
         for term in query_terms:
+            rarity = max(1, min(8, len(profiles) // max(1, document_frequency.get(term, 1))))
             if term in file_terms:
-                score += 5
+                score += 3 + rarity
             if term in file_name:
-                score += 4
+                score += 5 + rarity
 
         for domain in domains:
             if domain in file_name:
                 score += 8
-            if any(hint in file_name for hint in DOMAIN_HINTS.get(domain, [])):
-                score += 3
+            if domain in file_terms:
+                score += 5
 
         if score <= 0:
             continue
@@ -340,6 +387,11 @@ def search_data_context(query, limit=10):
         "available": bool(scored),
         "query_terms": query_terms,
         "domains": domains,
+        "semantic_source": (
+            "Understanding_brain.request_contract"
+            if isinstance(understanding, dict) and understanding
+            else "text_fallback_without_domain_inference"
+        ),
         "matches": scored[:limit],
         "profiled_files": len(profiles),
         "total_profiled_bytes": sum(item.get("bytes", 0) for item in profiles),
@@ -371,37 +423,7 @@ def compact_match_for_brains(match):
     }
 
 
-def recommended_brains_from_domains(domains):
-    mapping = {
-        "code": ["Code_brain", "Technology_brain", "Quality_Control_brain"],
-        "creative": ["Creative_brain", "Quality_Control_brain"],
-        "game": ["Game_brain", "Creative_brain", "Quality_Control_brain"],
-        "planner": ["Planner_brain", "Reasoning_brain"],
-        "language": ["Language_brain", "Spelling_brain"],
-        "knowledge": ["Research_brain", "Fact_Check_brain"],
-        "memory": ["Memory_brain"],
-        "science": ["Science_brain", "Research_brain", "Fact_Check_brain"],
-        "geography": ["Geography_brain", "Research_brain"],
-        "technology": ["Technology_brain", "Research_brain"],
-        "vision": ["Vision_brain", "Security_brain"],
-        "voice": ["Voice_brain", "Vision_brain"],
-        "reasoning": ["Reasoning_brain", "Quality_Control_brain"],
-        "security": ["Security_brain", "Fact_Check_brain"],
-        "emotion": ["Emotion_brain", "Creative_brain", "Response_brain"],
-        "image_generation": ["Image_brain", "Creative_brain", "Quality_Control_brain"],
-        "math": ["Math_brain", "Reasoning_brain", "Quality_Control_brain"],
-        "history": ["History_brain", "Research_brain", "Fact_Check_brain"],
-        "canri": ["Response_brain", "Manager_brain", "Fact_Check_brain"],
-    }
-
-    brains = []
-    for domain in domains:
-        brains.extend(mapping.get(domain, []))
-
-    return list(dict.fromkeys(brains))
-
-
-def build_context_pack(context, query):
+def build_context_pack(context, query, understanding=None):
     matches = context.get("matches", [])
     domains = context.get("domains", [])
     compact_matches = [
@@ -431,7 +453,14 @@ def build_context_pack(context, query):
         "data_sources": compact_matches,
         "evidence_snippets": evidence_snippets[:10],
         "scanner_evidence": context.get("scanner_matches", [])[:8],
-        "recommended_brains": recommended_brains_from_domains(domains),
+        "recommended_brains": list(dict.fromkeys(
+            str(item)
+            for item in (
+                understanding.get("routing_hints", [])
+                if isinstance(understanding, dict) else []
+            )
+            if str(item).endswith("_brain")
+        )),
         "confidence": min(95, 35 + top_score) if compact_matches else 0,
         "usage_policy": [
             "Use local DATA as supporting context, not as the only truth source.",
@@ -442,8 +471,8 @@ def build_context_pack(context, query):
     }
 
 
-def build_shared_data_context(query, limit=12):
-    context = search_data_context(query, limit=limit)
+def build_shared_data_context(query, limit=12, understanding=None):
+    context = search_data_context(query, limit=limit, understanding=understanding)
     if search_scanner_knowledge is not None:
         try:
             context["scanner_matches"] = search_scanner_knowledge(
@@ -454,7 +483,11 @@ def build_shared_data_context(query, limit=12):
             context["scanner_matches"] = []
     else:
         context["scanner_matches"] = []
-    context["context_pack"] = build_context_pack(context, query)
+    context["understanding_contract"] = (
+        understanding.get("request_contract", {})
+        if isinstance(understanding, dict) else {}
+    )
+    context["context_pack"] = build_context_pack(context, query, understanding)
     return context
 
 
@@ -464,41 +497,8 @@ def context_view_for_brain(context, brain_name, max_sources=6):
     if not isinstance(context, dict):
         return {}
 
-    brain_domains = {
-        "Code_brain": {"code", "technology", "security"},
-        "Math_brain": {"math", "reasoning"},
-        "History_brain": {"history", "knowledge", "geography"},
-        "Story_brain": {"creative", "language"},
-        "Creative_brain": {
-            "creative", "planner", "language", "game", "code", "emotion",
-            "image_generation", "vision", "voice"
-        },
-        "Emotion_brain": {"emotion", "language", "memory"},
-        "Fact_Check_brain": {"knowledge", "science", "geography", "technology", "security"},
-        "Research_brain": {"knowledge", "science", "geography", "technology"},
-        "Language_brain": {"language"},
-        "Memory_brain": {"memory"},
-        "Security_brain": {"security", "code", "technology"},
-        "Vision_brain": {"vision"},
-        "Voice_brain": {"voice", "vision"},
-        "Image_brain": {"vision", "creative", "image_generation"},
-        "Game_brain": {"game", "creative", "code"},
-        "Planner_brain": {"planner", "reasoning"},
-        "Reasoning_brain": {"reasoning", "knowledge", "math"},
-        "Collaboration_brain": {"reasoning", "knowledge", "planner", "code", "creative", "math"},
-    }
-    unrestricted = {
-        "Manager_brain",
-        "Quality_Control_brain",
-        "Response_brain",
-        "Learning_brain",
-        "Collaboration_brain",
-        "Creative_brain"
-    }
     if brain_name == "Creative_brain":
         max_sources = max(max_sources, 12)
-    wanted = brain_domains.get(brain_name, set())
-    query_domains = set(context.get("domains", []))
 
     matches = []
     for match in context.get("matches", []):
@@ -510,18 +510,7 @@ def context_view_for_brain(context, brain_name, max_sources=6):
             for marker in [" rule", " rules", "risk rule", "safety rule", "release criteria"]
         ):
             continue
-        matched_terms = set(match.get("matched_terms", []))
-        relevant = brain_name in unrestricted or not wanted
-        if wanted and query_domains.intersection(wanted):
-            relevant = True
-        if wanted and any(
-            domain in file_name
-            or matched_terms.intersection(DOMAIN_HINTS.get(domain, []))
-            for domain in wanted
-        ):
-            relevant = True
-        if relevant:
-            matches.append(compact_match_for_brains(match))
+        matches.append(compact_match_for_brains(match))
         if len(matches) >= max_sources:
             break
 
@@ -548,6 +537,7 @@ def context_view_for_brain(context, brain_name, max_sources=6):
         "brain": brain_name,
         "query_terms": context.get("query_terms", [])[:30],
         "domains": context.get("domains", [])[:12],
+        "understanding_contract": context.get("understanding_contract", {}),
         "matches": matches,
         "evidence_snippets": evidence[:8],
         "scanner_matches": [
@@ -581,6 +571,7 @@ def context_view_for_brain(context, brain_name, max_sources=6):
         "profiled_files": context.get("profiled_files", 0),
         "total_profiled_bytes": context.get("total_profiled_bytes", 0),
         "selection_policy": "domain_filtered_lazy_context",
+        "ranking_policy": "understanding_ranked_relevant_excerpts",
         "full_context_available_to_manager": True
     }
 

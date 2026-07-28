@@ -1,6 +1,10 @@
 {
   "id": "understanding",
   "name": "Canri Whole-Request Understanding Package",
+  "semantic_routing": {
+    "select_as_user_domain": false,
+    "reason": "This package analyzes every request and is not itself a user-content domain."
+  },
   "primary_brain": "Understanding_brain",
   "supporting_brains": [
     "Spelling_brain", "Language_brain", "Memory_brain", "Data_context",

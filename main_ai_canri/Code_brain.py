@@ -6,11 +6,21 @@ Canri AI
 import json
 import re
 import ast
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
 from Code_artifact_catalog import CodeArtifactCatalog
 from Brain_storage import atomic_write_json, load_json_resilient
+from domain_packages.code.capabilities import (
+    CodeCapabilityDetector,
+    dictionary_semantic_terms,
+)
+from domain_packages.code.program_specs import (
+    detect_existing_program_kind as detect_existing_program_kind_from_specs,
+    detect_program_kind,
+)
+from Semantic_router import semantic_tokens
 
 try:
     from domain_packages.code.project_editor import ExistingProjectEditor
@@ -18,10 +28,14 @@ except Exception:
     ExistingProjectEditor = None
 
 try:
+    from domain_packages.creativity.naming import ContextualNamingEngine
+except Exception:
+    ContextualNamingEngine = None
+
+try:
     from Scanner_knowledge import scanner_evidence
 except Exception:
     scanner_evidence = None
-
 
 DATA_DIR = Path(__file__).parent / "data"
 
@@ -33,23 +47,7 @@ ASSEMBLY_PATTERNS_FILE = DATA_DIR / "Code_assembly_patterns.json"
 PROJECT_RECIPES_FILE = DATA_DIR / "Code_project_recipes.json"
 ADVANCED_PROFILES_FILE = DATA_DIR / "Code_advanced_profiles.json"
 FUNCTION_SELECTION_PROFILES_FILE = DATA_DIR / "Code_function_selection_profiles.json"
-
-GENERIC_CODE_TERMS = {
-    "code",
-    "coding",
-    "generation",
-    "code_generation",
-    "function",
-    "program",
-    "create",
-    "make",
-    "build",
-    "write",
-    "data",
-    "task",
-    "unknown"
-}
-
+_CODE_SEMANTIC_PROFILE_CACHE = {}
 
 class CodeQualityScorer:
     """Score generated code across independent, explainable dimensions."""
@@ -1346,99 +1344,23 @@ class CodeProjectReviewer:
 
 class AdvancedCodeProjectBuilder:
 
-    CAPABILITY_MARKERS = {
-        "multi_file": [
-            "multi-file", "multiple files", "several files", "large system",
-            "large project", "architecture", "production-ready", "professional project",
-        ],
-        "database": ["database", "sqlite", "sql", "persistence", "repository"],
-        "api": ["api", "rest", "endpoint", "fastapi", "web service"],
-        "authentication": ["authentication", "authenticate", "login", "user account", "bearer token"],
-        "async": ["async", "asynchronous", "await", "non-blocking"],
-        "concurrency": ["concurrent", "parallel", "worker", "thread", "task group"],
-        "security": ["security", "secure", "password hashing", "authorization"],
-        "cryptography": ["cryptography", "encrypt", "encryption", "decrypt", "fernet", "aes"],
-        "tests": ["tests", "testing", "pytest", "test suite", "coverage", "regression"],
-        "dependencies": ["dependencies", "requirements.txt", "pyproject.toml", "package"],
-        "layered_architecture": ["architecture", "service layer", "repository", "separation of concerns"],
-        "hardware_integration": [
-            "hardware", "arduino", "raspberry pi", "gpio", "sensor", "serial",
-            "microcontroller", "embedded", "firmware", "iot",
-        ],
-        "scientific_computing": [
-            "science", "scientific", "physics", "measurement", "calibration",
-            "experiment", "signal", "gravity", "temperature", "voltage",
-        ],
-    }
-
     def __init__(self, profiles=None):
         self.profiles = profiles if isinstance(profiles, dict) else {}
+        self.capability_detector = CodeCapabilityDetector(self.profiles)
+        self.naming_engine = (
+            ContextualNamingEngine()
+            if ContextualNamingEngine is not None
+            else None
+        )
 
     def detect_capabilities(self, text, report=None, existing_files=None):
-        lowered = str(text or "").lower()
-        capabilities = {
-            name: any(marker in lowered for marker in markers)
-            for name, markers in self.CAPABILITY_MARKERS.items()
-        }
-        advanced_count = sum(
-            capabilities[name]
-            for name in [
-                "database", "api", "authentication", "async", "concurrency",
-                "security", "cryptography", "tests", "hardware_integration",
-                "scientific_computing",
-            ]
+        return self.capability_detector.detect(
+            text,
+            report=report,
+            existing_files=existing_files,
         )
-        professional = any(
-            marker in lowered
-            for marker in [
-                "advanced", "professional", "production-ready", "production ready",
-                "large system", "large project", "robust architecture",
-            ]
-        )
-        capabilities["multi_file"] = capabilities["multi_file"] or advanced_count >= 3
-        capabilities["layered_architecture"] = (
-            capabilities["layered_architecture"] or capabilities["multi_file"]
-        )
-        capabilities["dependencies"] = (
-            capabilities["dependencies"] or capabilities["api"] or capabilities["cryptography"]
-        )
-        capabilities["tests"] = capabilities["tests"] or professional
-        if capabilities["hardware_integration"]:
-            capabilities["async"] = True
-            capabilities["concurrency"] = True
-            capabilities["multi_file"] = True
-            capabilities["tests"] = True
-        if capabilities["scientific_computing"]:
-            capabilities["tests"] = True
-        capabilities["security"] = (
-            capabilities["security"] or capabilities["authentication"] or capabilities["cryptography"]
-        )
-        if capabilities["authentication"]:
-            capabilities["database"] = True
-            capabilities["api"] = True
-        if capabilities["api"]:
-            capabilities["async"] = True
-            capabilities["database"] = True
-        capabilities["existing_project"] = bool(existing_files) or any(
-            marker in lowered
-            for marker in [
-                "existing project", "existing codebase", "current project",
-                "without breaking", "preserve behavior", "regression-safe",
-            ]
-        )
-        capabilities["professional"] = professional or capabilities["multi_file"]
-        capabilities["advanced_project"] = (
-            capabilities["multi_file"]
-            or advanced_count >= 3
-            or (
-                capabilities["hardware_integration"]
-                and capabilities["scientific_computing"]
-            )
-            or (capabilities["existing_project"] and professional)
-        )
-        return capabilities
 
-    def project_slug(self, text):
+    def project_slug(self, text, report=None):
         match = re.search(
             r"\b(?:called|named)\s+([a-zA-Z][a-zA-Z0-9_-]{1,30})",
             str(text or ""),
@@ -1446,17 +1368,10 @@ class AdvancedCodeProjectBuilder:
         )
         if match:
             return match.group(1).lower().replace("-", "_")
-        for label, markers in [
-            ("sensor_lab", ["sensor", "arduino", "raspberry pi", "gpio", "measurement"]),
-            ("task_service", ["task", "todo"]),
-            ("notes_service", ["note"]),
-            ("expense_service", ["expense"]),
-            ("inventory_service", ["inventory", "product"]),
-            ("account_service", ["account", "user"]),
-        ]:
-            if any(marker in str(text or "").lower() for marker in markers):
-                return label
-        return "canri_service"
+        if self.naming_engine is not None:
+            return self.naming_engine.project_names(text, report)["project_slug"]
+        digest = __import__("hashlib").sha256(str(text).encode("utf-8")).hexdigest()
+        return f"project_{digest[:10]}"
 
     def select_profile(self, capabilities):
         profiles = self.profiles.get("profiles", {})
@@ -1509,8 +1424,8 @@ testpaths = ["tests"]
 addopts = "-q"
 '''
 
-    def build_files(self, text, capabilities):
-        project_name = self.project_slug(text)
+    def build_files(self, text, capabilities, report=None):
+        project_name = self.project_slug(text, report)
         files = {
             "pyproject.toml": self.build_pyproject(project_name, capabilities),
             "app/__init__.py": '__all__ = ["service"]\n',
@@ -2235,7 +2150,7 @@ python -m pytest
     def build(self, text, report=None, existing_files=None):
         capabilities = self.detect_capabilities(text, report, existing_files)
         profile = self.select_profile(capabilities)
-        generated = self.build_files(text, capabilities)
+        generated = self.build_files(text, capabilities, report)
         existing = CodeProjectReviewer().normalize_files(existing_files)
         files = dict(existing)
         conflicts = []
@@ -2248,7 +2163,7 @@ python -m pytest
             files[path] = content
             added.append(path)
         return {
-            "project_name": self.project_slug(text),
+            "project_name": self.project_slug(text, report),
             "architecture_profile": profile,
             "project_files": files,
             "capabilities": capabilities,
@@ -2275,6 +2190,8 @@ class CodeBrain:
         self.function_selection_profiles = {}
         self.recipe_by_kind = {}
         self.code_by_id = {}
+        self.code_language_profiles = {}
+        self.code_task_profiles = {}
         self.library_catalog = CodeArtifactCatalog()
         self.self_reviewer = CodeSelfReviewer()
         self.project_reviewer = CodeProjectReviewer()
@@ -2347,6 +2264,7 @@ class CodeBrain:
             for item in self.code_database
             if item.get("id")
         }
+        self.build_code_semantic_profiles()
         recipe_values = (
             self.project_recipes.values()
             if isinstance(self.project_recipes, dict)
@@ -2361,6 +2279,44 @@ class CodeBrain:
                 key=lambda item: (item.get("quality_score", 0), item.get("version", 0)),
                 reverse=True
             )
+
+    def build_code_semantic_profiles(self):
+        """Derive language and task vocabulary from the current code catalog."""
+
+        try:
+            cache_key = (len(self.code_database), CODE_FILE.stat().st_mtime_ns)
+        except OSError:
+            cache_key = (len(self.code_database), None)
+        cached = _CODE_SEMANTIC_PROFILE_CACHE.get(cache_key)
+        if cached:
+            self.code_language_profiles, self.code_task_profiles = cached
+            return
+
+        language_profiles = {}
+        task_profiles = {}
+        for item in self.code_database:
+            if not isinstance(item, dict):
+                continue
+            language = str(item.get("language") or "").casefold().strip()
+            category = str(item.get("category") or "").casefold().strip()
+            item_terms = semantic_tokens(" ".join([
+                str(item.get("name") or ""),
+                str(item.get("description") or ""),
+                " ".join(str(value) for value in item.get("tags", [])),
+            ]))[:40]
+            if language:
+                profile = language_profiles.setdefault(language, Counter())
+                profile.update([language, *item_terms])
+            if category:
+                profile = task_profiles.setdefault(category, Counter())
+                profile.update([category, *item_terms])
+        self.code_language_profiles = language_profiles
+        self.code_task_profiles = task_profiles
+        _CODE_SEMANTIC_PROFILE_CACHE.clear()
+        _CODE_SEMANTIC_PROFILE_CACHE[cache_key] = (
+            language_profiles,
+            task_profiles,
+        )
 
     def choose_project_recipe(self, program_kind, text=""):
 
@@ -2399,6 +2355,9 @@ class CodeBrain:
                 code_result = results.get("Code_brain")
                 if isinstance(code_result, dict):
                     candidates.append(code_result.get("project_files"))
+                project_context = results.get("Project_context_brain")
+                if isinstance(project_context, dict):
+                    candidates.append(project_context.get("selected_files"))
 
         for candidate in candidates:
             normalized = self.project_reviewer.normalize_files(candidate)
@@ -2408,6 +2367,139 @@ class CodeBrain:
         if existing_code:
             return {"app/legacy.py": str(existing_code)}
         return {}
+
+    def build_local_model_result(
+        self,
+        data,
+        text,
+        terms,
+        task_type,
+        report,
+        existing_files,
+    ):
+        """Adopt reviewed local-model output when an on-device model is enabled."""
+
+        results = data.get("results", {}) if isinstance(data, dict) else {}
+        local_result = results.get("Local_LLM_brain", {}) if isinstance(results, dict) else {}
+        if not isinstance(local_result, dict) or local_result.get("status") != "completed":
+            return {}
+
+        generated_files = self.project_reviewer.normalize_files(
+            local_result.get("project_files")
+        )
+        if generated_files:
+            project_files = dict(existing_files)
+            changed_paths = []
+            for path, content in generated_files.items():
+                if project_files.get(path) != content:
+                    changed_paths.append(path)
+                project_files[path] = content
+            capabilities = self.advanced_project_builder.detect_capabilities(
+                text,
+                report,
+                existing_files,
+            )
+            capabilities["multi_file"] = len(project_files) > 1
+            capabilities["existing_project"] = bool(existing_files)
+            preserved = {
+                path: content
+                for path, content in existing_files.items()
+                if path not in changed_paths
+            }
+            review = self.project_reviewer.review(
+                project_files,
+                capabilities,
+                preserved,
+            )
+            if not review.get("ready"):
+                return {}
+            entrypoint = str(local_result.get("entrypoint") or "").strip()
+            if entrypoint not in project_files:
+                entrypoint = next(
+                    (
+                        path for path in project_files
+                        if path.endswith(("main.py", "app.py", "api.py"))
+                    ),
+                    next(iter(project_files)),
+                )
+            return {
+                "brain": "Code_brain",
+                "used_understanding_report": bool(report),
+                "used_memory_report": True,
+                "local_model_assisted": True,
+                "language": "python",
+                "task_type": task_type,
+                "program_kind": "local_model_reviewed_project",
+                "output_mode": "project_update" if existing_files else "project_bundle",
+                "professional_mode": True,
+                "project_files": project_files,
+                "existing_project_files": existing_files,
+                "generated_code": project_files.get(entrypoint, ""),
+                "entrypoint": entrypoint,
+                "changed_paths": sorted(changed_paths),
+                "capabilities": capabilities,
+                "project_review": review,
+                "request_text": text,
+                "terms_used": terms,
+                "matched_functions": sum(path.endswith(".py") for path in project_files),
+                "selected": sorted(changed_paths or project_files),
+                "change_safety": {
+                    "strategy": "reviewed_local_model_merge",
+                    "changed_files": sorted(changed_paths),
+                    "preserved_files": sorted(preserved),
+                    "unrelated_files_preserved": True,
+                },
+                "assembly_plan": {
+                    "architecture": "request_specific_local_model_project",
+                    "quality_gates": [
+                        "safe relative paths",
+                        "all Python files parse",
+                        "request capability coverage",
+                        "existing unrelated files preserved",
+                    ],
+                },
+                "missing": [],
+                "needs_creative_brain": False,
+                "needs_security": bool(capabilities.get("security")),
+                "confidence": 94,
+                "suggested_next_brains": [
+                    "Security_brain", "Quality_Control_brain", "Agent_brain"
+                ],
+            }
+
+        final_output = str(local_result.get("final_output") or "").strip()
+        fenced = re.search(r"```(?:python)?\s*(.*?)```", final_output, re.I | re.S)
+        candidate = fenced.group(1).strip() if fenced else final_output
+        if not candidate:
+            return {}
+        try:
+            ast.parse(candidate)
+        except (SyntaxError, ValueError):
+            return {}
+        return {
+            "brain": "Code_brain",
+            "used_understanding_report": bool(report),
+            "used_memory_report": True,
+            "local_model_assisted": True,
+            "language": "python",
+            "task_type": task_type,
+            "program_kind": "request_specific_python_program",
+            "output_mode": "code",
+            "professional_mode": True,
+            "generated_code": candidate,
+            "request_text": text,
+            "terms_used": terms,
+            "matched_functions": len([
+                node for node in ast.walk(ast.parse(candidate))
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            ]),
+            "selected": [],
+            "missing": [],
+            "needs_creative_brain": False,
+            "needs_security": False,
+            "confidence": 92,
+            "suggested_next_brains": ["Quality_Control_brain", "Response_brain"],
+        }
 
     def build_existing_project_continuation_result(
         self,
@@ -3340,6 +3432,11 @@ class CodeBrain:
     ):
 
         terms = []
+        ignored_terms = {
+            str(item.get("word", "")).strip().casefold()
+            for item in report.get("words", [])
+            if isinstance(item, dict) and item.get("is_stop_word")
+        }
 
         if isinstance(
             data,
@@ -3685,7 +3782,7 @@ class CodeBrain:
             if (
                 term
                 and len(term) > 1
-                and term not in GENERIC_CODE_TERMS
+                and term not in ignored_terms
                 and term not in clean_terms
             ):
                 clean_terms.append(term)
@@ -3695,39 +3792,50 @@ class CodeBrain:
     def detect_language(
         self,
         terms,
-        text
+        text,
+        report=None,
     ):
 
-        aliases = {
-            "python": ["python", "py", "פייתון"],
-            "javascript": ["javascript", "js", "node", "react"],
-            "html": ["html"],
-            "css": ["css"],
-            "java": ["java"],
-            "csharp": ["c#", "csharp", "c sharp"],
-            "cpp": ["c++", "cpp"],
-            "c": [" c ", "clang"],
-            "php": ["php"],
-            "sql": ["sql"]
+        report = report if isinstance(report, dict) else {}
+        code_context = report.get("code_context", {})
+        if isinstance(code_context, dict):
+            for hint in code_context.get("language_hints", []):
+                normalized = str(hint or "").casefold().strip()
+                if normalized in self.code_language_profiles:
+                    return normalized
+
+        def normalized_symbol(value):
+            value = str(value or "").casefold().replace("++", "pp")
+            value = value.replace("#", "sharp")
+            return re.sub(r"[^a-z0-9]", "", value)
+
+        term_set = {
+            normalized_symbol(value)
+            for value in [*terms, *semantic_tokens(text)]
+            if normalized_symbol(value)
         }
+        direct = [
+            language
+            for language in self.code_language_profiles
+            if normalized_symbol(language) in term_set
+        ]
+        if direct:
+            return max(
+                direct,
+                key=lambda language: sum(self.code_language_profiles[language].values()),
+            )
 
-        lowered = f" {text.lower()} "
-
-        for language, names in aliases.items():
-            for name in names:
-                if name in terms:
-                    return language
-
-                if len(name) <= 2:
-                    pattern = r"(?<![a-z0-9])" + re.escape(name) + r"(?![a-z0-9])"
-                    if re.search(pattern, lowered):
-                        return language
-                    continue
-
-                if name in lowered:
-                    return language
-
-        return None
+        scores = Counter()
+        query_terms = set(semantic_tokens(" ".join(str(value) for value in terms)))
+        for language, profile in self.code_language_profiles.items():
+            scores[language] = sum(
+                min(int(profile.get(term, 0)), 8)
+                for term in query_terms
+            )
+        if not scores:
+            return None
+        language, score = scores.most_common(1)[0]
+        return language if score >= 4 else None
 
     def detect_task_type(
         self,
@@ -3735,29 +3843,20 @@ class CodeBrain:
         text
     ):
 
-        lowered = text.lower()
-
-        task_map = {
-            "web_api": ["api", "endpoint", "route", "server", "http"],
-            "database": ["database", "sql", "insert", "select", "query"],
-            "game": ["game", "player", "enemy", "inventory", "score"],
-            "file_io": ["file", "json", "csv", "read", "write"],
-            "security": ["password", "hash", "encrypt", "token", "login"],
-            "algorithm": ["sort", "search", "binary", "algorithm", "pathfinding"],
-            "ui": ["button", "form", "card", "grid", "css", "html"],
-            "testing": ["test", "unit", "assert"],
-            "basic": ["hello", "function", "class", "loop", "variable"]
-        }
-
-        for task, keywords in task_map.items():
-            if any(
-                keyword in terms
-                or keyword in lowered
-                for keyword in keywords
-            ):
-                return task
-
-        return "general_code"
+        query_terms = set(semantic_tokens(" ".join([
+            str(text),
+            *[str(value) for value in terms],
+        ])))
+        scores = Counter()
+        for category, profile in self.code_task_profiles.items():
+            score = 12 if category in query_terms else 0
+            score += sum(
+                min(int(profile.get(term, 0)), 6)
+                for term in query_terms
+            )
+            if score:
+                scores[category] = score
+        return scores.most_common(1)[0][0] if scores else "general_code"
 
     def find_by_tags(
         self,
@@ -3808,8 +3907,6 @@ class CodeBrain:
         searchable = " ".join(searchable_parts).lower()
 
         for term in terms:
-            if term in GENERIC_CODE_TERMS:
-                continue
             if term and term in searchable:
                 score += 3
                 matched.append(term)
@@ -4429,68 +4526,17 @@ if __name__ == "__main__":
             lowered
         )
 
-        equation_signals = [
-            "equation calculator", "calculator for equations", "solve equations",
-            "solve an equation", "linear equation calculator",
-            "quadratic equation calculator", "polynomial equation calculator",
-            "\u05de\u05d7\u05e9\u05d1\u05d5\u05df \u05de\u05e9\u05d5\u05d5\u05d0\u05d5\u05ea",
-        ]
-        if any(signal in domain_text for signal in equation_signals):
-            return "equation_calculator"
-
-        recipe_matches = []
+        extra_aliases = {}
         for kind, recipes in self.recipe_by_kind.items():
-            aliases = {
+            extra_aliases[kind] = sorted({
                 str(alias).lower()
                 for recipe in recipes
                 for alias in recipe.get("aliases", [])
                 if alias
-            }
-            matched = [alias for alias in aliases if alias in domain_text]
-            if matched:
-                recipe_matches.append((max(len(alias) for alias in matched), kind))
-        if recipe_matches:
-            recipe_matches.sort(reverse=True)
-            return recipe_matches[0][1]
-
-        checks = [
-            ("name_greeter", [
-                "asks for the user's name", "ask for the user's name",
-                "asks for names", "hello, <name>", "hello <name>",
-            ]),
-            ("temperature_converter", [
-                "temperature converter", "convert temperature", "convert celsius",
-                "convert fahrenheit", "celsius or fahrenheit", "celsius to fahrenheit",
-                "fahrenheit to celsius",
-            ]),
-            ("weather_app", ["weather app", "weather", "humidity", "forecast", "weather api"]),
-            ("expense_tracker", ["expense tracker", "expenses", "amount spent", "total amount", "search expenses", "category"]),
-            ("calendar_app", ["calendar", "appointment", "appointments", "event planner", "events by date", "schedule event"]),
-            ("todo_app", ["to-do", "todo", "task list", "tasks", "mark a task"]),
-            ("contact_book", ["contact", "phone book", "address book", "email book"]),
-            ("library_manager", ["library", "books", "book tracker", "borrowed books", "reading list"]),
-            ("flashcards_app", ["flashcards", "flash cards", "study cards", "review cards"]),
-            ("shop_inventory", ["shop inventory", "store inventory", "inventory tracker", "stock", "products in stock"]),
-            ("habit_tracker", ["habit tracker", "daily habits", "habit log"]),
-            ("grade_book", ["grade book", "gradebook", "student grades"]),
-            ("recipe_manager", ["recipe manager", "cookbook", "recipes"]),
-            ("bookmark_manager", ["bookmark manager", "bookmarks", "saved links"]),
-            ("workout_log", ["workout log", "exercise tracker", "fitness log"]),
-            ("time_tracker", ["time tracker", "time log", "hours worked"]),
-            ("event_registration", ["event registration", "attendee list", "registrations"]),
-            ("file_catalog", ["file catalog", "file organizer", "document catalog"]),
-            ("notes_app", ["notes", "note taking", "save notes", "notebook"]),
-            ("password_manager", ["password manager", "accounts", "account names", "view one account"]),
-            ("quiz_game", ["quiz", "question game", "multiple choice"]),
-            ("guessing_game", ["guessing game", "guess number", "number game"]),
-            ("password_generator", ["password generator", "generate password", "random password"]),
-            ("calculator", ["calculator", "calculate", "math app", "add subtract", "multiply", "divide"]),
-            ("json_cli", ["json", "file", "save", "load"])
-        ]
-
-        for kind, signals in checks:
-            if any(signal in domain_text for signal in signals):
-                return kind
+            })
+        detected = detect_program_kind(domain_text, extra_aliases)
+        if detected:
+            return detected
 
         if task_type == "file_io":
             return "json_cli"
@@ -4498,26 +4544,7 @@ if __name__ == "__main__":
         return "number_summary"
 
     def detect_existing_program_kind(self, code):
-
-        lowered = str(code or "").lower()
-        markers = [
-            ("equation_calculator", ["def parse_equation", "def solve_equation"]),
-            ("notes_app", ["def add_note", "def list_notes"]),
-            ("expense_tracker", ["def add_expense", "def show_total"]),
-            ("library_manager", ["def add_book", "def borrow_book"]),
-            ("quiz_game", ["questions =", "def run_quiz"]),
-            ("temperature_converter", ["celsius", "fahrenheit", "def convert"]),
-            ("todo_app", ["def add_task", "def list_tasks"]),
-            ("contact_book", ["def add_contact", "def list_contacts"]),
-            ("shop_inventory", ["quantity", "price", "def add_"]),
-            ("weather_app", ["def fetch_weather", "humidity"]),
-            ("name_greeter", ["hello, {name}", "enter your name"]),
-            ("calculator", ["def calculate", "operator"]),
-        ]
-        for kind, required in markers:
-            if all(marker in lowered for marker in required):
-                return kind
-        return None
+        return detect_existing_program_kind_from_specs(code)
 
     def requested_count(self, text, target_pattern, default, minimum=1, maximum=50):
 
@@ -7936,7 +7963,6 @@ if __name__ == "__main__":
             if (
                 clean_memory_term
                 and clean_memory_term not in terms
-                and clean_memory_term not in GENERIC_CODE_TERMS
             ):
                 terms.append(
                     clean_memory_term
@@ -7944,7 +7970,8 @@ if __name__ == "__main__":
 
         language = self.detect_language(
             terms,
-            text
+            text,
+            report,
         )
 
         task_type = self.detect_task_type(
@@ -8038,6 +8065,21 @@ if __name__ == "__main__":
             data,
             existing_code
         )
+
+        local_model_result = self.build_local_model_result(
+            data,
+            text,
+            terms,
+            task_type,
+            report,
+            existing_project_files,
+        )
+        if local_model_result:
+            return self.finalize_code_result(
+                local_model_result,
+                scanner_articles,
+                library_context,
+            )
 
         continuation_result = self.build_existing_project_continuation_result(
             data,

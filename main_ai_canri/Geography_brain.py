@@ -19,6 +19,7 @@ from pathlib import Path
 
 from Brain_runtime import invoke_brain_safely
 from Brain_storage import atomic_write_json
+from domain_packages.understanding.context import stop_terms as understanding_stop_terms
 
 from Scanner_knowledge import scanner_evidence
 
@@ -35,14 +36,6 @@ CREATIVE_PROFILES_PATH = DATA_DIR / "Geography_creative_profiles.json"
 
 LOCAL_CONFIDENCE_THRESHOLD = 55
 MAX_LOCAL_RESULTS = 6
-
-STOP_WORDS = {
-    "the", "and", "for", "with", "that", "this", "what", "where",
-    "how", "why", "is", "are", "was", "were", "does", "did",
-    "about", "from", "into", "של", "את", "על", "מה", "איפה",
-    "איך", "למה", "זה", "אני", "רוצה"
-}
-
 
 class GeographyBrain:
 
@@ -377,6 +370,7 @@ class GeographyBrain:
                     "exists",
                     True
                 )
+                and not word_data.get("is_stop_word")
             ):
 
                 terms.append(
@@ -402,6 +396,7 @@ class GeographyBrain:
         )
 
         clean_terms = []
+        blocked = understanding_stop_terms(report)
 
         for term in terms:
 
@@ -413,7 +408,7 @@ class GeographyBrain:
 
             if (
                 term
-                and term not in STOP_WORDS
+                and term not in blocked
                 and term not in clean_terms
             ):
 

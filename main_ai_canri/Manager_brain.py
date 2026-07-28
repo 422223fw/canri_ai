@@ -57,6 +57,11 @@ except Exception:
     search_scanner_knowledge = None
 
 try:
+    from Semantic_router import load_semantic_profiles
+except Exception:
+    load_semantic_profiles = None
+
+try:
     from UnderstandingDk import (
         get_forms as dk_get_forms,
         get_meanings as dk_get_meanings,
@@ -395,45 +400,45 @@ class ManagerBrain:
 
         return context
 
-    def build_scanner_view(self, knowledge, brain_name):
+    def build_scanner_view(self, knowledge, brain_name, report=None):
         """Provide every brain a small relevant evidence pack, never the full database."""
 
-        factual_brains = {
-            "Research_brain", "Fact_Check_brain", "Reasoning_brain", "Science_brain",
-            "Geography_brain", "History_brain", "Technology_brain", "Learning_brain",
-            "Quality_Control_brain", "Collaboration_brain"
+        report = report if isinstance(report, dict) else {}
+        understanding_routes = {
+            str(item)
+            for item in report.get("routing_hints", [])
+            if str(item).endswith("_brain")
         }
-        preferred_collections = {
-            "Code_brain": {"code", "general", "trusted_knowledge"},
-            "Technology_brain": {"code", "product", "general", "trusted_knowledge"},
-            "Science_brain": {"general", "trusted_knowledge", "product"},
-            "Math_brain": {"general", "trusted_knowledge", "code"},
-            "History_brain": {"general", "trusted_knowledge"},
-            "Geography_brain": {"general", "trusted_knowledge", "product"},
-            "Language_brain": {"general", "trusted_knowledge", "code", "product"},
-            "Story_brain": {"general", "trusted_knowledge", "product"},
-            "Emotion_brain": {"general", "trusted_knowledge"},
-            "Planner_brain": {"general", "trusted_knowledge", "product", "code"},
-            "Reasoning_brain": {"general", "trusted_knowledge", "product", "code"},
-            "Research_brain": {"general", "trusted_knowledge", "product", "code"},
-            "Fact_Check_brain": {"general", "trusted_knowledge", "product", "code"},
-            "Creative_brain": {"product", "general", "code", "trusted_knowledge"},
-            "Understanding_brain": {"product", "general", "code", "trusted_knowledge"},
-        }
+        contract = report.get("request_contract", {})
+        contract = contract if isinstance(contract, dict) else {}
+        intent = str(report.get("intent") or contract.get("intent") or "").casefold()
+        topic = str(report.get("main_topic") or contract.get("topic") or "").casefold()
+        discovered_owner = ""
+        if load_semantic_profiles is not None and topic:
+            try:
+                discovered_owner = str(
+                    load_semantic_profiles().get(topic, {}).get("brain") or ""
+                )
+            except Exception:
+                discovered_owner = ""
+        factual_request = bool(
+            "Fact_Check_brain" in understanding_routes
+            or intent in {"question", "explanation", "research", "fact_check"}
+        )
+        evidence_owner = bool(
+            brain_name in understanding_routes
+            or (discovered_owner and brain_name == discovered_owner)
+        )
         raw_matches = []
         if isinstance(knowledge, dict):
             raw_matches = [
                 item for item in knowledge.get("matches", [])
                 if isinstance(item, dict)
             ]
-        wanted = preferred_collections.get(brain_name)
-        if wanted:
-            ordered = [
-                item for item in raw_matches if item.get("collection", "trusted_knowledge") in wanted
-            ]
-            ordered.extend(item for item in raw_matches if item not in ordered)
-        else:
-            ordered = raw_matches
+        # Scanner ranking already used Understanding_brain's semantic query.
+        # Every specialist receives the same bounded evidence order so local
+        # brain-specific keyword tables cannot reinterpret the request.
+        ordered = raw_matches
 
         matches = []
         for item in ordered[:8]:
@@ -455,9 +460,7 @@ class ManagerBrain:
                     "metadata": item.get("metadata", {})
                 })
 
-        required = bool(matches) and brain_name not in {
-            "Memory_brain", "Security_brain", "Response_brain"
-        }
+        required = bool(matches) and factual_request and evidence_owner
         return {
             "brain": brain_name,
             "available": bool(matches),
@@ -467,7 +470,7 @@ class ManagerBrain:
             "retrieval": "indexed_jsonl_excerpt",
             "policy": (
                 "Use relevant scanner evidence and preserve its sources. Separate evidence from inference."
-                if brain_name in factual_brains else
+                if required else
                 "Consider the relevant scanner excerpts before producing the specialist result; "
                 "use them when they improve accuracy and ignore unrelated evidence."
             )
@@ -597,9 +600,17 @@ class ManagerBrain:
 
         try:
             if build_shared_data_context:
-                context = build_shared_data_context(query, limit=12)
+                context = build_shared_data_context(
+                    query,
+                    limit=12,
+                    understanding=report,
+                )
             else:
-                context = search_data_context(query, limit=12)
+                context = search_data_context(
+                    query,
+                    limit=12,
+                    understanding=report,
+                )
         except Exception as error:
             return {
                 "available": False,
@@ -758,11 +769,6 @@ class ManagerBrain:
         memory_report = memory_report if isinstance(memory_report, dict) else {}
         contract = report.get("request_contract", {})
         contract = contract if isinstance(contract, dict) else {}
-        intent = str(
-            report.get("intent")
-            or contract.get("intent")
-            or "unknown"
-        ).lower()
         domains = []
 
         def add_domain(value):
@@ -780,23 +786,11 @@ class ManagerBrain:
         for item in contract.get("domain_details", []):
             add_domain(item)
 
-        # These are semantic intent-to-domain mappings. Lexical analysis is
-        # owned exclusively by Understanding_brain.
-        intent_domains = {
-            "code_generation": "code",
-            "code_analysis": "code",
-            "code_editing": "code",
-            "debugging": "code",
-            "game_creation": "game",
-            "image_generation": "image_generation",
-            "math": "math",
-            "movie_creation": "movie",
-            "story_creation": "story",
-            "translation": "language",
-        }
-        add_domain(intent_domains.get(intent))
-        if intent in {"question", "research"}:
-            add_domain("research")
+        intent = str(report.get("intent") or contract.get("intent") or "").lower().strip()
+        if intent and load_semantic_profiles is not None:
+            intent_profile = load_semantic_profiles().get(intent, {})
+            if intent_profile.get("selectable") and intent_profile.get("brain"):
+                add_domain(intent)
 
         if memory_report.get("memory_found", 0):
             domains.append("memory_context")
@@ -811,26 +805,6 @@ class ManagerBrain:
         contract = report.get("request_contract", {})
         contract = contract if isinstance(contract, dict) else {}
         topic = str(report.get("main_topic") or contract.get("topic") or "").lower()
-        intent = str(report.get("intent") or contract.get("intent") or "").lower()
-        requested_action = report.get("requested_action", {})
-        action_intent = ""
-        if isinstance(requested_action, dict):
-            action_intent = str(requested_action.get("intent_override", "")).lower()
-        intent_domains = {
-            "code_generation": "code",
-            "code_analysis": "code",
-            "code_editing": "code",
-            "debugging": "code",
-            "game_creation": "game",
-            "image_generation": "image_generation",
-            "math": "math",
-            "movie_creation": "movie",
-            "story_creation": "story",
-            "translation": "language",
-        }
-        for candidate in (action_intent, intent):
-            if candidate in intent_domains:
-                return intent_domains[candidate]
         if topic and topic not in {"unknown", "request"}:
             return topic
         for item in report.get("central_domains", []):
@@ -838,86 +812,77 @@ class ManagerBrain:
             domain = str(domain or "").lower().strip()
             if domain not in {"", "unknown", "request"}:
                 return domain
-        if intent in {"question", "research"}:
-            return "knowledge"
         return "general"
 
     def routing_decision(self, report, memory_report=None):
 
-        memory_report = memory_report or {}
+        report = report if isinstance(report, dict) else {}
+        memory_report = memory_report if isinstance(memory_report, dict) else {}
         primary = self.primary_domain(report, memory_report)
         contract = report.get("request_contract", {})
-        conversation = memory_report.get("conversation", {}) if isinstance(memory_report, dict) else {}
-        continuation_contract = contract.get("continuation", {}) if isinstance(contract, dict) else {}
+        contract = contract if isinstance(contract, dict) else {}
+        conversation = memory_report.get("conversation", {})
+        conversation = conversation if isinstance(conversation, dict) else {}
+        continuation_contract = contract.get("continuation", {})
+        continuation_contract = (
+            continuation_contract if isinstance(continuation_contract, dict) else {}
+        )
         continuation_requested = bool(
-            (isinstance(continuation_contract, dict) and continuation_contract.get("requested"))
-            or (isinstance(conversation, dict) and conversation.get("continuation_request"))
+            continuation_contract.get("requested")
+            or conversation.get("continuation_request")
             or (
-                isinstance(continuation_contract, dict)
-                and continuation_contract.get("agent_mode_requested")
-                and isinstance(conversation, dict)
+                continuation_contract.get("agent_mode_requested")
                 and conversation.get("agent_continuation")
             )
         )
         domains = self.focus_domains(
             self.classify_request(report, memory_report),
             report,
-            memory_report
+            memory_report,
         )
-        contract = report.get("request_contract", {})
-        action = contract.get("action") if isinstance(contract, dict) else None
-        intent = str(report.get("intent", "request"))
-        specialist_map = {
-            "code": "Code_brain",
-            "math": "Math_brain",
-            "movie": "Movie_brain",
-            "story": "Story_brain",
-            "image_generation": "Image_brain",
-            "voice": "Voice_brain",
-            "vision": "Vision_brain",
-            "science": "Science_brain",
-            "geography": "Geography_brain",
-            "technology": "Technology_brain",
-            "history": "History_brain",
-            "language": "Language_brain",
-            "knowledge": "Research_brain",
-            "game": "Game_brain",
-            "emotion": "Emotion_brain",
-        }
-        primary_brain = specialist_map.get(primary, "Reasoning_brain")
-        supporting = []
-        if primary in {"knowledge", "science", "geography", "technology", "history"}:
-            supporting.extend(["Research_brain", "Fact_Check_brain"])
-        if primary == "story":
-            supporting.extend(["Creative_brain", "Character_brain", "World_brain"])
-        if primary == "movie":
-            supporting.extend([
-                "Creative_brain", "Story_brain", "Character_brain", "World_brain",
-                "Image_brain", "Voice_brain", "Technology_brain", "Planner_brain",
-                "Quality_Control_brain"
-            ])
-        if primary == "code":
-            if intent != "code_analysis":
-                supporting.append("Planner_brain")
-            supporting.append("Quality_Control_brain")
-        if primary == "math":
-            supporting.extend(["Reasoning_brain", "Quality_Control_brain"])
-        if primary == "emotion":
-            supporting.extend(["Creative_brain", "Response_brain"])
+        semantic_details = [
+            item
+            for item in report.get("semantic_domain_profiles", [])
+            if isinstance(item, dict)
+        ]
+        primary_brain = next(
+            (
+                str(item.get("brain"))
+                for item in semantic_details
+                if str(item.get("domain", "")).lower() == primary
+                and str(item.get("brain", "")).endswith("_brain")
+            ),
+            "",
+        )
+        routes = [
+            str(item)
+            for item in report.get("routing_hints", [])
+            if str(item).endswith("_brain")
+        ]
+        if not primary_brain:
+            primary_brain = next(
+                (
+                    route for route in routes
+                    if route not in {
+                        "Memory_brain", "Understanding_brain", "Response_brain",
+                        "Planner_brain", "Reasoning_brain", "Security_brain",
+                        "Quality_Control_brain", "Fact_Check_brain",
+                        "Collaboration_brain", "Nervous_system_brain",
+                    }
+                ),
+                "Reasoning_brain",
+            )
+        supporting = [
+            route
+            for route in routes
+            if route not in {
+                primary_brain, "Memory_brain", "Understanding_brain", "Response_brain"
+            }
+        ]
 
-        for domain in domains:
-            specialist = specialist_map.get(domain)
-            if specialist and specialist != primary_brain:
-                supporting.append(specialist)
-        if len([domain for domain in domains if domain != "memory_context"]) > 1:
-            supporting.extend(["Planner_brain", "Reasoning_brain", "Collaboration_brain"])
-            if primary == "code" and any(
-                domain in domains for domain in {"science", "technology", "game", "creative"}
-            ):
-                supporting.append("Creative_brain")
-
-        agent_settings = report.get("_agent_settings", {}) if isinstance(report, dict) else {}
-        if isinstance(agent_settings, dict) and str(agent_settings.get("mode", "off")).lower() != "off":
+        agent_settings = report.get("_agent_settings", {})
+        agent_settings = agent_settings if isinstance(agent_settings, dict) else {}
+        if str(agent_settings.get("mode", "off")).lower() != "off":
             supporting.extend(["Project_context_brain", "Agent_brain"])
 
         return {
@@ -928,72 +893,31 @@ class ManagerBrain:
             "multi_domain": len([
                 domain for domain in domains if domain != "memory_context"
             ]) > 1,
-            "action": action,
-            "intent": intent,
+            "action": contract.get("action"),
+            "intent": str(report.get("intent", "request")),
             "continuation": continuation_requested,
-            "reason": f"intent={intent}; primary_domain={primary}; specialist={primary_brain}"
+            "reason": (
+                "Understanding_brain semantic profiles selected "
+                f"{primary_brain} for {primary}."
+            ),
         }
+
 
     def focus_domains(self, domains, report, memory_report):
 
         primary = self.primary_domain(report, memory_report)
-        domain_set = set(domains)
+        ordered = []
+        if primary not in {"", "unknown", "request", "general"}:
+            ordered.append(primary)
+        for domain in domains:
+            domain = str(domain or "").strip().lower()
+            if domain and domain not in ordered and domain != "memory_context":
+                ordered.append(domain)
+        focused = ordered[:MAX_CENTRAL_DOMAINS]
+        if "memory_context" in domains:
+            focused.append("memory_context")
+        return focused or ["general"]
 
-        if primary == "math":
-            return [
-                domain
-                for domain in ["math", "security", "memory_context"]
-                if domain in domain_set or domain == "math"
-            ]
-
-        if primary == "code":
-            ordered = [
-                "code", "science", "technology", "math", "game", "security",
-                "vision", "voice", "image_generation", "creative", "research"
-            ]
-            focused = [domain for domain in ordered if domain in domain_set]
-            if "code" not in focused:
-                focused.insert(0, "code")
-            core = focused[:MAX_CENTRAL_DOMAINS]
-            if "memory_context" in domain_set:
-                core.append("memory_context")
-            return list(dict.fromkeys(core))
-
-        if primary == "story":
-            return [
-                domain
-                for domain in ["story", "creative", "memory_context"]
-                if domain in domain_set or domain in {"story", "creative"}
-            ]
-
-        if primary == "movie":
-            ordered = [
-                "movie", "creative", "story", "image_generation", "voice",
-                "technology", "science", "research", "security", "memory_context"
-            ]
-            return [
-                domain
-                for domain in ordered
-                if domain in domain_set or domain in {"movie", "creative", "story"}
-            ]
-
-        if primary == "image_generation":
-            return [
-                domain
-                for domain in ["image_generation", "creative", "security", "memory_context"]
-                if domain in domain_set or domain in {"image_generation", "creative"}
-            ]
-
-        if primary == "knowledge":
-            return [
-                domain
-                for domain in ["research", "science", "technology", "geography", "history", "language", "general", "memory_context"]
-                if domain in domain_set
-            ] or ["research"]
-
-        memory_domain = ["memory_context"] if "memory_context" in domain_set else []
-        central = [domain for domain in domains if domain != "memory_context"][:MAX_CENTRAL_DOMAINS]
-        return list(dict.fromkeys(central + memory_domain))
 
     def build_plan(self, report, memory_report=None):
 
@@ -1023,37 +947,37 @@ class ManagerBrain:
             isinstance(requested_action, dict)
             and requested_action.get("is_action_request")
         )
+        understanding_routes = {
+            str(item)
+            for item in report.get("routing_hints", [])
+            if str(item).endswith("_brain")
+        }
         agent_creative_consultation = bool(
             agent_enabled
-            and primary in {"code", "game"}
             and (continuation_requested or contract.get("action") or action_requested)
         )
-        story_continuation = primary == "story" and continuation_requested
+        story_continuation = "Story_brain" in understanding_routes and continuation_requested
         central_domains = [
             domain for domain in domains
-            if domain not in {"memory_context", "creative"}
+            if domain != "memory_context"
         ]
         requirement_count = len(contract.get("requirements", [])) if isinstance(contract, dict) else 0
-        high_detail_request = (
-            primary in {"code", "planning", "knowledge", "science", "technology", "movie"}
-            and requirement_count >= 6
-        )
+        user_specialists = understanding_routes.difference({
+            "Memory_brain", "Understanding_brain", "Manager_brain",
+            "Security_brain", "Quality_Control_brain", "Response_brain",
+            "Learning_brain", "Nervous_system_brain",
+        })
+        high_detail_request = requirement_count >= 6 and bool(user_specialists)
         needs_collaboration = len(central_domains) > 1 or high_detail_request
-        needs_planner = (
-            (primary == "code" and intent != "code_analysis")
-            or primary in {"game", "planning", "movie"}
-            or needs_collaboration
-        )
-        needs_fact_check = primary in {
-            "knowledge", "science", "geography", "technology", "history", "movie"
-        }
+        needs_planner = "Planner_brain" in understanding_routes or needs_collaboration
+        needs_fact_check = "Fact_Check_brain" in understanding_routes
 
         phases = [
             {
                 "phase": "safety_and_context",
                 "brains": (
                     ([] if memory_report else ["Memory_brain"])
-                    + (["Emotion_brain"] if primary in {"emotion", "story"} and not story_continuation else [])
+                    + (["Emotion_brain"] if "Emotion_brain" in understanding_routes and not story_continuation else [])
                     + ["Security_brain"]
                 )
             },
@@ -1066,6 +990,10 @@ class ManagerBrain:
                 "brains": ["Creative_brain"] if agent_creative_consultation else []
             },
             {
+                "phase": "local_model_reasoning",
+                "brains": ["Local_LLM_brain"]
+            },
+            {
                 "phase": "core_reasoning",
                 "brains": ["Planner_brain"] if needs_planner else []
             },
@@ -1075,7 +1003,7 @@ class ManagerBrain:
             },
             {
                 "phase": "movie_synthesis",
-                "brains": ["Movie_brain"] if "movie" in domains else []
+                "brains": ["Movie_brain"] if "Movie_brain" in understanding_routes else []
             },
             {
                 "phase": "neural_integration",
@@ -1116,139 +1044,46 @@ class ManagerBrain:
         core = next(phase["brains"] for phase in phases if phase["phase"] == "core_reasoning")
         experts = next(phase["brains"] for phase in phases if phase["phase"] == "domain_experts")
 
-        if "research" in domains or "general" in domains:
-            core.extend([
-                "Research_brain",
-                "Reasoning_brain"
-            ])
-
-        if "code" in domains:
-            if intent != "code_analysis" or len(central_domains) > 1:
-                core.extend([
-                    "Reasoning_brain",
-                    "Technology_brain"
-                ])
-            experts.extend([
-                "Code_brain"
-            ])
-
-        if "science" in domains:
-            experts.extend([
-                "Science_brain",
-                "Research_brain",
-                "Reasoning_brain"
-            ])
-
-        if "language" in domains:
-            experts.extend([
-                "Language_brain"
-            ])
-
-        if "geography" in domains:
-            experts.extend([
-                "Geography_brain",
-                "Research_brain"
-            ])
-
-        if "technology" in domains:
-            experts.extend([
-                "Technology_brain",
-                "Research_brain"
-            ])
-
-        if "history" in domains:
-            experts.extend([
-                "History_brain",
-                "Research_brain"
-            ])
-
-        if "math" in domains:
-            experts.extend([
-                "Math_brain",
-                "Reasoning_brain"
-            ])
-
-        if "security" in domains:
-            phases[0]["brains"].append(
-                "Security_brain"
-            )
-
-        if "vision" in domains:
-            experts.extend([
-                "Vision_brain",
-                "Security_brain"
-            ])
-
-        if "image_generation" in domains:
-            experts.extend([
-                "Image_brain",
-                "Creative_brain",
-                "Security_brain"
-            ])
-
-        if "voice" in domains:
-            experts.extend([
-                "Voice_brain",
-                "Vision_brain",
-                "Security_brain"
-            ])
-
-        if "movie" in domains:
-            core.extend([
-                "Research_brain",
-                "Reasoning_brain",
-                "Planner_brain"
-            ])
-            experts.extend([
-                "Creative_brain",
-                "Character_brain",
-                "World_brain",
-                "Story_brain",
-                "Image_brain",
-                "Voice_brain",
-                "Technology_brain"
-            ])
-
-        if "emotion" in domains:
-            experts.extend([
-                "Creative_brain"
-            ])
-
-        if "creative" in domains and not story_continuation:
-            experts.extend([
-                "Creative_brain",
-                "Planner_brain"
-            ])
-
-        if "story" in domains:
-            if not story_continuation:
-                experts.append("Creative_brain")
-            routing_hints = {
-                str(item)
-                for item in report.get("routing_hints", [])
-            }
-            experts.extend(
-                brain_name
-                for brain_name in ("Character_brain", "World_brain")
-                if brain_name in routing_hints
-            )
-            experts.append("Story_brain")
-
-        if "game" in domains:
-            experts.extend([
-                "Game_brain",
-                "Creative_brain",
-                "Technology_brain",
-                "Planner_brain"
-            ])
+        phase_owners = {
+            "Memory_brain": "safety_and_context",
+            "Security_brain": "safety_and_context",
+            "Project_context_brain": "project_context",
+            "Local_LLM_brain": "local_model_reasoning",
+            "Planner_brain": "core_reasoning",
+            "Research_brain": "core_reasoning",
+            "Reasoning_brain": "core_reasoning",
+            "Nervous_system_brain": "neural_integration",
+            "Collaboration_brain": "brain_collaboration",
+            "Fact_Check_brain": "verification",
+            "Quality_Control_brain": "verification",
+            "Learning_brain": "verification",
+            "Agent_brain": "agent_execution",
+            "Answer_Enrichment_brain": "answer_enrichment",
+            "Response_brain": "response",
+        }
+        phase_lookup = {
+            phase["phase"]: phase["brains"]
+            for phase in phases
+        }
+        for brain_name in report.get("routing_hints", []):
+            brain_name = str(brain_name)
+            if brain_name in {"Understanding_brain", "Main_brain", "Manager_brain"}:
+                continue
+            target_phase = phase_owners.get(brain_name, "domain_experts")
+            if target_phase in {"project_context", "agent_execution"} and not agent_enabled:
+                continue
+            if (
+                target_phase == "domain_experts"
+                and brain_name == "Creative_brain"
+                and story_continuation
+            ):
+                continue
+            phase_lookup[target_phase].append(brain_name)
 
         if needs_collaboration:
-            core.extend(["Reasoning_brain", "Planner_brain"])
-            if "code" in central_domains and any(
-                domain in central_domains
-                for domain in {"science", "technology", "game", "creative"}
-            ):
-                experts.append("Creative_brain")
+            phase_lookup["core_reasoning"].extend(["Reasoning_brain", "Planner_brain"])
+            phase_lookup["brain_collaboration"].append("Collaboration_brain")
+
 
         for phase in phases:
             phase["brains"] = list(dict.fromkeys(phase["brains"]))
@@ -1365,7 +1200,8 @@ class ManagerBrain:
         context["knowledge_context"] = context["knowledge"]
         context["scanner_knowledge"] = self.build_scanner_view(
             context["knowledge"],
-            brain_name
+            brain_name,
+            report
         )
         context["shared_context"] = context.get("shared_context") or self.build_shared_brain_context(
             original_data,
