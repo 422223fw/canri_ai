@@ -1,4 +1,4 @@
-powershell -ExecutionPolicy Bypass -File .\push_canri.ps1
 
-Set-Location -LiteralPath "C:\Users\Anabel\Documents\Downloads\canri AI"
+
+powershell -ExecutionPolicy Bypass -File .\push_canri.ps1Set-Location -LiteralPath "C:\Users\Anabel\Documents\Downloads\canri AI"
 powershell -ExecutionPolicy Bypass -File .\push_canri.ps1
