@@ -373,6 +373,13 @@ class ResponseBrain:
             return False
         if self.is_action_request(report):
             return False
+
+        # A one-word greeting must remain conversational even if an upstream
+        # retrieval match accidentally added a specialist route.
+        normalized = re.sub(r"[^a-z\u0590-\u05FF]+", " ", str(text or "").casefold()).strip()
+        if normalized in {"hello", "hi", "hey", "shalom", "שלום", "היי", "הי"}:
+            return True
+
         substantive_routes = set(self.routed_brains(report)).difference({
             "Response_brain", "Language_brain", "Emotion_brain",
             "Memory_brain", "Understanding_brain",

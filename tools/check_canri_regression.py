@@ -94,6 +94,32 @@ def test_expense_tracker_code_and_quality():
     assert_true(quality["quality_score"] == 100, "Expense tracker should score 100 in this regression.")
 
 
+def test_standalone_greeting_never_routes_to_creative_profile():
+    understanding = UnderstandingBrain()
+    report = understanding.process({"original_text": "Hello"})
+
+    assert_true(report["intent"] == "greeting", "Hello must be recognized as a greeting.")
+    assert_true(report["main_topic"] == "general", "A greeting must not acquire a specialist topic.")
+    assert_true(
+        "creative" not in report["central_domains"],
+        "A greeting must not route to the Creative_brain domain."
+    )
+
+    response = ResponseBrain().process({
+        "original_text": "Hello",
+        "understanding": report,
+        "results": {
+            "Creative_brain": {
+                "final_text": "Internal Creative_brain profile that must never be shown."
+            }
+        },
+    })
+    assert_true(
+        response["display_text"].startswith("Hello, I am Canri"),
+        "A standalone greeting must return a natural greeting."
+    )
+
+
 def test_library_manager_full_requirements_and_old_json_compatibility():
     prompt = """Build a real runnable Python library management program for the terminal.
 The program must add books with title, author, and year, list books, search by
@@ -2059,6 +2085,7 @@ def test_nervous_system_combines_memory_scanner_and_quality_correction():
 
 def main():
     tests = [
+        test_standalone_greeting_never_routes_to_creative_profile,
         test_expense_tracker_code_and_quality,
         test_library_manager_full_requirements_and_old_json_compatibility,
         test_manager_retries_target_brain_until_quality_passes,

@@ -2824,6 +2824,19 @@ class UnderstandingBrain:
             main_topic
         )
 
+        # A standalone greeting has no subject domain.  Retrieval can find
+        # incidental matches for short words such as "Hello"; do not let one
+        # of those matches route a social greeting to a specialist brain.
+        normalized_greeting = re.sub(r"[^a-z\u0590-\u05FF]+", " ", str(text).casefold()).strip()
+        standalone_greetings = {
+            "hello", "hi", "hey", "shalom", "שלום", "היי", "הי",
+        }
+        if intent == "greeting" and normalized_greeting in standalone_greetings:
+            main_topic = "general"
+            topics = {}
+            topic_hits = {}
+            self._semantic_domain_details = []
+
         features = self.detect_requested_features(text, words)
         key_terms = self.extract_key_terms(words, word_reports)
         entities = self.extract_entities(original_text)

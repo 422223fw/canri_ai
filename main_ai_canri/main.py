@@ -532,9 +532,12 @@ def process_user_message(message, attached_files=None, progress_callback=None, s
 
     if isinstance(response_result, dict):
         agent_result = manager_result.get("results", {}).get("Agent_brain", {})
-        if isinstance(agent_result, dict) and agent_result.get("action_results"):
+        if isinstance(agent_result, dict) and (
+            agent_result.get("action_results")
+            or agent_result.get("status") == "approval_required"
+        ):
             # The GUI uses this structured result to show a review card with
-            # file-level additions, removals, and a code preview.
+            # file-level changes or an approval card before any write occurs.
             response_result["agent_changes"] = agent_result
         storage_payload = {
             "session_id": session_id,

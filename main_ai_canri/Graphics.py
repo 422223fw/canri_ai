@@ -384,6 +384,20 @@ class CanriGraphics:
             padx=(8, 0)
         )
 
+        self.knowledge_stats_button = self.create_button(
+            header,
+            text="Knowledge statistics",
+            command=self.show_knowledge_statistics,
+            bg=self.colors["panel_2"]
+        )
+        self.knowledge_stats_button.grid(
+            row=0,
+            column=3,
+            rowspan=2,
+            sticky="e",
+            padx=(8, 0)
+        )
+
         self.settings_button = self.create_button(
             header,
             text="Settings",
@@ -392,7 +406,7 @@ class CanriGraphics:
         )
         self.settings_button.grid(
             row=0,
-            column=3,
+            column=4,
             rowspan=2,
             sticky="e",
             padx=(8, 0)
@@ -1651,6 +1665,9 @@ class CanriGraphics:
                 trace_id = self.store_thinking_trace(thinking_trace)
             self.insert_thinking_button(trace_id)
 
+        if sender == "Canri" and isinstance(thinking_trace, dict):
+            self.insert_information_button(thinking_trace)
+
         if sender == "Canri" and isinstance(memory_usage, dict):
             self.insert_memory_button(memory_usage, trace_id)
 
@@ -1671,6 +1688,10 @@ class CanriGraphics:
         ]
 
     def insert_agent_change_card(self, agent_changes):
+        if agent_changes.get("status") == "approval_required":
+            self.insert_agent_approval_card(agent_changes)
+            return
+
         changes = self._agent_write_changes(agent_changes)
         if not changes:
             return
@@ -1752,6 +1773,138 @@ class CanriGraphics:
                 anchor="w",
             )
             extra.grid(row=9, column=0, columnspan=2, sticky="w", pady=(5, 0))
+
+        self.chat_area.window_create("end", window=card, padx=4, pady=4)
+        self.chat_area.insert("end", "\n\n")
+
+    def submit_agent_approval(self, approval_id, approved, approve_button, deny_button):
+        """Submit the Agent's existing approval command through the normal chat path."""
+        if not approval_id:
+            return
+        approve_button.configure(state="disabled")
+        deny_button.configure(state="disabled")
+        command = "approve" if approved else "reject"
+        self.message_entry.delete("1.0", "end")
+        self.message_entry.insert("1.0", f"/agent {command} {approval_id}")
+        self.send_message()
+
+    def insert_agent_approval_card(self, agent_changes):
+        approval_id = str(agent_changes.get("approval_id", "")).strip()
+        actions = [
+            item for item in agent_changes.get("planned_actions", [])
+            if isinstance(item, dict)
+        ]
+        if not approval_id:
+            return
+
+        file_actions = [
+            item for item in actions
+            if item.get("type") in {"write_file", "create_file"}
+        ]
+        command_actions = [
+            item for item in actions if item.get("type") == "run_command"
+        ]
+        card = tk.Frame(
+            self.chat_area,
+            bg=self.colors["panel_2"],
+            highlightthickness=1,
+            highlightbackground=self.colors["accent"],
+            padx=14,
+            pady=12,
+        )
+        card.grid_columnconfigure(0, weight=1)
+        tk.Label(
+            card,
+            text="Agent approval required",
+            bg=self.colors["panel_2"],
+            fg=self.colors["text"],
+            font=("Segoe UI", 11, "bold"),
+            anchor="w",
+        ).grid(row=0, column=0, columnspan=2, sticky="w")
+        tk.Label(
+            card,
+            text="No file has been changed. Review the planned actions, then approve or deny them.",
+            bg=self.colors["panel_2"],
+            fg=self.colors["muted"],
+            font=("Segoe UI", 9),
+            anchor="w",
+            justify="left",
+            wraplength=620,
+        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(4, 8))
+
+        row = 2
+        for action in file_actions[:10]:
+            target = str(action.get("path", "file"))
+            characters = int(action.get("content_characters", 0) or 0)
+            tk.Label(
+                card,
+                text=f"File: {target}",
+                bg=self.colors["panel_2"],
+                fg=self.colors["text"],
+                font=("Consolas", 9),
+                anchor="w",
+            ).grid(row=row, column=0, sticky="w")
+            tk.Label(
+                card,
+                text=f"{characters} characters planned",
+                bg=self.colors["panel_2"],
+                fg=self.colors["muted"],
+                font=("Consolas", 9),
+                anchor="e",
+            ).grid(row=row, column=1, sticky="e", padx=(18, 0))
+            row += 1
+        for action in command_actions[:5]:
+            command = action.get("command", "command")
+            if isinstance(command, list):
+                command = " ".join(str(part) for part in command)
+            tk.Label(
+                card,
+                text=f"Command: {command}",
+                bg=self.colors["panel_2"],
+                fg=self.colors["accent"],
+                font=("Consolas", 9),
+                anchor="w",
+            ).grid(row=row, column=0, columnspan=2, sticky="w")
+            row += 1
+
+        controls = tk.Frame(card, bg=self.colors["panel_2"])
+        controls.grid(row=row, column=0, columnspan=2, sticky="w", pady=(10, 0))
+        approve_button = tk.Button(
+            controls,
+            text="Approve",
+            bg=self.colors["success"],
+            fg=self.colors["app"],
+            activebackground=self.colors["accent_hover"],
+            activeforeground=self.colors["text"],
+            relief="flat",
+            cursor="hand2",
+            padx=14,
+            pady=5,
+        )
+        deny_button = tk.Button(
+            controls,
+            text="Deny",
+            bg=self.colors["danger"],
+            fg=self.colors["text"],
+            activebackground=self.colors["danger"],
+            activeforeground=self.colors["text"],
+            relief="flat",
+            cursor="hand2",
+            padx=14,
+            pady=5,
+        )
+        approve_button.configure(
+            command=lambda: self.submit_agent_approval(
+                approval_id, True, approve_button, deny_button
+            )
+        )
+        deny_button.configure(
+            command=lambda: self.submit_agent_approval(
+                approval_id, False, approve_button, deny_button
+            )
+        )
+        approve_button.pack(side="left")
+        deny_button.pack(side="left", padx=(8, 0))
 
         self.chat_area.window_create("end", window=card, padx=4, pady=4)
         self.chat_area.insert("end", "\n\n")
@@ -2020,6 +2173,130 @@ class CanriGraphics:
         self.chat_area.window_create("end", window=button)
         self.chat_area.insert("end", "\n\n")
 
+    @staticmethod
+    def information_size(value):
+        """Return the serialized size of context that was actually available to a request."""
+        if value in (None, "", [], {}):
+            return 0
+        try:
+            return len(json.dumps(value, ensure_ascii=False, default=str).encode("utf-8"))
+        except (TypeError, ValueError):
+            return len(str(value).encode("utf-8", errors="replace"))
+
+    @staticmethod
+    def information_item_count(value):
+        if isinstance(value, dict):
+            return len(value)
+        if isinstance(value, (list, tuple, set)):
+            return len(value)
+        return 1 if value not in (None, "") else 0
+
+    def information_usage_from_trace(self, thinking_trace):
+        """Explain retrieved request context by source, not just brain-to-brain traffic."""
+        trace = thinking_trace if isinstance(thinking_trace, dict) else {}
+        if isinstance(trace.get("final_trace"), dict):
+            trace = trace["final_trace"]
+        manager = trace.get("manager", {}) if isinstance(trace.get("manager"), dict) else {}
+        memory = trace.get("memory", {}) if isinstance(trace.get("memory"), dict) else {}
+        understanding = trace.get("understanding", {}) if isinstance(trace.get("understanding"), dict) else {}
+        brain_results = trace.get("brain_results", {}) if isinstance(trace.get("brain_results"), dict) else {}
+
+        sources = [
+            ("Conversation memory", memory),
+            ("Dictionary context", manager.get("dictionary_context")),
+            ("Local data context", manager.get("local_data_context")),
+            ("Knowledge and scanner context", manager.get("knowledge_context")),
+            ("Understanding report", understanding),
+            ("Specialist brain results", brain_results),
+        ]
+        rows = [
+            {
+                "source": name,
+                "bytes": self.information_size(value),
+                "items": self.information_item_count(value),
+                "used": value not in (None, "", [], {}),
+            }
+            for name, value in sources
+        ]
+        return {
+            "sources": rows,
+            "total_bytes": sum(row["bytes"] for row in rows),
+        }
+
+    def insert_information_button(self, thinking_trace):
+        usage = self.information_usage_from_trace(thinking_trace)
+        text = f"Information used {self.format_memory_size(usage['total_bytes'])}"
+        button = tk.Button(
+            self.chat_area,
+            text=text,
+            command=lambda: self.show_information_usage(usage),
+            bg=self.colors["panel_2"],
+            fg=self.colors["accent"],
+            activebackground=self.colors["accent_hover"],
+            activeforeground=self.colors["text"],
+            relief="flat",
+            borderwidth=0,
+            font=("Segoe UI", 9, "bold"),
+            cursor="hand2",
+            padx=10,
+            pady=4,
+        )
+        self.chat_area.window_create("end", window=button)
+        self.chat_area.insert("end", "\n")
+
+    def show_information_usage(self, usage):
+        window = tk.Toplevel(self.root)
+        window.title("CANRI Information Used")
+        window.geometry("820x560")
+        window.configure(bg=self.colors["app"])
+        tk.Label(
+            window,
+            text=(
+                f"Information used for this answer: "
+                f"{self.format_memory_size(usage.get('total_bytes'))}"
+            ),
+            bg=self.colors["app"],
+            fg=self.colors["text"],
+            font=("Segoe UI", 14, "bold"),
+            anchor="w",
+        ).pack(fill="x", padx=18, pady=(16, 8))
+        tk.Label(
+            window,
+            text=(
+                "This shows the request context supplied from each source. "
+                "It is separate from the Memory button, which measures all internal "
+                "read/write transfers between brains."
+            ),
+            bg=self.colors["app"],
+            fg=self.colors["muted"],
+            font=("Segoe UI", 10),
+            anchor="w",
+            justify="left",
+            wraplength=770,
+        ).pack(fill="x", padx=18, pady=(0, 10))
+        details = ScrolledText(
+            window,
+            bg=self.colors["panel"],
+            fg=self.colors["text"],
+            insertbackground=self.colors["text"],
+            relief="flat",
+            wrap="word",
+            font=("Consolas", 10),
+            padx=14,
+            pady=12,
+        )
+        details.pack(fill="both", expand=True, padx=18, pady=(0, 18))
+        for row in usage.get("sources", []):
+            state = "used" if row.get("used") else "not used"
+            details.insert(
+                "end",
+                f"{row.get('source')}: {state} | "
+                f"{self.format_memory_size(row.get('bytes'))} | "
+                f"{row.get('items')} top-level items\n"
+            )
+        details.configure(state="disabled")
+        self.bind_thinking_text_shortcuts(details)
+
     def memory_usage_text(self, memory_usage):
         lines = [
             "CANRI information-memory usage",
@@ -2185,6 +2462,118 @@ class CanriGraphics:
                 f"LFM {self.format_memory_size(item.get('lfm_bytes'))} | "
                 f"LLM {self.format_memory_size(item.get('llm_bytes'))}\n\n",
             )
+        details.configure(state="disabled")
+        self.bind_thinking_text_shortcuts(details)
+
+    def knowledge_storage_inventory(self):
+        """Summarize available CANRI data without loading large JSON or model files."""
+        project_dir = Path(__file__).parent
+        dictionary_dir = project_dir / "UnderstandingDk" / "data"
+        llm_dir = project_dir / "domain_packages" / "local_llm"
+        media_dirs = {
+            project_dir / "generated_images",
+            project_dir / "generated_movies",
+        }
+        groups = {
+            "Knowledge and scanners": {"files": [], "bytes": 0},
+            "Dictionaries and language data": {"files": [], "bytes": 0},
+            "Local LLM models and training": {"files": [], "bytes": 0},
+            "Generated media": {"files": [], "bytes": 0},
+            "Other CANRI data": {"files": [], "bytes": 0},
+        }
+
+        for path in project_dir.rglob("*"):
+            if not path.is_file() or "__pycache__" in path.parts:
+                continue
+            try:
+                size = path.stat().st_size
+            except OSError:
+                continue
+
+            lowered_name = path.name.casefold()
+            if dictionary_dir in path.parents or "dictionary" in lowered_name:
+                group = "Dictionaries and language data"
+            elif llm_dir in path.parents or path.suffix.casefold() in {".pt", ".pth", ".safetensors"}:
+                group = "Local LLM models and training"
+            elif any(media_dir == path.parent or media_dir in path.parents for media_dir in media_dirs):
+                group = "Generated media"
+            elif any(marker in lowered_name for marker in ("knowledge", "scanner", "scan_", "article", "source")):
+                group = "Knowledge and scanners"
+            elif path.suffix.casefold() in {".json", ".jsonl", ".csv", ".txt"}:
+                group = "Other CANRI data"
+            else:
+                continue
+
+            groups[group]["files"].append((path, size))
+            groups[group]["bytes"] += size
+
+        return groups
+
+    def show_knowledge_statistics(self):
+        inventory = self.knowledge_storage_inventory()
+        total_files = sum(len(group["files"]) for group in inventory.values())
+        total_bytes = sum(group["bytes"] for group in inventory.values())
+
+        window = tk.Toplevel(self.root)
+        window.title("CANRI Knowledge Statistics")
+        window.geometry("980x720")
+        window.configure(bg=self.colors["app"])
+
+        tk.Label(
+            window,
+            text=(
+                f"Knowledge available to CANRI  |  Files {total_files}  |  "
+                f"Stored data {self.format_memory_size(total_bytes)}"
+            ),
+            bg=self.colors["app"],
+            fg=self.colors["text"],
+            font=("Segoe UI", 13, "bold"),
+            anchor="w",
+        ).pack(fill="x", padx=18, pady=(16, 8))
+
+        note = (
+            "This is available project knowledge on disk, not per-request memory. "
+            "CANRI searches relevant excerpts instead of loading all of it for every answer."
+        )
+        tk.Label(
+            window,
+            text=note,
+            bg=self.colors["app"],
+            fg=self.colors["muted"],
+            font=("Segoe UI", 10),
+            anchor="w",
+            justify="left",
+            wraplength=920,
+        ).pack(fill="x", padx=18, pady=(0, 10))
+
+        details = ScrolledText(
+            window,
+            bg=self.colors["panel"],
+            fg=self.colors["text"],
+            insertbackground=self.colors["text"],
+            relief="flat",
+            wrap="word",
+            font=("Consolas", 10),
+            padx=14,
+            pady=12,
+        )
+        details.pack(fill="both", expand=True, padx=18, pady=(0, 18))
+        for name, group in inventory.items():
+            files = sorted(group["files"], key=lambda item: item[1], reverse=True)
+            details.insert(
+                "end",
+                f"{name}\n"
+                f"  Files: {len(files)} | Size: {self.format_memory_size(group['bytes'])}\n"
+            )
+            for path, size in files[:12]:
+                relative = path.relative_to(Path(__file__).parent)
+                details.insert(
+                    "end",
+                    f"  - {relative} ({self.format_memory_size(size)})\n"
+                )
+            if len(files) > 12:
+                details.insert("end", f"  ... and {len(files) - 12} more files\n")
+            details.insert("end", "\n")
         details.configure(state="disabled")
         self.bind_thinking_text_shortcuts(details)
 
