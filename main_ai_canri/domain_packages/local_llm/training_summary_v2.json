@@ -1,0 +1,217 @@
+{
+  "schema_version": 1,
+  "model": "canri_native_v2",
+  "requested_targets": {
+    "approximately_parameters": 5000000,
+    "approximately_checkpoint_bytes": 50000000,
+    "maximum_validation_loss": 1.5,
+    "weight_transfer_required": true
+  },
+  "architecture": {
+    "vocab_size": 8448,
+    "context_length": 256,
+    "embedding_size": 224,
+    "layers": 5,
+    "heads": 7,
+    "dropout": 0.1
+  },
+  "parameters": 4975264,
+  "training_checkpoint_bytes": 59785281,
+  "inference_checkpoint_bytes": 19928353,
+  "v2_training_steps": 4656,
+  "transferred_source_steps": 2679,
+  "training_runs": [
+    {
+      "started_utc": "2026-07-30T08:03:42.460752+00:00",
+      "finished_utc": "2026-07-30T08:15:00.558054+00:00",
+      "objective": "language_model",
+      "starting_step": 0,
+      "ending_step": 656,
+      "run_steps": 656,
+      "sequences_seen": 2624,
+      "last_loss": 1.6650468111038208,
+      "last_gradient_norm": 1.3245782852172852,
+      "ending_learning_rate": 0.00014917685986106532,
+      "skipped_nonfinite_batches": 0,
+      "elapsed_seconds": 682.86
+    },
+    {
+      "started_utc": "2026-07-30T08:17:08.739165+00:00",
+      "finished_utc": "2026-07-30T08:34:47.348714+00:00",
+      "objective": "instruction",
+      "starting_step": 656,
+      "ending_step": 1656,
+      "run_steps": 1000,
+      "sequences_seen": 4000,
+      "last_loss": 1.605722427368164,
+      "last_gradient_norm": 4.697084903717041,
+      "ending_learning_rate": 9.648743847135017e-05,
+      "skipped_nonfinite_batches": 0,
+      "elapsed_seconds": 1063.4
+    },
+    {
+      "started_utc": "2026-07-30T08:38:11.957091+00:00",
+      "finished_utc": "2026-07-30T09:18:34.565710+00:00",
+      "objective": "instruction",
+      "starting_step": 1656,
+      "ending_step": 3656,
+      "run_steps": 2000,
+      "sequences_seen": 8000,
+      "last_loss": 2.85506010055542,
+      "last_gradient_norm": 1.8828505277633667,
+      "ending_learning_rate": 8.093231195337473e-05,
+      "skipped_nonfinite_batches": 0,
+      "elapsed_seconds": 2431.25
+    },
+    {
+      "started_utc": "2026-07-30T09:24:27.880853+00:00",
+      "finished_utc": "2026-07-30T10:01:48.904072+00:00",
+      "objective": "instruction",
+      "starting_step": 3656,
+      "ending_step": 4656,
+      "run_steps": 1000,
+      "sequences_seen": 8000,
+      "last_loss": 1.9971649646759033,
+      "last_gradient_norm": 2.5692789554595947,
+      "ending_learning_rate": 5.370714479060059e-05,
+      "skipped_nonfinite_batches": 0,
+      "elapsed_seconds": 2247.36
+    }
+  ],
+  "data_inventory": {
+    "root": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\data",
+    "files": 41,
+    "bytes": 489133007,
+    "by_kind": {
+      "json": {
+        "files": 37,
+        "bytes": 67496556
+      },
+      "jsonl": {
+        "files": 4,
+        "bytes": 421636451
+      }
+    },
+    "fingerprint": "26b180976ad0f45b7afe6ae6b28a7bb247251caf0cd9e32547df6e9ccf2a982a",
+    "excluded_files": 126,
+    "excluded_bytes": 254530149,
+    "policy": {
+      "name": "canri_native_v2_quality_policy",
+      "source": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\domain_packages\\local_llm\\training_data_policy.json"
+    }
+  },
+  "validation": {
+    "loss": 2.328442,
+    "perplexity": 10.2619,
+    "examples": 512,
+    "assistant_tokens": 48179,
+    "clean_holdout_lineage": false,
+    "source_metrics": [
+      {
+        "source": "Knowledge_database.jsonl",
+        "examples": 128,
+        "assistant_tokens": 20912,
+        "loss": 2.805552,
+        "perplexity": 16.5362
+      },
+      {
+        "source": "Local_llm_instruction_seeds.json",
+        "examples": 1,
+        "assistant_tokens": 147,
+        "loss": 2.720481,
+        "perplexity": 15.1876
+      },
+      {
+        "source": "Code_library_templates.json",
+        "examples": 107,
+        "assistant_tokens": 14556,
+        "loss": 2.485623,
+        "perplexity": 12.0086
+      },
+      {
+        "source": "History_events.json",
+        "examples": 2,
+        "assistant_tokens": 192,
+        "loss": 2.481379,
+        "perplexity": 11.9577
+      },
+      {
+        "source": "History_figures.json",
+        "examples": 1,
+        "assistant_tokens": 46,
+        "loss": 2.480384,
+        "perplexity": 11.9459
+      },
+      {
+        "source": "Math_formulas.json",
+        "examples": 3,
+        "assistant_tokens": 221,
+        "loss": 2.419979,
+        "perplexity": 11.2456
+      },
+      {
+        "source": "Company_products.json",
+        "examples": 5,
+        "assistant_tokens": 344,
+        "loss": 2.367728,
+        "perplexity": 10.6731
+      },
+      {
+        "source": "Code_project_recipes.json",
+        "examples": 2,
+        "assistant_tokens": 243,
+        "loss": 1.641947,
+        "perplexity": 5.1652
+      },
+      {
+        "source": "Translation_dictionary.json",
+        "examples": 65,
+        "assistant_tokens": 1149,
+        "loss": 1.504318,
+        "perplexity": 4.5011
+      },
+      {
+        "source": "Units_dictionary.json",
+        "examples": 13,
+        "assistant_tokens": 527,
+        "loss": 1.442271,
+        "perplexity": 4.2303
+      },
+      {
+        "source": "Synonyms.json",
+        "examples": 75,
+        "assistant_tokens": 4407,
+        "loss": 1.366355,
+        "perplexity": 3.921
+      },
+      {
+        "source": "code.json",
+        "examples": 64,
+        "assistant_tokens": 3560,
+        "loss": 1.203818,
+        "perplexity": 3.3328
+      },
+      {
+        "source": "Technical_terms.json",
+        "examples": 46,
+        "assistant_tokens": 1875,
+        "loss": 0.958504,
+        "perplexity": 2.6078
+      }
+    ]
+  },
+  "generation_review": {
+    "automatic_average_score": 59.62,
+    "automatic_gate_passed": false,
+    "manual_review_required": true,
+    "manual_review_approved": false
+  },
+  "target_results": {
+    "parameter_target_met": true,
+    "training_checkpoint_near_50mb": true,
+    "validation_loss_target_met": false,
+    "weight_transfer_preserved": true,
+    "ready_for_canri": false
+  },
+  "activation_decision": "disabled_until_validation_and_generation_gates_pass"
+}

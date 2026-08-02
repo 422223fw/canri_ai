@@ -1,0 +1,220 @@
+{
+  "schema_version": 2,
+  "status": "experimental_not_ready",
+  "ready_for_canri_default_backend": false,
+  "automated_gate_passed": false,
+  "manual_review_approved": false,
+  "checkpoint": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\domain_packages\\local_llm\\checkpoints\\canri_native_v3.pt",
+  "checkpoint_bytes": 107511553,
+  "global_steps": 50000,
+  "parameters": 8950720,
+  "tokenizer_mode": "hybrid_word_byte_v3",
+  "vocabulary_size": 8448,
+  "held_out_examples": 512,
+  "held_out_assistant_tokens": 29521,
+  "held_out_skip": 0,
+  "evaluation_protocol": "assistant_only_deterministic_holdout_v2",
+  "instruction_split_version": "sha256_v1",
+  "instruction_split_enforced_since_step": -1,
+  "clean_holdout_lineage": false,
+  "validation_fraction": 0.05,
+  "validation_loss": 1.983178,
+  "perplexity": 7.2658,
+  "held_out_source_metrics": [
+    {
+      "source": "Local_llm_instruction_seeds.json",
+      "examples": 1,
+      "assistant_tokens": 105,
+      "loss": 3.765456,
+      "perplexity": 43.1834
+    },
+    {
+      "source": "quality_corpus/technical.jsonl",
+      "examples": 67,
+      "assistant_tokens": 2339,
+      "loss": 3.181078,
+      "perplexity": 24.0727
+    },
+    {
+      "source": "quality_corpus/structured_knowledge.jsonl",
+      "examples": 4,
+      "assistant_tokens": 207,
+      "loss": 3.036519,
+      "perplexity": 20.8326
+    },
+    {
+      "source": "Knowledge_database.jsonl",
+      "examples": 63,
+      "assistant_tokens": 10766,
+      "loss": 2.455966,
+      "perplexity": 11.6577
+    },
+    {
+      "source": "Company_products.json",
+      "examples": 4,
+      "assistant_tokens": 204,
+      "loss": 2.422164,
+      "perplexity": 11.2702
+    },
+    {
+      "source": "Code_library_templates.json",
+      "examples": 49,
+      "assistant_tokens": 5927,
+      "loss": 2.369324,
+      "perplexity": 10.6902
+    },
+    {
+      "source": "quality_corpus/math.jsonl",
+      "examples": 82,
+      "assistant_tokens": 1422,
+      "loss": 2.010343,
+      "perplexity": 7.4659
+    },
+    {
+      "source": "Translation_dictionary.json",
+      "examples": 30,
+      "assistant_tokens": 225,
+      "loss": 1.792683,
+      "perplexity": 6.0055
+    },
+    {
+      "source": "Math_formulas.json",
+      "examples": 3,
+      "assistant_tokens": 95,
+      "loss": 1.66512,
+      "perplexity": 5.2863
+    },
+    {
+      "source": "quality_corpus/language.jsonl",
+      "examples": 67,
+      "assistant_tokens": 2829,
+      "loss": 1.393,
+      "perplexity": 4.0269
+    },
+    {
+      "source": "quality_corpus/code.jsonl",
+      "examples": 3,
+      "assistant_tokens": 172,
+      "loss": 0.823535,
+      "perplexity": 2.2785
+    },
+    {
+      "source": "quality_corpus/conversation_en.jsonl",
+      "examples": 2,
+      "assistant_tokens": 100,
+      "loss": 0.64726,
+      "perplexity": 1.9103
+    },
+    {
+      "source": "Synonyms.json",
+      "examples": 38,
+      "assistant_tokens": 2215,
+      "loss": 0.518526,
+      "perplexity": 1.6796
+    },
+    {
+      "source": "quality_corpus/task_following.jsonl",
+      "examples": 27,
+      "assistant_tokens": 386,
+      "loss": 0.494388,
+      "perplexity": 1.6395
+    },
+    {
+      "source": "Technical_terms.json",
+      "examples": 24,
+      "assistant_tokens": 611,
+      "loss": 0.131583,
+      "perplexity": 1.1406
+    },
+    {
+      "source": "code.json",
+      "examples": 39,
+      "assistant_tokens": 1414,
+      "loss": 0.063043,
+      "perplexity": 1.0651
+    },
+    {
+      "source": "quality_corpus/code_behavior.jsonl",
+      "examples": 8,
+      "assistant_tokens": 367,
+      "loss": 0.062316,
+      "perplexity": 1.0643
+    },
+    {
+      "source": "Code_project_recipes.json",
+      "examples": 1,
+      "assistant_tokens": 137,
+      "loss": 0.026996,
+      "perplexity": 1.0274
+    }
+  ],
+  "readiness_gate": {
+    "maximum_validation_loss": 1.5,
+    "minimum_training_steps": 20000,
+    "manual_generation_review_required": true,
+    "clean_holdout_lineage_required": true
+  },
+  "training_data": {
+    "root": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\data",
+    "files": 41,
+    "bytes": 489133007,
+    "by_kind": {
+      "json": {
+        "files": 37,
+        "bytes": 67496556
+      },
+      "jsonl": {
+        "files": 4,
+        "bytes": 421636451
+      }
+    },
+    "fingerprint": "26b180976ad0f45b7afe6ae6b28a7bb247251caf0cd9e32547df6e9ccf2a982a",
+    "excluded_files": 126,
+    "excluded_bytes": 254530318,
+    "policy": {
+      "name": "canri_native_v2_quality_policy",
+      "source": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\domain_packages\\local_llm\\training_data_policy.json"
+    },
+    "objective": "instruction",
+    "sampling_mode": "balanced",
+    "samples_per_source": 4,
+    "instruction_split_version": "sha256_v1",
+    "corpus": null
+  },
+  "lineage": {
+    "trained_from_random_initialization": true,
+    "downloaded_base_model": false,
+    "seed": 42,
+    "weight_transfer": {
+      "source_checkpoint": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\domain_packages\\local_llm\\checkpoints\\canri_native_v2.pt",
+      "source_global_steps": 21250,
+      "source_parameters": 4975264,
+      "target_parameters": 8950720,
+      "source_config": {
+        "vocab_size": 8448,
+        "context_length": 256,
+        "embedding_size": 224,
+        "layers": 5,
+        "heads": 7,
+        "dropout": 0.1
+      },
+      "target_config": {
+        "vocab_size": 8448,
+        "context_length": 256,
+        "embedding_size": 320,
+        "layers": 5,
+        "heads": 10,
+        "dropout": 0.1
+      },
+      "tokenizer_strategy": "byte_v3",
+      "transferred_state_elements": 4137952,
+      "exact_tensors": 0,
+      "partial_tensors": 65,
+      "cloned_layer_tensors": 0,
+      "matched_token_rows": 2355,
+      "missing_tensors": []
+    },
+    "instruction_split_version": "sha256_v1",
+    "instruction_split_enforced_since_step": -1
+  }
+}

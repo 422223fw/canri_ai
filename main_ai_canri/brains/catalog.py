@@ -46,6 +46,7 @@ BRAIN_MODULES = (
     "Answer_Enrichment_brain",
     "Security_brain",
     "Project_context_brain",
+    "LLM_bridge_brain",
     "Local_LLM_brain",
     "Agent_brain",
 )

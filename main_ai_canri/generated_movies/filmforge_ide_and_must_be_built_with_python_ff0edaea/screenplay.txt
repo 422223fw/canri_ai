@@ -1,0 +1,395 @@
+**FILMFORGE IDE** AND MUST BE BUILT WITH PYTHON
+
+Genre: action | Tone: dark | Target: 90 minutes
+
+
+
+INT./EXT. TKINTER — PYTHON INTERFACE TO TCL/TK — PYTHON 3.14.6 DOCUMENTATION - DAWN
+
+The characters pursue the scene objective in tkinter — Python interface to Tcl/Tk — Python 3.14.6 documentation. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to save someone before it is too late, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_2
+
+INT./EXT. 6. USING PYTHON ON ANDROID — PYTHON 3.14.6 DOCUMENTATION - DAY
+
+The characters pursue the scene objective in 6. Using Python on Android — Python 3.14.6 documentation. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to save someone before it is too late, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_3
+
+INT./EXT. LZMA — COMPRESSION USING THE LZMA ALGORITHM — PYTHON 3.14.6 DOCUMENTATION - LATE AFTERNOON
+
+The characters pursue the scene objective in lzma — Compression using the LZMA algorithm — Python 3.14.6 documentation. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to save someone before it is too late, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_4
+
+INT./EXT. SQLITE3 — DB-API 2.0 INTERFACE FOR SQLITE DATABASES — PYTHON 3.14.6 DOCUMENTATION - NIGHT
+
+The characters pursue the scene objective in sqlite3 — DB-API 2.0 interface for SQLite databases — Python 3.14.6 documentation. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to save someone before it is too late, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_5
+
+INT./EXT. 4. USING PYTHON ON WINDOWS — PYTHON 3.14.6 DOCUMENTATION - DAWN
+
+The characters pursue the scene objective in 4. Using Python on Windows — Python 3.14.6 documentation. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to save someone before it is too late, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: A disruption makes inaction costly.
+CONTINUITY OUT: decision_pressure_for_scene_6
+
+INT./EXT. READLINE — GNU READLINE INTERFACE — PYTHON 3.14.6 DOCUMENTATION - DAY
+
+The characters pursue the scene objective in readline — GNU readline interface — Python 3.14.6 documentation. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to save someone before it is too late, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_7
+
+INT./EXT. PYTHON ON WINDOWS FAQ — PYTHON 3.14.6 DOCUMENTATION - LATE AFTERNOON
+
+The characters pursue the scene objective in Python on Windows FAQ — Python 3.14.6 documentation. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to save someone before it is too late, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_8
+
+INT./EXT. THE IMPLEMENTATION RESEARCH LOGIC MODEL: A METHOD FOR PLANNING, EXECUTING, REPORTING, AND SYNTHESIZING IMPLEMENTATION PROJECTS. - NIGHT
+
+The characters pursue the scene objective in The Implementation Research Logic Model: a method for planning, executing, reporting, and synthesizing implementation projects.. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to save someone before it is too late, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_9
+
+INT./EXT. TKINTER — PYTHON INTERFACE TO TCL/TK — PYTHON 3.14.6 DOCUMENTATION - DAWN
+
+The characters pursue the scene objective in tkinter — Python interface to Tcl/Tk — Python 3.14.6 documentation. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to save someone before it is too late, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_10
+
+INT./EXT. 6. USING PYTHON ON ANDROID — PYTHON 3.14.6 DOCUMENTATION - DAY
+
+The characters pursue the scene objective in 6. Using Python on Android — Python 3.14.6 documentation. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to save someone before it is too late, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The first irreversible choice closes the easy exit.
+CONTINUITY OUT: decision_pressure_for_scene_11
+
+INT./EXT. LZMA — COMPRESSION USING THE LZMA ALGORITHM — PYTHON 3.14.6 DOCUMENTATION - LATE AFTERNOON
+
+The characters pursue the scene objective in lzma — Compression using the LZMA algorithm — Python 3.14.6 documentation. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to save someone before it is too late, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_12
+
+INT./EXT. SQLITE3 — DB-API 2.0 INTERFACE FOR SQLITE DATABASES — PYTHON 3.14.6 DOCUMENTATION - NIGHT
+
+The characters pursue the scene objective in sqlite3 — DB-API 2.0 interface for SQLite databases — Python 3.14.6 documentation. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to save someone before it is too late, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_13
+
+INT./EXT. 4. USING PYTHON ON WINDOWS — PYTHON 3.14.6 DOCUMENTATION - DAWN
+
+The characters pursue the scene objective in 4. Using Python on Windows — Python 3.14.6 documentation. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to save someone before it is too late, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_14
+
+INT./EXT. READLINE — GNU READLINE INTERFACE — PYTHON 3.14.6 DOCUMENTATION - DAY
+
+The characters pursue the scene objective in readline — GNU readline interface — Python 3.14.6 documentation. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to save someone before it is too late, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_15
+
+INT./EXT. PYTHON ON WINDOWS FAQ — PYTHON 3.14.6 DOCUMENTATION - LATE AFTERNOON
+
+The characters pursue the scene objective in Python on Windows FAQ — Python 3.14.6 documentation. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to save someone before it is too late, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: A partial victory creates a larger problem.
+CONTINUITY OUT: decision_pressure_for_scene_16
+
+INT./EXT. THE IMPLEMENTATION RESEARCH LOGIC MODEL: A METHOD FOR PLANNING, EXECUTING, REPORTING, AND SYNTHESIZING IMPLEMENTATION PROJECTS. - NIGHT
+
+The characters pursue the scene objective in The Implementation Research Logic Model: a method for planning, executing, reporting, and synthesizing implementation projects.. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to save someone before it is too late, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_17
+
+INT./EXT. TKINTER — PYTHON INTERFACE TO TCL/TK — PYTHON 3.14.6 DOCUMENTATION - DAWN
+
+The characters pursue the scene objective in tkinter — Python interface to Tcl/Tk — Python 3.14.6 documentation. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to save someone before it is too late, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_18
+
+INT./EXT. 6. USING PYTHON ON ANDROID — PYTHON 3.14.6 DOCUMENTATION - DAY
+
+The characters pursue the scene objective in 6. Using Python on Android — Python 3.14.6 documentation. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to save someone before it is too late, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_19
+
+INT./EXT. LZMA — COMPRESSION USING THE LZMA ALGORITHM — PYTHON 3.14.6 DOCUMENTATION - LATE AFTERNOON
+
+The characters pursue the scene objective in lzma — Compression using the LZMA algorithm — Python 3.14.6 documentation. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to save someone before it is too late, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_20
+
+INT./EXT. SQLITE3 — DB-API 2.0 INTERFACE FOR SQLITE DATABASES — PYTHON 3.14.6 DOCUMENTATION - NIGHT
+
+The characters pursue the scene objective in sqlite3 — DB-API 2.0 interface for SQLite databases — Python 3.14.6 documentation. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to save someone before it is too late, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: New evidence changes what the goal means.
+CONTINUITY OUT: decision_pressure_for_scene_21
+
+INT./EXT. 4. USING PYTHON ON WINDOWS — PYTHON 3.14.6 DOCUMENTATION - DAWN
+
+The characters pursue the scene objective in 4. Using Python on Windows — Python 3.14.6 documentation. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to save someone before it is too late, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_22
+
+INT./EXT. READLINE — GNU READLINE INTERFACE — PYTHON 3.14.6 DOCUMENTATION - DAY
+
+The characters pursue the scene objective in readline — GNU readline interface — Python 3.14.6 documentation. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to save someone before it is too late, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_23
+
+INT./EXT. PYTHON ON WINDOWS FAQ — PYTHON 3.14.6 DOCUMENTATION - LATE AFTERNOON
+
+The characters pursue the scene objective in Python on Windows FAQ — Python 3.14.6 documentation. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to save someone before it is too late, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_24
+
+INT./EXT. THE IMPLEMENTATION RESEARCH LOGIC MODEL: A METHOD FOR PLANNING, EXECUTING, REPORTING, AND SYNTHESIZING IMPLEMENTATION PROJECTS. - NIGHT
+
+The characters pursue the scene objective in The Implementation Research Logic Model: a method for planning, executing, reporting, and synthesizing implementation projects.. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to save someone before it is too late, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_25
+
+INT./EXT. TKINTER — PYTHON INTERFACE TO TCL/TK — PYTHON 3.14.6 DOCUMENTATION - DAWN
+
+The characters pursue the scene objective in tkinter — Python interface to Tcl/Tk — Python 3.14.6 documentation. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to save someone before it is too late, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The protagonist accepts responsibility.
+CONTINUITY OUT: decision_pressure_for_scene_26
+
+INT./EXT. 6. USING PYTHON ON ANDROID — PYTHON 3.14.6 DOCUMENTATION - DAY
+
+The characters pursue the scene objective in 6. Using Python on Android — Python 3.14.6 documentation. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to save someone before it is too late, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_27
+
+INT./EXT. LZMA — COMPRESSION USING THE LZMA ALGORITHM — PYTHON 3.14.6 DOCUMENTATION - LATE AFTERNOON
+
+The characters pursue the scene objective in lzma — Compression using the LZMA algorithm — Python 3.14.6 documentation. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to save someone before it is too late, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_28
+
+INT./EXT. SQLITE3 — DB-API 2.0 INTERFACE FOR SQLITE DATABASES — PYTHON 3.14.6 DOCUMENTATION - NIGHT
+
+The characters pursue the scene objective in sqlite3 — DB-API 2.0 interface for SQLite databases — Python 3.14.6 documentation. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to save someone before it is too late, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_29
+
+INT./EXT. 4. USING PYTHON ON WINDOWS — PYTHON 3.14.6 DOCUMENTATION - DAWN
+
+The characters pursue the scene objective in 4. Using Python on Windows — Python 3.14.6 documentation. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to save someone before it is too late, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The cost rises and the next scene inherits an unresolved decision.
+CONTINUITY OUT: decision_pressure_for_scene_30
+
+INT./EXT. READLINE — GNU READLINE INTERFACE — PYTHON 3.14.6 DOCUMENTATION - DAY
+
+The characters pursue the scene objective in readline — GNU readline interface — Python 3.14.6 documentation. Physical behavior, eyelines, screen direction, props, weather, and emotional state remain continuous.
+
+RELUCTANT HERO CONCEPT
+We need to save someone before it is too late, but not at the cost we keep ignoring.
+
+RELUCTANT HERO CONCEPT
+Then make the choice this moment requires. The immediate objective is blocked by a concrete opposing action.
+
+ACTION BEAT: The decisive choice resolves theme and conflict.
+CONTINUITY OUT: decision_pressure_for_scene_30

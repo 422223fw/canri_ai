@@ -1,0 +1,217 @@
+{
+  "schema_version": 1,
+  "created_utc": "2026-07-30T10:04:50.195472+00:00",
+  "checkpoint": "main_ai_canri\\domain_packages\\local_llm\\checkpoints\\canri_native_v2.pt",
+  "benchmark": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\data\\Local_llm_generation_benchmark.json",
+  "cases": 12,
+  "automatic_average_score": 59.62,
+  "automatic_gate_passed": false,
+  "manual_review_required": true,
+  "manual_review_approved": false,
+  "results": [
+    {
+      "id": "greeting_en",
+      "category": "conversation",
+      "prompt": "Hello. Introduce yourself in one clear sentence.",
+      "output": "The the the corestens of the oures of. The the.\nSource: English Wikipedia.",
+      "checks": {
+        "nonempty_and_bounded": true,
+        "required_signal_present": false,
+        "all_mandatory_signals_present": true,
+        "forbidden_signal_absent": true,
+        "repetition_bounded": true,
+        "unknown_token_artifacts_bounded": true
+      },
+      "score": 69.23,
+      "word_count": 13,
+      "repeated_word_ratio": 0.4615
+    },
+    {
+      "id": "greeting_he",
+      "category": "conversation",
+      "prompt": "שלום, תענה במשפט קצר וברור.",
+      "output": "",
+      "checks": {
+        "nonempty_and_bounded": false,
+        "required_signal_present": false,
+        "all_mandatory_signals_present": true,
+        "forbidden_signal_absent": true,
+        "repetition_bounded": true,
+        "unknown_token_artifacts_bounded": true
+      },
+      "score": 0.0,
+      "word_count": 0,
+      "repeated_word_ratio": 0.0
+    },
+    {
+      "id": "arithmetic",
+      "category": "math",
+      "prompt": "Answer only with the result: 2 + 3",
+      "output": "A unit of data.",
+      "checks": {
+        "nonempty_and_bounded": true,
+        "required_signal_present": false,
+        "all_mandatory_signals_present": true,
+        "forbidden_signal_absent": true,
+        "repetition_bounded": true,
+        "unknown_token_artifacts_bounded": true
+      },
+      "score": 69.23,
+      "word_count": 4,
+      "repeated_word_ratio": 0.0
+    },
+    {
+      "id": "quadratic",
+      "category": "math",
+      "prompt": "Solve x^2 - 5x + 6 = 0 and give both solutions.",
+      "output": "",
+      "checks": {
+        "nonempty_and_bounded": false,
+        "required_signal_present": true,
+        "all_mandatory_signals_present": false,
+        "forbidden_signal_absent": true,
+        "repetition_bounded": true,
+        "unknown_token_artifacts_bounded": true
+      },
+      "score": 0.0,
+      "word_count": 0,
+      "repeated_word_ratio": 0.0
+    },
+    {
+      "id": "gravity",
+      "category": "science",
+      "prompt": "What is gravity? Give a short scientific explanation.",
+      "output": "The is a a the a of the the sinering of of science. The of atind of is the of spa of. It of an",
+      "checks": {
+        "nonempty_and_bounded": true,
+        "required_signal_present": false,
+        "all_mandatory_signals_present": true,
+        "forbidden_signal_absent": true,
+        "repetition_bounded": false,
+        "unknown_token_artifacts_bounded": true
+      },
+      "score": 61.54,
+      "word_count": 25,
+      "repeated_word_ratio": 0.6
+    },
+    {
+      "id": "python_loop",
+      "category": "code",
+      "prompt": "Write Python code that asks for a name until the user types exit.",
+      "output": "``python\nimport tkinter\nos.pate(data)\n```\n\nReturn the the list the corins of of the data of data the of per",
+      "checks": {
+        "nonempty_and_bounded": true,
+        "required_signal_present": true,
+        "all_mandatory_signals_present": false,
+        "forbidden_signal_absent": true,
+        "repetition_bounded": true,
+        "unknown_token_artifacts_bounded": true
+      },
+      "score": 69.23,
+      "word_count": 21,
+      "repeated_word_ratio": 0.4286
+    },
+    {
+      "id": "code_explanation",
+      "category": "code",
+      "prompt": "Explain what print('Hello') does in Python.",
+      "output": "The the corates and the the splons and.",
+      "checks": {
+        "nonempty_and_bounded": true,
+        "required_signal_present": false,
+        "all_mandatory_signals_present": true,
+        "forbidden_signal_absent": true,
+        "repetition_bounded": true,
+        "unknown_token_artifacts_bounded": true
+      },
+      "score": 69.23,
+      "word_count": 8,
+      "repeated_word_ratio": 0.5
+    },
+    {
+      "id": "fact_uncertainty",
+      "category": "reasoning",
+      "prompt": "What should you do when a factual claim cannot be verified?",
+      "output": "``python\nimport tkinter\nos.paterins()\n```\n\nRe the the math the field of math of the data of of data the of suror",
+      "checks": {
+        "nonempty_and_bounded": true,
+        "required_signal_present": false,
+        "all_mandatory_signals_present": true,
+        "forbidden_signal_absent": true,
+        "repetition_bounded": true,
+        "unknown_token_artifacts_bounded": true
+      },
+      "score": 69.23,
+      "word_count": 22,
+      "repeated_word_ratio": 0.4545
+    },
+    {
+      "id": "emotional_support",
+      "category": "conversation",
+      "prompt": "I had a tiring day. Give me one simple supportive suggestion.",
+      "output": "the the veres the sting the Sterered of the restiong of of steratiory and the pa",
+      "checks": {
+        "nonempty_and_bounded": true,
+        "required_signal_present": true,
+        "all_mandatory_signals_present": true,
+        "forbidden_signal_absent": true,
+        "repetition_bounded": true,
+        "unknown_token_artifacts_bounded": true
+      },
+      "score": 100.0,
+      "word_count": 16,
+      "repeated_word_ratio": 0.4375
+    },
+    {
+      "id": "story",
+      "category": "creative",
+      "prompt": "Write two sentences about Leo finding a glowing key in a park.",
+      "output": "the coreng the the Fing of the steraled of of staterer of rentiong and the rang",
+      "checks": {
+        "nonempty_and_bounded": true,
+        "required_signal_present": true,
+        "all_mandatory_signals_present": false,
+        "forbidden_signal_absent": true,
+        "repetition_bounded": true,
+        "unknown_token_artifacts_bounded": true
+      },
+      "score": 69.23,
+      "word_count": 16,
+      "repeated_word_ratio": 0.4375
+    },
+    {
+      "id": "quality_retry",
+      "category": "task_following",
+      "prompt": "A quality checker finds one missing feature. What should happen next?",
+      "output": "The the cteres the the sting the herereng of the reratintion and the peng. The the..",
+      "checks": {
+        "nonempty_and_bounded": true,
+        "required_signal_present": false,
+        "all_mandatory_signals_present": true,
+        "forbidden_signal_absent": true,
+        "repetition_bounded": true,
+        "unknown_token_artifacts_bounded": true
+      },
+      "score": 69.23,
+      "word_count": 16,
+      "repeated_word_ratio": 0.5
+    },
+    {
+      "id": "output_constraint",
+      "category": "task_following",
+      "prompt": "The user requests final code only. Should you include a plan?",
+      "output": "the the houres of the sthathes and the restory the pores. The the athars the chere",
+      "checks": {
+        "nonempty_and_bounded": true,
+        "required_signal_present": false,
+        "all_mandatory_signals_present": true,
+        "forbidden_signal_absent": true,
+        "repetition_bounded": true,
+        "unknown_token_artifacts_bounded": true
+      },
+      "score": 69.23,
+      "word_count": 16,
+      "repeated_word_ratio": 0.4375
+    }
+  ]
+}

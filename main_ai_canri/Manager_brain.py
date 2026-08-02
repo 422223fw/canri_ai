@@ -990,10 +990,6 @@ class ManagerBrain:
                 "brains": ["Creative_brain"] if agent_creative_consultation else []
             },
             {
-                "phase": "local_model_reasoning",
-                "brains": ["Local_LLM_brain"]
-            },
-            {
                 "phase": "core_reasoning",
                 "brains": ["Planner_brain"] if needs_planner else []
             },
@@ -1016,6 +1012,18 @@ class ManagerBrain:
             {
                 "phase": "post_collaboration_integration",
                 "brains": ["Nervous_system_brain"] if needs_collaboration else []
+            },
+            {
+                "phase": "llm_context_bridge",
+                "brains": ["LLM_bridge_brain"]
+            },
+            {
+                "phase": "local_model_assistance",
+                "brains": ["Local_LLM_brain"]
+            },
+            {
+                "phase": "llm_candidate_review",
+                "brains": ["LLM_bridge_brain"]
             },
             {
                 "phase": "verification",
@@ -1048,7 +1056,8 @@ class ManagerBrain:
             "Memory_brain": "safety_and_context",
             "Security_brain": "safety_and_context",
             "Project_context_brain": "project_context",
-            "Local_LLM_brain": "local_model_reasoning",
+            "LLM_bridge_brain": "llm_context_bridge",
+            "Local_LLM_brain": "local_model_assistance",
             "Planner_brain": "core_reasoning",
             "Research_brain": "core_reasoning",
             "Reasoning_brain": "core_reasoning",
@@ -1139,6 +1148,34 @@ class ManagerBrain:
         results,
         brain_name=None
     ):
+
+        if (
+            phase in {
+                "llm_context_bridge",
+                "local_model_assistance",
+                "llm_candidate_review",
+            }
+            and brain_name in {"LLM_bridge_brain", "Local_LLM_brain"}
+        ):
+            context = dict(original_data) if isinstance(original_data, dict) else {
+                "original_text": str(original_data)
+            }
+            combined_results = dict(context.get("results", {}))
+            if isinstance(results, dict):
+                combined_results.update(results)
+            context["results"] = combined_results
+            context["manager_context"] = {
+                "phase": phase,
+                "target_brain": brain_name,
+                "integration_mode": "bounded_llm_bridge",
+            }
+            context["execution_contract"] = {
+                "instruction": (
+                    "Use only the bounded bridge packet. Preserve specialist authority, "
+                    "keep internal reports private, and never execute model output."
+                )
+            }
+            return context
 
         context = {}
 
@@ -1728,6 +1765,17 @@ class ManagerBrain:
                     {},
                 )
 
+            if phase_name in {
+                "llm_context_bridge",
+                "local_model_assistance",
+                "llm_candidate_review",
+            }:
+                phase_context = self.build_llm_phase_context(
+                    phase_context,
+                    all_results,
+                    phase_name,
+                )
+
             results = self.execute(
                 phase_brains,
                 phase_context,
@@ -1887,6 +1935,134 @@ class ManagerBrain:
                         })
 
         return all_results, phase_results
+
+    @staticmethod
+    def bounded_llm_value(value, depth=0):
+        """Create a small structured view for the 500-token local model."""
+
+        if depth >= 3:
+            if isinstance(value, str):
+                return value[:2000]
+            if isinstance(value, (int, float, bool)) or value is None:
+                return value
+            return str(value)[:800]
+        if isinstance(value, str):
+            return value[:8000]
+        if isinstance(value, dict):
+            return {
+                str(key): ManagerBrain.bounded_llm_value(item, depth + 1)
+                for key, item in list(value.items())[:40]
+            }
+        if isinstance(value, (list, tuple)):
+            return [
+                ManagerBrain.bounded_llm_value(item, depth + 1)
+                for item in list(value)[:30]
+            ]
+        if isinstance(value, (int, float, bool)) or value is None:
+            return value
+        return str(value)[:1200]
+
+    @classmethod
+    def compact_llm_result(cls, brain_name, result):
+        if not isinstance(result, dict):
+            return {}
+        keep = (
+            "brain",
+            "status",
+            "available",
+            "confidence",
+            "final_output",
+            "display_text",
+            "answer",
+            "generated_code",
+            "story",
+            "support_response",
+            "summary",
+            "result",
+            "best_answer",
+            "facts",
+            "plan",
+            "candidate_accepted",
+            "candidate_issues",
+            "context_packet",
+            "release_readiness",
+            "error",
+            "skipped",
+        )
+        compact = {
+            key: cls.bounded_llm_value(result[key])
+            for key in keep
+            if key in result and result[key] not in (None, "", [], {})
+        }
+        project_files = result.get("project_files")
+        if isinstance(project_files, dict) and project_files:
+            compact["project_files"] = {
+                str(path): "<project file available>"
+                for path in list(project_files)[:30]
+            }
+        compact.setdefault("brain", str(brain_name))
+        return compact
+
+    @classmethod
+    def build_llm_phase_context(cls, phase_context, all_results, phase_name):
+        source = phase_context if isinstance(phase_context, dict) else {}
+        understanding = source.get("understanding", {})
+        if isinstance(understanding, dict):
+            understanding = {
+                key: cls.bounded_llm_value(understanding.get(key))
+                for key in (
+                    "intent",
+                    "main_topic",
+                    "requested_action",
+                    "meaning_frame",
+                    "request_contract",
+                )
+                if understanding.get(key) not in (None, "", [], {})
+            }
+        results = all_results if isinstance(all_results, dict) else {}
+        if phase_name == "llm_context_bridge":
+            selected_results = {
+                name: cls.compact_llm_result(name, result)
+                for name, result in results.items()
+                if isinstance(result, dict)
+            }
+        elif phase_name == "local_model_assistance":
+            selected_results = {
+                "LLM_bridge_brain": cls.compact_llm_result(
+                    "LLM_bridge_brain",
+                    results.get("LLM_bridge_brain", {}),
+                )
+            }
+        else:
+            selected_results = {
+                name: cls.compact_llm_result(name, results.get(name, {}))
+                for name in ("LLM_bridge_brain", "Local_LLM_brain")
+            }
+        selected_results = {
+            name: result for name, result in selected_results.items() if result
+        }
+        compact_context = {
+            key: source[key]
+            for key in (
+                "_request_id",
+                "session_id",
+                "original_text",
+                "corrected_text",
+                "failed_requirements",
+                "quality_feedback",
+            )
+            if key in source
+        } | {
+            "understanding": understanding,
+            "results": selected_results,
+        }
+        if phase_name == "llm_context_bridge":
+            compact_context.update({
+                "memory": cls.bounded_llm_value(source.get("memory", {})),
+                "knowledge": cls.bounded_llm_value(source.get("knowledge", {})),
+                "data_context": cls.bounded_llm_value(source.get("data_context", {})),
+            })
+        return compact_context
 
     def retry_brains_from_quality(self, quality_result):
 
@@ -2391,6 +2567,28 @@ class ManagerBrain:
                     "data_context": shared_data_context,
                 }
             )
+
+        local_model = self.brains.get("Local_LLM_brain")
+        if local_model is not None and hasattr(local_model, "process_shadow"):
+            try:
+                shadow_context = dict(data) if isinstance(data, dict) else {
+                    "original_text": str(data)
+                }
+                shadow_context["results"] = dict(results)
+                shadow_result = local_model.process_shadow(shadow_context)
+                if (
+                    isinstance(shadow_result, dict)
+                    and shadow_result.get("status") != "shadow_disabled"
+                ):
+                    results["Local_LLM_shadow"] = shadow_result
+            except Exception as error:
+                results["Local_LLM_shadow"] = {
+                    "brain": "Local_LLM_shadow",
+                    "status": "shadow_unavailable",
+                    "available": False,
+                    "reason": str(error),
+                    "used_for_user_answer": False,
+                }
 
         runtime_events = brain_runtime.events_for_request(self._request_id)
         manager_report = {

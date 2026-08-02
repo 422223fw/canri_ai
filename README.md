@@ -66,8 +66,9 @@ powershell -ExecutionPolicy Bypass -File .\push_canri.ps1
 - `Data_context.py`: bounded retrieval from dictionaries, memory, scanners,
   and local knowledge indexes.
 - `Brain_runtime.py`: uniform result contract, safe errors, request IDs,
-  runtime telemetry, and an optional emergency watchdog. Ordinary requests
-  have no default thinking deadline.
+  runtime telemetry, per-brain UTF-8 information-volume accounting, and an
+  optional emergency watchdog. Ordinary requests have no default thinking
+  deadline.
 - `Brain_storage.py`: resilient reads and atomic JSON writes.
 - `Canri_self_profile.json`: versioned self-description of Canri's purpose,
   brains, capabilities, workflows, limits, and user-facing features. It is
@@ -86,10 +87,14 @@ powershell -ExecutionPolicy Bypass -File .\push_canri.ps1
   summaries, verification details, and run instructions when the user's output
   contract permits them. Strict output requests always disable these additions.
 - `Response_brain.py`: clean final user output without internal reports.
-- `Local_LLM_brain.py`: optional on-device generation through a configured
-  GGUF model or local Ollama installation. It is disabled by default, uses no
-  cloud API, cannot execute its own output, and is reviewed by the normal code
-  and quality pipeline before an Agent may write files.
+- `Local_LLM_brain.py`: on-device advisory generation through CANRI's native
+  model, a configured GGUF model, or local Ollama. It uses no cloud API and
+  cannot execute its own output.
+- `LLM_bridge_brain.py`: builds a bounded prompt from Understanding, isolated
+  conversation memory, retrieved evidence, quality corrections, and specialist
+  reports. Specialists remain authoritative. Native model text can become a
+  general-conversation answer only after the sealed automated gate and manual
+  review both pass.
 
 `Code_brain.py` uses a multidimensional quality score. Single-file Python code
 is scored for syntax, request coverage, implementation completeness, runnable
@@ -118,19 +123,35 @@ a trained general-purpose language model. For request-specific conversation,
 creative writing, and unfamiliar software architectures, Canri can use a
 model that runs locally without a cloud API.
 
-Edit `main_ai_canri/data/Local_model_settings.json` and choose one backend:
+The current native v4 model has 9,028,800 parameters, 10 attention heads, and
+a 500-token context window. It was expanded from v3 by weight transfer and
+received a focused 1,500-step adaptation pass. It is connected in `advisory`
+mode, but its sealed report is still `experimental_not_ready` (loss 3.112334,
+generation score 60, semantic pass rate 0%). CANRI therefore records its
+suggestion for collaboration and telemetry but does not expose it as the final
+answer. This prevents an undertrained model from replacing working specialist
+results.
+
+Edit `main_ai_canri/data/Local_model_settings.json` to choose another backend:
 
 1. Install `llama-cpp-python`, set `model_path` to a local GGUF file, and set
    `backend` to `llama_cpp`.
 2. Install Ollama locally, download a model with Ollama, set `ollama_model` to
    its installed name, and set `backend` to `ollama`.
-3. Set `enabled` to `true` only after the model is available.
+3. Keep `integration_mode` set to `advisory` until the selected model passes
+   its quality review.
 
 `timeout_seconds: 0` means no generation deadline. Prompt and output sizes are
 still bounded to protect memory and prevent an accidental multi-gigabyte
 response. Model files are not bundled with this repository. Their licenses,
 RAM requirements, quality, and disk size vary. Enabling a small local model
 does not by itself make Canri equal to Claude or another frontier model.
+
+Every completed response includes an information-memory summary. The button
+under the answer shows the total, LFM, and LLM volume; opening it shows every
+brain's reads, writes, calls, and transfer edges. `Memory statistics` in the
+header displays aggregate totals and a per-request graph. These values measure
+serialized UTF-8 context and reports, not operating-system RAM.
 
 `Planner_brain.py` builds executable steps from the current structured request
 contract. Stored templates are used only as quality and risk references; they
@@ -253,6 +274,26 @@ However, project programs launched by the Agent receive the current Windows acco
 normal permissions; Agent mode is not an operating-system sandbox. Use Autonomous only
 for trusted projects. Local machine paths, pending approvals, and Agent audit records
 are excluded from Git.
+
+## Native Model From Scratch
+
+`main_ai_canri/domain_packages/local_llm/` contains an experimental causal
+Transformer that starts with random weights. It does not download or use a
+pre-trained model. The package includes a hybrid word/Unicode tokenizer,
+streaming access to every JSON, JSONL, and SQLite source in CANRI's data
+directory, resumable checkpointing, and local inference:
+
+```powershell
+python -m main_ai_canri.domain_packages.local_llm.train `
+  --rebuild-tokenizer --sampling-mode balanced --max-steps 200
+```
+
+PyTorch is optional and must be installed separately for training. Data is read
+incrementally and is not copied into a second large corpus. This model is a
+research foundation, not a Claude-equivalent model. The existing
+`Local_LLM_brain` can use it with `backend: "canri_native"` after a checkpoint
+exists; Understanding, specialist brains, Quality Control, and Response remain
+responsible for grounding and validating its output.
 
 ## Current Limits
 

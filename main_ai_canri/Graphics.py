@@ -25,6 +25,7 @@ RECORDING_DIR = UPLOAD_DIR / "recordings"
 CHAT_FILE = DATA_DIR / "Canri_chats.json"
 CHAT_BACKUP_FILE = DATA_DIR / "Canri_chats.backup.json"
 CHAT_TEMP_FILE = DATA_DIR / "Canri_chats.tmp.json"
+MEMORY_STATS_FILE = DATA_DIR / "Cognitive_memory_statistics.json"
 
 
 class CanriGraphics:
@@ -369,6 +370,20 @@ class CanriGraphics:
             fg=self.colors["muted"]
         )
 
+        self.memory_stats_button = self.create_button(
+            header,
+            text="Memory statistics",
+            command=self.show_memory_statistics,
+            bg=self.colors["panel_2"]
+        )
+        self.memory_stats_button.grid(
+            row=0,
+            column=2,
+            rowspan=2,
+            sticky="e",
+            padx=(8, 0)
+        )
+
         self.settings_button = self.create_button(
             header,
             text="Settings",
@@ -377,7 +392,7 @@ class CanriGraphics:
         )
         self.settings_button.grid(
             row=0,
-            column=2,
+            column=3,
             rowspan=2,
             sticky="e",
             padx=(8, 0)
@@ -1133,7 +1148,16 @@ class CanriGraphics:
 
         return " ".join(words[:6])[:48]
 
-    def append_chat_record(self, role, text, trace_id=None, chat_id=None, attachments=None, agent_changes=None):
+    def append_chat_record(
+        self,
+        role,
+        text,
+        trace_id=None,
+        chat_id=None,
+        attachments=None,
+        agent_changes=None,
+        memory_usage=None,
+    ):
 
         chat = self.chat_by_id(chat_id) if chat_id else None
         if chat_id and chat is None:
@@ -1161,6 +1185,8 @@ class CanriGraphics:
             ]
         if isinstance(agent_changes, dict):
             record["agent_changes"] = agent_changes
+        if isinstance(memory_usage, dict):
+            record["memory_usage"] = memory_usage
         chat.setdefault("messages", []).append(record)
         chat["updated_utc"] = datetime.now().isoformat()
         self.save_chats()
@@ -1208,6 +1234,9 @@ class CanriGraphics:
                     )
             if "CANRI" in message:
                 self.insert_chat_message("Canri", message.get("CANRI", ""))
+                memory_usage = message.get("memory_usage")
+                if isinstance(memory_usage, dict):
+                    self.insert_memory_button(memory_usage, message.get("trace_id"))
                 agent_changes = message.get("agent_changes")
                 if isinstance(agent_changes, dict):
                     self.insert_agent_change_card(agent_changes)
@@ -1513,14 +1542,23 @@ class CanriGraphics:
                     or result.get("trace")
                 )
                 agent_changes = result.get("agent_changes")
+                memory_usage = result.get("memory_usage")
             else:
                 text = str(result)
                 thinking_trace = None
                 agent_changes = None
+                memory_usage = None
 
             self.root.after(
                 0,
-                lambda: self.show_canri_response(text, thinking_trace, trace_id, chat_id, agent_changes)
+                lambda: self.show_canri_response(
+                    text,
+                    thinking_trace,
+                    trace_id,
+                    chat_id,
+                    agent_changes,
+                    memory_usage,
+                )
             )
 
         except Exception as error:
@@ -1543,14 +1581,36 @@ class CanriGraphics:
                 )
             )
 
-    def show_canri_response(self, text, thinking_trace=None, trace_id=None, chat_id=None, agent_changes=None):
+    def show_canri_response(
+        self,
+        text,
+        thinking_trace=None,
+        trace_id=None,
+        chat_id=None,
+        agent_changes=None,
+        memory_usage=None,
+    ):
 
         if thinking_trace and trace_id:
             self.finish_live_thinking_trace(trace_id, thinking_trace)
 
         if not chat_id or chat_id == self.current_chat_id:
-            self.add_chat_message("Canri", text, thinking_trace, trace_id, agent_changes)
-        self.append_chat_record("CANRI", text, trace_id, chat_id=chat_id, agent_changes=agent_changes)
+            self.add_chat_message(
+                "Canri",
+                text,
+                thinking_trace,
+                trace_id,
+                agent_changes,
+                memory_usage,
+            )
+        self.append_chat_record(
+            "CANRI",
+            text,
+            trace_id,
+            chat_id=chat_id,
+            agent_changes=agent_changes,
+            memory_usage=memory_usage,
+        )
         self.refresh_chat_list_titles()
         self.stop_thinking_timer()
 
@@ -1562,7 +1622,15 @@ class CanriGraphics:
         else:
             self.header_status.configure(text="Ready")
 
-    def add_chat_message(self, sender, text, thinking_trace=None, trace_id=None, agent_changes=None):
+    def add_chat_message(
+        self,
+        sender,
+        text,
+        thinking_trace=None,
+        trace_id=None,
+        agent_changes=None,
+        memory_usage=None,
+    ):
 
         self.chat_area.configure(state="normal")
 
@@ -1582,6 +1650,9 @@ class CanriGraphics:
             if not trace_id:
                 trace_id = self.store_thinking_trace(thinking_trace)
             self.insert_thinking_button(trace_id)
+
+        if sender == "Canri" and isinstance(memory_usage, dict):
+            self.insert_memory_button(memory_usage, trace_id)
 
         if sender == "Canri" and isinstance(agent_changes, dict):
             self.insert_agent_change_card(agent_changes)
@@ -1913,6 +1984,209 @@ class CanriGraphics:
 
         self.chat_area.window_create("end", window=button)
         self.chat_area.insert("end", "\n\n")
+
+    @staticmethod
+    def format_memory_size(value):
+        size = max(0, int(value or 0))
+        if size >= 1024 * 1024:
+            return f"{size / (1024 * 1024):.2f} MB"
+        if size >= 1024:
+            return f"{size / 1024:.1f} KB"
+        return f"{size} B"
+
+    def insert_memory_button(self, memory_usage, trace_id=None):
+        if not isinstance(memory_usage, dict):
+            return
+        text = (
+            f"Memory {self.format_memory_size(memory_usage.get('total_bytes'))}  |  "
+            f"LFM {self.format_memory_size(memory_usage.get('lfm_bytes'))}  |  "
+            f"LLM {self.format_memory_size(memory_usage.get('llm_bytes'))}"
+        )
+        button = tk.Button(
+            self.chat_area,
+            text=text,
+            command=lambda: self.show_memory_usage(memory_usage, trace_id),
+            bg=self.colors["panel_2"],
+            fg=self.colors["success"],
+            activebackground=self.colors["accent_hover"],
+            activeforeground=self.colors["text"],
+            relief="flat",
+            borderwidth=0,
+            font=("Segoe UI", 9, "bold"),
+            cursor="hand2",
+            padx=10,
+            pady=4,
+        )
+        self.chat_area.window_create("end", window=button)
+        self.chat_area.insert("end", "\n\n")
+
+    def memory_usage_text(self, memory_usage):
+        lines = [
+            "CANRI information-memory usage",
+            "",
+            "This measures UTF-8 context and report bytes read, written, and transferred. "
+            "It is not operating-system RAM.",
+            "",
+            f"Request: {memory_usage.get('request_id', '')}",
+            f"Total: {self.format_memory_size(memory_usage.get('total_bytes'))}",
+            f"LFM: {self.format_memory_size(memory_usage.get('lfm_bytes'))}",
+            f"LLM: {self.format_memory_size(memory_usage.get('llm_bytes'))}",
+            f"Events: {memory_usage.get('events', 0)}",
+            "",
+            "Per brain",
+        ]
+        for item in memory_usage.get("brains", []):
+            if not isinstance(item, dict):
+                continue
+            lines.append(
+                f"{item.get('brain', 'brain')}: "
+                f"read {self.format_memory_size(item.get('input_bytes'))}, "
+                f"wrote {self.format_memory_size(item.get('output_bytes'))}, "
+                f"total {self.format_memory_size(item.get('transfer_bytes'))}, "
+                f"calls {item.get('calls', 0)}"
+            )
+        lines.extend(["", "Transfers"])
+        for item in memory_usage.get("transfers", [])[:100]:
+            if not isinstance(item, dict):
+                continue
+            lines.append(
+                f"{item.get('from')} -> {item.get('to')}: "
+                f"{self.format_memory_size(item.get('bytes'))} "
+                f"({item.get('transfers', 0)} transfers, {item.get('direction')})"
+            )
+        return "\n".join(lines)
+
+    def show_memory_usage(self, memory_usage, trace_id=None):
+        window = tk.Toplevel(self.root)
+        window.title("CANRI Memory Details")
+        window.geometry("920x680")
+        window.configure(bg=self.colors["app"])
+        header = tk.Frame(window, bg=self.colors["app"])
+        header.pack(fill="x", padx=18, pady=(16, 8))
+        tk.Label(
+            header,
+            text="Memory details",
+            bg=self.colors["app"],
+            fg=self.colors["text"],
+            font=("Segoe UI", 16, "bold"),
+        ).pack(side="left")
+        text_box = ScrolledText(
+            window,
+            bg=self.colors["panel"],
+            fg=self.colors["text"],
+            insertbackground=self.colors["text"],
+            relief="flat",
+            wrap="word",
+            font=("Consolas", 10),
+            padx=14,
+            pady=12,
+        )
+        text_box.pack(fill="both", expand=True, padx=18, pady=(0, 18))
+        text_box.insert("1.0", self.memory_usage_text(memory_usage))
+        text_box.configure(state="disabled")
+        self.bind_thinking_text_shortcuts(text_box)
+
+    def show_memory_statistics(self):
+        try:
+            payload = json.loads(MEMORY_STATS_FILE.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            payload = {"requests": [], "totals": {}}
+        requests = [item for item in payload.get("requests", []) if isinstance(item, dict)]
+        window = tk.Toplevel(self.root)
+        window.title("CANRI Memory Statistics")
+        window.geometry("1040x760")
+        window.configure(bg=self.colors["app"])
+
+        totals = payload.get("totals", {}) if isinstance(payload, dict) else {}
+        tk.Label(
+            window,
+            text=(
+                f"Memory statistics  |  Requests {totals.get('requests', len(requests))}  |  "
+                f"Total {self.format_memory_size(totals.get('total_bytes'))}  |  "
+                f"LFM {self.format_memory_size(totals.get('lfm_bytes'))}  |  "
+                f"LLM {self.format_memory_size(totals.get('llm_bytes'))}"
+            ),
+            bg=self.colors["app"],
+            fg=self.colors["text"],
+            font=("Segoe UI", 13, "bold"),
+            anchor="w",
+        ).pack(fill="x", padx=18, pady=(16, 8))
+
+        canvas = tk.Canvas(
+            window,
+            height=220,
+            bg=self.colors["panel"],
+            highlightthickness=1,
+            highlightbackground=self.colors["input_border"],
+        )
+        canvas.pack(fill="x", padx=18, pady=(0, 10))
+        recent = requests[-30:]
+        maximum = max([int(item.get("total_bytes", 0) or 0) for item in recent] or [1])
+
+        def draw_graph(event=None):
+            canvas.delete("all")
+            width = max(canvas.winfo_width(), 200)
+            height = max(canvas.winfo_height(), 160)
+            if not recent:
+                canvas.create_text(
+                    width / 2,
+                    height / 2,
+                    text="No completed request statistics yet",
+                    fill=self.colors["muted"],
+                )
+                return
+            bar_width = max(3, (width - 40) / len(recent))
+            for index, item in enumerate(recent):
+                x0 = 20 + index * bar_width
+                x1 = x0 + max(2, bar_width - 2)
+                lfm = int(item.get("lfm_bytes", 0) or 0)
+                llm = int(item.get("llm_bytes", 0) or 0)
+                lfm_height = (height - 30) * lfm / maximum
+                llm_height = (height - 30) * llm / maximum
+                canvas.create_rectangle(
+                    x0,
+                    height - 20 - lfm_height,
+                    x1,
+                    height - 20,
+                    fill=self.colors["accent"],
+                    outline="",
+                )
+                canvas.create_rectangle(
+                    x0,
+                    height - 20 - lfm_height - llm_height,
+                    x1,
+                    height - 20 - lfm_height,
+                    fill=self.colors["success"],
+                    outline="",
+                )
+            canvas.create_text(24, 12, text="LFM", fill=self.colors["accent"], anchor="w")
+            canvas.create_text(74, 12, text="LLM", fill=self.colors["success"], anchor="w")
+
+        canvas.bind("<Configure>", draw_graph)
+        draw_graph()
+
+        details = ScrolledText(
+            window,
+            bg=self.colors["panel"],
+            fg=self.colors["text"],
+            insertbackground=self.colors["text"],
+            relief="flat",
+            wrap="word",
+            font=("Consolas", 10),
+            padx=14,
+            pady=12,
+        )
+        details.pack(fill="both", expand=True, padx=18, pady=(0, 18))
+        for index, item in enumerate(reversed(recent), start=1):
+            details.insert(
+                "end",
+                f"{index}. {item.get('user_preview', '')}\n"
+                f"   Total {self.format_memory_size(item.get('total_bytes'))} | "
+                f"LFM {self.format_memory_size(item.get('lfm_bytes'))} | "
+                f"LLM {self.format_memory_size(item.get('llm_bytes'))}\n\n",
+            )
+        details.configure(state="disabled")
+        self.bind_thinking_text_shortcuts(details)
 
     def format_thinking_trace(self, trace):
 

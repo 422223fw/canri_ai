@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "created_utc": "2026-07-30T14:51:35.876100+00:00",
+  "builder": "build_quality_corpus.py",
+  "training_only": true,
+  "old_chat_answers_used": false,
+  "model_generated_answers_used": false,
+  "sealed_holdout": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\domain_packages\\local_llm\\evaluation\\sealed_holdout_v2.json",
+  "sealed_holdout_sha256": "5c1373ceaac5f0d482f316ab7d2386360a67ce3ea38efda1addeb425f20cb43f",
+  "sealed_prompt_count": 30,
+  "exact_holdout_prompts_in_training": 0,
+  "examples": 28091,
+  "bytes": 14729351,
+  "rejected_examples": 12,
+  "shards": [
+    {
+      "file": "code.jsonl",
+      "examples": 7129,
+      "bytes": 3171406,
+      "sha256": "9fe2b0814a8d9279a5e2cfe1cc5c2c082a4279eb83576c8c6e8ce7825c88542b"
+    },
+    {
+      "file": "code_behavior.jsonl",
+      "examples": 541,
+      "bytes": 176755,
+      "sha256": "bb7f66f35864d326b7297223d845b19fa9022952218dacad01579636b2b512bd"
+    },
+    {
+      "file": "conversation_en.jsonl",
+      "examples": 62,
+      "bytes": 19421,
+      "sha256": "308d2adf40d2f3a379f6e76323e1147d6efb8e029aa85ba7ccdc37c0de0a79b3"
+    },
+    {
+      "file": "conversation_he.jsonl",
+      "examples": 35,
+      "bytes": 12827,
+      "sha256": "adfc9f9898ee1f89ade2204a0198e56787081a5cf0afa2e6b1b1e0ba9ab9ac18"
+    },
+    {
+      "file": "knowledge.jsonl",
+      "examples": 9086,
+      "bytes": 8920531,
+      "sha256": "c95793d7cc5fe27f3760c5d514fa5bee659a41c144155f3903cbf61888158190"
+    },
+    {
+      "file": "language.jsonl",
+      "examples": 6000,
+      "bytes": 1260390,
+      "sha256": "332c12361f9b7d0c055d900e53f1418694955e229355f859c659208e7cdd205f"
+    },
+    {
+      "file": "math.jsonl",
+      "examples": 2336,
+      "bytes": 458187,
+      "sha256": "9f1bb40f30992e83e4da2377fef4a0451ad0216c4014c6b9695bb7cec7bb2411"
+    },
+    {
+      "file": "structured_knowledge.jsonl",
+      "examples": 200,
+      "bytes": 53837,
+      "sha256": "9332ccea937b9f7a823e73a163026ed9e1f97fe75fce8ee3526da0924cb1ec88"
+    },
+    {
+      "file": "task_following.jsonl",
+      "examples": 696,
+      "bytes": 184819,
+      "sha256": "c4331c5ba8e4a105629a5de605e243ef3a2c9540f4ef9a16cbffa531206c8d44"
+    },
+    {
+      "file": "technical.jsonl",
+      "examples": 2006,
+      "bytes": 471178,
+      "sha256": "4df2017002e99490183bbcef432eeefeea52fbbc358c20e7a693887f04ae734f"
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "id": "local_llm",
+  "name": "Canri Native Language Model Package",
+  "primary_brain": "Local_LLM_brain",
+  "supporting_brains": [
+    "LLM_bridge_brain",
+    "Understanding_brain",
+    "Memory_brain",
+    "Scanner_knowledge",
+    "Code_brain",
+    "Quality_Control_brain",
+    "Response_brain"
+  ],
+  "semantic_routing": {
+    "select_as_user_domain": false
+  },
+  "capabilities": [
+    "train a small causal Transformer from random initialization",
+    "build a hybrid word and lossless UTF-8 byte-fallback tokenizer from clean CANRI data",
+    "stream JSON, JSONL, and SQLite training sources without duplicating them",
+    "save and resume local checkpoints",
+    "generate text without a cloud API",
+    "train assistant completions with prompt-masked loss",
+    "keep deterministic training and validation partitions separate",
+    "run a generation benchmark before activation",
+    "map inherited embeddings by token identity across tokenizer versions",
+    "transfer compatible weights into a ten-head 500-token-context architecture",
+    "assist specialist brains without replacing their authoritative result",
+    "account for LLM context and report volume separately from deterministic LFM brains",
+    "constrain byte-token decoding to complete valid UTF-8 sequences",
+    "select curriculum sources from measured held-out loss",
+    "export a compact inference-only checkpoint",
+    "block activation until sealed semantic and executable-code gates pass"
+  ],
+  "context_inputs": [
+    "Understanding request contract",
+    "bounded indexed scanner excerpts",
+    "conversation memory",
+    "specialist results",
+    "Quality correction packets"
+  ],
+  "data_sources": [
+    "main_ai_canri/data/*.json",
+    "main_ai_canri/data/*.jsonl",
+    "main_ai_canri/data/*.sqlite3"
+  ],
+  "acceptance_checks": [
+    "The model starts from random weights",
+    "No cloud API or downloaded model is used",
+    "Training can be resumed from a checkpoint",
+    "Inference reports clearly when the model is untrained or unavailable",
+    "User-facing native output remains blocked until sealed and manual gates pass",
+    "Readiness requires held-out evaluation and explicit manual approval"
+  ],
+  "handoff": {
+    "before": ["Understanding_brain", "Memory_brain", "Scanner_knowledge", "specialist brains", "LLM_bridge_brain"],
+    "after": ["Quality_Control_brain", "Response_brain"]
+  }
+}

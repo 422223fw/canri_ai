@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "state": "stopped_resumable",
+  "reason": "stop_file_requested",
+  "pid": 18380,
+  "started_utc": "2026-07-30T10:48:48.059151+00:00",
+  "finished_utc": "2026-07-30T14:14:18.062438+00:00",
+  "elapsed_seconds": 12330.0,
+  "cycles_this_run": 67,
+  "minimum_target_steps": 20000,
+  "hard_limit_steps": 40000,
+  "global_steps": 21250,
+  "last_loss": 0.7072494029998779,
+  "parameters": 4975264,
+  "config": {
+    "vocab_size": 8448,
+    "context_length": 256,
+    "embedding_size": 224,
+    "layers": 5,
+    "heads": 7,
+    "dropout": 0.1
+  },
+  "checkpoint_bytes": 59805697,
+  "last_evaluated_step": 21250,
+  "automated_quality_gate_passed": false,
+  "sealed_validation_loss": 2.623843,
+  "sealed_generation_metrics": {
+    "average_score": 52.82,
+    "semantic_pass_rate": 0.0,
+    "code_pass_rate": 0.0,
+    "code_cases": 4
+  },
+  "events": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\domain_packages\\local_llm\\training_campaign_v2.jsonl",
+  "process_log": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\domain_packages\\local_llm\\training_campaign_v2.log"
+}

@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "created_utc": "2026-07-30T14:22:39.274109+00:00",
+  "source_checkpoint": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\domain_packages\\local_llm\\checkpoints\\canri_native_v2.pt",
+  "target_checkpoint": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\domain_packages\\local_llm\\checkpoints\\canri_native_v3.pt",
+  "target_tokenizer": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\domain_packages\\local_llm\\data\\canri_tokenizer_v3.json",
+  "checkpoint_bytes": 35829093,
+  "source_parameters": 4975264,
+  "target_parameters": 8950720,
+  "parameter_growth": 3975456,
+  "source_vocabulary_size": 8448,
+  "target_vocabulary_size": 8448,
+  "tokenizer_strategy": "byte_v3",
+  "data_inventory": {
+    "root": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\data",
+    "files": 41,
+    "bytes": 489133007,
+    "by_kind": {
+      "json": {
+        "files": 37,
+        "bytes": 67496556
+      },
+      "jsonl": {
+        "files": 4,
+        "bytes": 421636451
+      }
+    },
+    "fingerprint": "26b180976ad0f45b7afe6ae6b28a7bb247251caf0cd9e32547df6e9ccf2a982a",
+    "excluded_files": 126,
+    "excluded_bytes": 254530310,
+    "policy": {
+      "name": "canri_native_v2_quality_policy",
+      "source": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\domain_packages\\local_llm\\training_data_policy.json"
+    }
+  },
+  "lineage": {
+    "trained_from_random_initialization": true,
+    "downloaded_base_model": false,
+    "seed": 42,
+    "weight_transfer": {
+      "source_checkpoint": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\domain_packages\\local_llm\\checkpoints\\canri_native_v2.pt",
+      "source_global_steps": 21250,
+      "source_parameters": 4975264,
+      "target_parameters": 8950720,
+      "source_config": {
+        "vocab_size": 8448,
+        "context_length": 256,
+        "embedding_size": 224,
+        "layers": 5,
+        "heads": 7,
+        "dropout": 0.1
+      },
+      "target_config": {
+        "vocab_size": 8448,
+        "context_length": 256,
+        "embedding_size": 320,
+        "layers": 5,
+        "heads": 10,
+        "dropout": 0.1
+      },
+      "tokenizer_strategy": "byte_v3",
+      "transferred_state_elements": 4137952,
+      "exact_tensors": 0,
+      "partial_tensors": 65,
+      "cloned_layer_tensors": 0,
+      "matched_token_rows": 2355,
+      "missing_tensors": []
+    },
+    "instruction_split_version": "sha256_v1",
+    "instruction_split_enforced_since_step": -1
+  }
+}

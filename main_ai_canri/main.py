@@ -54,6 +54,7 @@ from Planner_brain import brain as planner_brain
 from Emotion_brain import brain as emotion_brain
 from Answer_Enrichment_brain import brain as answer_enrichment_brain
 from Project_context_brain import brain as project_context_brain
+from LLM_bridge_brain import brain as llm_bridge_brain
 from Local_LLM_brain import brain as local_llm_brain
 from Agent_brain import brain as agent_brain
 
@@ -233,6 +234,11 @@ def _register_all_brains_legacy():
     manager_brain.register_brain(
         "Project_context_brain",
         project_context_brain
+    )
+
+    manager_brain.register_brain(
+        "LLM_bridge_brain",
+        llm_bridge_brain
     )
 
     manager_brain.register_brain(
@@ -530,47 +536,108 @@ def process_user_message(message, attached_files=None, progress_callback=None, s
             # The GUI uses this structured result to show a review card with
             # file-level additions, removals, and a code preview.
             response_result["agent_changes"] = agent_result
-        response_result["thinking_trace"] = build_thinking_trace(
-            spelling_report,
-            understanding_report,
-            memory_result,
-            manager_result
-        )
+        storage_payload = {
+            "session_id": session_id,
+            "user_text": message,
+            "canri_text": response_result.get("display_text")
+            or response_result.get("answer", ""),
+            "response_result": response_result,
+            "manager_result": manager_result,
+        }
         try:
-            memory_brain.store_response(
+            stored_turn = memory_brain.store_response(
                 session_id,
                 message,
                 response_result.get("display_text") or response_result.get("answer", ""),
                 response_result,
                 manager_result
             )
-        except Exception:
-            pass
+            brain_runtime.record_information_exchange(
+                "Memory_brain",
+                storage_payload,
+                stored_turn,
+                request_id=request_id,
+                caller_brain="Response_brain",
+                phase="response_memory_write",
+            )
+        except Exception as error:
+            brain_runtime.record_information_exchange(
+                "Memory_brain",
+                storage_payload,
+                {"stored": False, "error_type": type(error).__name__},
+                request_id=request_id,
+                caller_brain="Response_brain",
+                phase="response_memory_write",
+                status="error",
+            )
+        memory_usage = brain_runtime.finalize_request_memory(
+            request_id,
+            session_id=session_id,
+            user_preview=message,
+        )
+        response_result["memory_usage"] = memory_usage
+        response_result["thinking_trace"] = build_thinking_trace(
+            spelling_report,
+            understanding_report,
+            memory_result,
+            manager_result,
+            memory_usage,
+        )
         brain_runtime.flush_statistics()
         emit_progress(progress_callback, "complete", "Response ready")
         return response_result
 
     emit_progress(progress_callback, "complete", "Fallback response ready")
     fallback_text = safe_processing_fallback(message)
+    fallback_storage_payload = {
+        "session_id": session_id,
+        "user_text": message,
+        "canri_text": fallback_text,
+        "response_result": {},
+        "manager_result": manager_result,
+    }
     try:
-        memory_brain.store_response(
+        stored_turn = memory_brain.store_response(
             session_id,
             message,
             fallback_text,
             {},
             manager_result
         )
-    except Exception:
-        pass
+        brain_runtime.record_information_exchange(
+            "Memory_brain",
+            fallback_storage_payload,
+            stored_turn,
+            request_id=request_id,
+            caller_brain="Response_brain",
+            phase="fallback_memory_write",
+        )
+    except Exception as error:
+        brain_runtime.record_information_exchange(
+            "Memory_brain",
+            fallback_storage_payload,
+            {"stored": False, "error_type": type(error).__name__},
+            request_id=request_id,
+            caller_brain="Response_brain",
+            phase="fallback_memory_write",
+            status="error",
+        )
+    memory_usage = brain_runtime.finalize_request_memory(
+        request_id,
+        session_id=session_id,
+        user_preview=message,
+    )
     brain_runtime.flush_statistics()
     return {
         "display_text": fallback_text,
         "answer": fallback_text,
+        "memory_usage": memory_usage,
         "thinking_trace": build_thinking_trace(
             spelling_report,
             understanding_report,
             memory_result,
-            manager_result
+            manager_result,
+            memory_usage,
         )
     }
 
@@ -656,7 +723,13 @@ def summarize_brain_result(result):
     }
 
 
-def build_thinking_trace(spelling_report, understanding_report, memory_result, manager_result):
+def build_thinking_trace(
+    spelling_report,
+    understanding_report,
+    memory_result,
+    manager_result,
+    memory_usage=None,
+):
 
     results = manager_result.get("results", {}) if isinstance(manager_result, dict) else {}
 
@@ -702,6 +775,7 @@ def build_thinking_trace(spelling_report, understanding_report, memory_result, m
             "confidence": understanding_report.get("confidence")
         } if isinstance(understanding_report, dict) else {},
         "memory": memory_result.get("memory", {}) if isinstance(memory_result, dict) else {},
+        "memory_usage": memory_usage if isinstance(memory_usage, dict) else {},
         "manager": {
             "domains_detected": manager_result.get("domains_detected"),
             "dictionary_context": manager_result.get("dictionary_context"),

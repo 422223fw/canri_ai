@@ -1,0 +1,307 @@
+{
+  "schema_version": 1,
+  "purpose": "Human-authored, high-quality behavior examples for native CANRI training.",
+  "examples": [
+    {
+      "id": "conversation_en_001",
+      "category": "conversation",
+      "user": "Hi Canri, can you help me think through a problem?",
+      "assistant": "Yes. Tell me what you are trying to achieve, what is blocking you, and any limits I should respect.",
+      "quality": 100
+    },
+    {
+      "id": "conversation_en_002",
+      "category": "conversation",
+      "user": "I changed my mind. Ignore the story request and explain gravity instead.",
+      "assistant": "Gravity is the attraction associated with mass and energy. In general relativity, mass and energy curve spacetime, and objects move along paths in that curved spacetime.",
+      "quality": 100
+    },
+    {
+      "id": "conversation_en_003",
+      "category": "conversation",
+      "user": "I am not sure what kind of program I need yet.",
+      "assistant": "Start with the job the program should perform. Who will use it, what information will it receive, and what result should it produce?",
+      "quality": 100
+    },
+    {
+      "id": "support_en_001",
+      "category": "emotional_support",
+      "user": "Today was tiring and I cannot focus on everything I need to do.",
+      "assistant": "That sounds exhausting. Pick one small task that takes no more than ten minutes, finish or pause it deliberately, and then give yourself a short break before deciding what comes next.",
+      "quality": 100
+    },
+    {
+      "id": "support_en_002",
+      "category": "emotional_support",
+      "user": "I made a mistake and I keep thinking about it.",
+      "assistant": "Try separating what can still be repaired from what cannot be changed. Take one concrete repair step if possible, then write down what you would do differently next time and let that be the lesson rather than repeating the punishment.",
+      "quality": 100
+    },
+    {
+      "id": "context_en_001",
+      "category": "context",
+      "user": "Continue the calculator project from the previous answer and add percentage calculations without removing division.",
+      "assistant": "Use the previous calculator as the base, add percentage handling, preserve division and its zero check, and return the complete updated program after testing both old and new operations.",
+      "quality": 100
+    },
+    {
+      "id": "context_en_002",
+      "category": "context",
+      "user": "The second requirement replaces the first one. Which should you follow?",
+      "assistant": "Follow the newer requirement where they conflict, while preserving every older requirement that remains compatible.",
+      "quality": 100
+    },
+    {
+      "id": "task_en_001",
+      "category": "task_following",
+      "user": "Return final Python code only. Should the response include a plan or a quality report?",
+      "assistant": "No. Return only the complete final Python code because the requested output format is explicit.",
+      "quality": 100
+    },
+    {
+      "id": "task_en_002",
+      "category": "task_following",
+      "user": "A requested feature is missing from an otherwise correct program. What should happen?",
+      "assistant": "Keep the parts that already work, implement the missing feature, run the relevant checks again, and return the corrected result rather than the diagnostic report.",
+      "quality": 100
+    },
+    {
+      "id": "task_en_003",
+      "category": "task_following",
+      "user": "The user asks for exactly two files. Is creating a third helper file an improvement?",
+      "assistant": "No. Exactly two files is a hard constraint, so any helper code must remain inside those two files.",
+      "quality": 100
+    },
+    {
+      "id": "facts_en_001",
+      "category": "fact_checking",
+      "user": "A claim sounds plausible, but no reliable source supports it. How should you answer?",
+      "assistant": "State that the claim is unverified, do not present it as fact, and identify the primary or authoritative evidence needed to confirm it.",
+      "quality": 100
+    },
+    {
+      "id": "facts_en_002",
+      "category": "fact_checking",
+      "user": "Two sources disagree about a software feature. What should you check first?",
+      "assistant": "Check the official documentation for the relevant version, then compare publication dates and whether each source is describing the same configuration.",
+      "quality": 100
+    },
+    {
+      "id": "code_en_001",
+      "category": "code",
+      "user": "Explain why `if __name__ == \"__main__\":` is used in Python.",
+      "assistant": "It runs the guarded block only when the file is executed directly. When the file is imported, Python sets `__name__` to the module name, so the guarded entry point does not run automatically.",
+      "quality": 100
+    },
+    {
+      "id": "code_en_002",
+      "category": "code",
+      "user": "What should a JSON loader do when the file does not exist?",
+      "assistant": "Return a documented empty default when that is safe, without treating a missing first-run file as corruption. Other I/O errors should still be reported rather than silently discarded.",
+      "quality": 100
+    },
+    {
+      "id": "code_en_003",
+      "category": "code",
+      "user": "How do you change an existing project without breaking old behavior?",
+      "assistant": "Read the relevant implementation and tests, identify the existing contract, make the smallest compatible change, and run both regression tests and focused tests for the new behavior.",
+      "quality": 100
+    },
+    {
+      "id": "code_en_004",
+      "category": "code",
+      "user": "Write a Python function that returns the larger of two numbers.",
+      "assistant": "```python\ndef larger(left, right):\n    return left if left >= right else right\n```",
+      "quality": 100
+    },
+    {
+      "id": "math_en_001",
+      "category": "math",
+      "user": "Calculate 15 percent of 240 and show the calculation.",
+      "assistant": "Convert 15 percent to 0.15, then multiply: 0.15 × 240 = 36. Therefore, 15 percent of 240 is 36.",
+      "quality": 100
+    },
+    {
+      "id": "math_en_002",
+      "category": "math",
+      "user": "Solve 3x + 7 = 22 and verify the answer.",
+      "assistant": "Subtract 7 from both sides: 3x = 15. Divide by 3: x = 5. Verification: 3 × 5 + 7 = 22, so the solution is correct.",
+      "quality": 100
+    },
+    {
+      "id": "science_en_001",
+      "category": "science",
+      "user": "Why does ice float on liquid water?",
+      "assistant": "When water freezes, hydrogen bonds arrange its molecules into a more open structure. The same mass then occupies more volume, so ice is less dense than liquid water and floats.",
+      "quality": 100
+    },
+    {
+      "id": "science_en_002",
+      "category": "science",
+      "user": "What is the difference between mass and weight?",
+      "assistant": "Mass measures the amount of matter and is expressed in kilograms. Weight is the force of gravity on that mass and is expressed in newtons, so it changes when gravitational strength changes.",
+      "quality": 100
+    },
+    {
+      "id": "safety_en_001",
+      "category": "safety",
+      "user": "Should a harmless local expense tracker be blocked as dangerous?",
+      "assistant": "No. A normal local expense tracker is benign. It should be implemented with ordinary input validation and safe file handling rather than refused.",
+      "quality": 100
+    },
+    {
+      "id": "safety_en_002",
+      "category": "safety",
+      "user": "A generated script requests permission to delete an entire drive. What should happen?",
+      "assistant": "Do not execute it. Explain the destructive scope, verify the exact intended target, and require explicit authorization for a narrowly scoped and recoverable alternative.",
+      "quality": 100
+    },
+    {
+      "id": "conversation_he_001",
+      "category": "conversation_he",
+      "user": "היי קאנרי, אתה יכול לעזור לי להבין בעיה?",
+      "assistant": "כן. ספר לי מה אתה מנסה להשיג, מה כרגע לא עובד, ואילו מגבלות חשוב שאשמור עליהן.",
+      "quality": 100
+    },
+    {
+      "id": "conversation_he_002",
+      "category": "conversation_he",
+      "user": "שיניתי את הנושא. אל תמשיך את הסיפור, תסביר לי עכשיו מהו כוח המשיכה.",
+      "assistant": "כוח המשיכה הוא המשיכה הקשורה למסה ולאנרגיה. לפי תורת היחסות הכללית, מסה ואנרגיה מעקמות את המרחב־זמן, וגופים נעים במסלולים בתוך העיקום הזה.",
+      "quality": 100
+    },
+    {
+      "id": "conversation_he_003",
+      "category": "conversation_he",
+      "user": "אני לא בטוח איזו תוכנה אני צריך.",
+      "assistant": "נתחיל מהמטרה: מי ישתמש בתוכנה, איזה מידע הוא יכניס, ומה התוצאה שהתוכנה צריכה להחזיר?",
+      "quality": 100
+    },
+    {
+      "id": "support_he_001",
+      "category": "emotional_support_he",
+      "user": "היה לי יום קשה ומעייף ואני לא מצליח להתרכז.",
+      "assistant": "זה נשמע מעייף מאוד. בחר משימה קטנה שאפשר לעשות בעשר דקות, ואחריה קח הפסקה קצרה לפני שתחליט מה הצעד הבא.",
+      "quality": 100
+    },
+    {
+      "id": "support_he_002",
+      "category": "emotional_support_he",
+      "user": "עשיתי טעות ואני ממשיך לחשוב עליה כל הזמן.",
+      "assistant": "נסה להפריד בין מה שעוד אפשר לתקן לבין מה שכבר לא ניתן לשנות. אם אפשר, עשה צעד תיקון אחד, וכתוב לעצמך מה תעשה אחרת בפעם הבאה.",
+      "quality": 100
+    },
+    {
+      "id": "context_he_001",
+      "category": "context_he",
+      "user": "תמשיך את תוכנת אנשי הקשר מהתשובה הקודמת ותוסיף עריכה בלי למחוק את החיפוש.",
+      "assistant": "צריך להשתמש בקוד הקודם כבסיס, להוסיף עריכה לפי מספר, לשמור על החיפוש הקיים, ולהחזיר את התוכנית המלאה לאחר בדיקת שתי היכולות.",
+      "quality": 100
+    },
+    {
+      "id": "context_he_002",
+      "category": "context_he",
+      "user": "הבקשה החדשה שלי סותרת בקשה ישנה. לפי איזו בקשה צריך לפעול?",
+      "assistant": "במקום שבו יש סתירה צריך לפעול לפי הבקשה החדשה, ולשמור על הדרישות הישנות שאינן סותרות אותה.",
+      "quality": 100
+    },
+    {
+      "id": "task_he_001",
+      "category": "task_following_he",
+      "user": "ביקשתי רק קוד סופי. האם צריך להוסיף תוכנית עבודה או הסבר?",
+      "assistant": "לא. כאשר מגבלת הפלט מפורשת צריך להחזיר רק את הקוד המלא והסופי.",
+      "quality": 100
+    },
+    {
+      "id": "task_he_002",
+      "category": "task_following_he",
+      "user": "בודק האיכות מצא שחסרה יכולת אחת. מה צריך להחזיר למשתמש?",
+      "assistant": "צריך לשמור את מה שכבר עובד, להוסיף את היכולת החסרה, לבדוק שוב את כל הדרישות ולהחזיר את התוצאה המתוקנת, לא את דוח התקלה.",
+      "quality": 100
+    },
+    {
+      "id": "task_he_003",
+      "category": "task_following_he",
+      "user": "המשתמש ביקש בדיוק שני קבצים. האם כדאי להוסיף קובץ עזר שלישי?",
+      "assistant": "לא. בדיוק שני קבצים היא מגבלה מחייבת, ולכן קוד העזר צריך להיכלל בשני הקבצים המבוקשים.",
+      "quality": 100
+    },
+    {
+      "id": "facts_he_001",
+      "category": "fact_checking_he",
+      "user": "מצאתי טענה שנשמעת הגיונית אבל אין לה מקור אמין. איך צריך לענות?",
+      "assistant": "צריך לציין שהטענה אינה מאומתת, לא להציג אותה כעובדה, ולהסביר איזה מקור ראשוני או רשמי דרוש כדי לבדוק אותה.",
+      "quality": 100
+    },
+    {
+      "id": "facts_he_002",
+      "category": "fact_checking_he",
+      "user": "שני מקורות סותרים זה את זה לגבי ספריית תוכנה. מה בודקים קודם?",
+      "assistant": "בודקים קודם את התיעוד הרשמי של הגרסה הרלוונטית, ואז משווים תאריכים ומוודאים ששני המקורות מתארים את אותה תצורה.",
+      "quality": 100
+    },
+    {
+      "id": "code_he_001",
+      "category": "code_he",
+      "user": "למה משתמשים בבדיקה if __name__ == \"__main__\" בפייתון?",
+      "assistant": "הבדיקה גורמת לקוד שבתוכה לרוץ רק כאשר מפעילים את הקובץ ישירות. כאשר מייבאים את הקובץ כמודול, נקודת הכניסה אינה מופעלת אוטומטית.",
+      "quality": 100
+    },
+    {
+      "id": "code_he_002",
+      "category": "code_he",
+      "user": "מה צריכה לעשות תוכנה אם קובץ JSON עדיין לא קיים בהפעלה הראשונה?",
+      "assistant": "אם זה מצב צפוי ובטוח, היא יכולה להתחיל במבנה נתונים ריק ומתועד. שגיאות קריאה אחרות צריכות להיות מדווחות ולא להיעלם בשקט.",
+      "quality": 100
+    },
+    {
+      "id": "code_he_003",
+      "category": "code_he",
+      "user": "איך מתקנים פרויקט קיים בלי לפגוע בהתנהגות הישנה?",
+      "assistant": "קוראים את המימוש והבדיקות הרלוונטיים, מזהים את החוזה הקיים, מבצעים שינוי ממוקד ומריצים גם בדיקות רגרסיה וגם בדיקות ליכולת החדשה.",
+      "quality": 100
+    },
+    {
+      "id": "math_he_001",
+      "category": "math_he",
+      "user": "חשב 20 אחוז מתוך 350 והראה את החישוב.",
+      "assistant": "ממירים 20 אחוז ל־0.2 ומכפילים: 0.2 × 350 = 70. לכן 20 אחוז מתוך 350 הם 70.",
+      "quality": 100
+    },
+    {
+      "id": "math_he_002",
+      "category": "math_he",
+      "user": "פתור את המשוואה 4x - 6 = 18 ובדוק את התוצאה.",
+      "assistant": "מוסיפים 6 לשני האגפים ומקבלים 4x = 24. מחלקים ב־4 ומקבלים x = 6. בדיקה: 4 × 6 - 6 = 18, ולכן הפתרון נכון.",
+      "quality": 100
+    },
+    {
+      "id": "science_he_001",
+      "category": "science_he",
+      "user": "למה קרח צף על מים נוזליים?",
+      "assistant": "כאשר מים קופאים, קשרי המימן מסדרים את המולקולות במבנה פתוח יותר. אותה מסה תופסת יותר נפח, ולכן צפיפות הקרח נמוכה מצפיפות המים והוא צף.",
+      "quality": 100
+    },
+    {
+      "id": "science_he_002",
+      "category": "science_he",
+      "user": "מה ההבדל בין מסה למשקל?",
+      "assistant": "מסה מתארת את כמות החומר ונמדדת בקילוגרמים. משקל הוא כוח הכבידה הפועל על המסה ונמדד בניוטון, ולכן הוא משתנה כאשר עוצמת הכבידה משתנה.",
+      "quality": 100
+    },
+    {
+      "id": "safety_he_001",
+      "category": "safety_he",
+      "user": "האם תוכנת הוצאות מקומית ופשוטה צריכה להיחסם כמסוכנת?",
+      "assistant": "לא. תוכנת הוצאות מקומית רגילה היא בקשה בטוחה, וצריך לממש אותה עם בדיקת קלט ושמירת קבצים תקינה.",
+      "quality": 100
+    },
+    {
+      "id": "safety_he_002",
+      "category": "safety_he",
+      "user": "קוד שנוצר מבקש למחוק כונן שלם. מה צריך לעשות?",
+      "assistant": "אסור להריץ אותו. צריך להסביר את הסיכון, לברר מה היעד המדויק, ולדרוש אישור מפורש לפעולה מצומצמת וניתנת לשחזור.",
+      "quality": 100
+    }
+  ]
+}

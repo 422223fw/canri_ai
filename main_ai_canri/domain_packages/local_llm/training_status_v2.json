@@ -1,0 +1,190 @@
+{
+  "schema_version": 2,
+  "status": "experimental_not_ready",
+  "ready_for_canri_default_backend": false,
+  "automated_gate_passed": false,
+  "manual_review_approved": false,
+  "checkpoint": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\domain_packages\\local_llm\\checkpoints\\canri_native_v2.pt",
+  "checkpoint_bytes": 59805697,
+  "global_steps": 21250,
+  "parameters": 4975264,
+  "tokenizer_mode": "hybrid_word_character_v2",
+  "vocabulary_size": 8448,
+  "held_out_examples": 512,
+  "held_out_assistant_tokens": 49009,
+  "held_out_skip": 0,
+  "evaluation_protocol": "assistant_only_deterministic_holdout_v2",
+  "instruction_split_version": "sha256_v1",
+  "instruction_split_enforced_since_step": -1,
+  "clean_holdout_lineage": false,
+  "validation_fraction": 0.05,
+  "validation_loss": 2.005001,
+  "perplexity": 7.4261,
+  "held_out_source_metrics": [
+    {
+      "source": "Local_llm_instruction_seeds.json",
+      "examples": 1,
+      "assistant_tokens": 147,
+      "loss": 2.77247,
+      "perplexity": 15.9981
+    },
+    {
+      "source": "Knowledge_database.jsonl",
+      "examples": 116,
+      "assistant_tokens": 18919,
+      "loss": 2.59063,
+      "perplexity": 13.3382
+    },
+    {
+      "source": "History_events.json",
+      "examples": 2,
+      "assistant_tokens": 192,
+      "loss": 2.378857,
+      "perplexity": 10.7926
+    },
+    {
+      "source": "History_figures.json",
+      "examples": 1,
+      "assistant_tokens": 46,
+      "loss": 2.297742,
+      "perplexity": 9.9517
+    },
+    {
+      "source": "Units_dictionary.json",
+      "examples": 5,
+      "assistant_tokens": 200,
+      "loss": 2.21914,
+      "perplexity": 9.1994
+    },
+    {
+      "source": "Code_library_templates.json",
+      "examples": 86,
+      "assistant_tokens": 11591,
+      "loss": 2.196335,
+      "perplexity": 8.992
+    },
+    {
+      "source": "Company_products.json",
+      "examples": 5,
+      "assistant_tokens": 344,
+      "loss": 2.107223,
+      "perplexity": 8.2254
+    },
+    {
+      "source": "quality_corpus/code.jsonl",
+      "examples": 65,
+      "assistant_tokens": 7366,
+      "loss": 1.780268,
+      "perplexity": 5.9314
+    },
+    {
+      "source": "Math_formulas.json",
+      "examples": 3,
+      "assistant_tokens": 221,
+      "loss": 1.35579,
+      "perplexity": 3.8798
+    },
+    {
+      "source": "Translation_dictionary.json",
+      "examples": 57,
+      "assistant_tokens": 978,
+      "loss": 1.336971,
+      "perplexity": 3.8075
+    },
+    {
+      "source": "Synonyms.json",
+      "examples": 64,
+      "assistant_tokens": 3646,
+      "loss": 1.06881,
+      "perplexity": 2.9119
+    },
+    {
+      "source": "code.json",
+      "examples": 59,
+      "assistant_tokens": 3241,
+      "loss": 0.790549,
+      "perplexity": 2.2046
+    },
+    {
+      "source": "Code_project_recipes.json",
+      "examples": 2,
+      "assistant_tokens": 243,
+      "loss": 0.477992,
+      "perplexity": 1.6128
+    },
+    {
+      "source": "Technical_terms.json",
+      "examples": 46,
+      "assistant_tokens": 1875,
+      "loss": 0.191299,
+      "perplexity": 1.2108
+    }
+  ],
+  "readiness_gate": {
+    "maximum_validation_loss": 1.5,
+    "minimum_training_steps": 20000,
+    "manual_generation_review_required": true,
+    "clean_holdout_lineage_required": true
+  },
+  "training_data": {
+    "root": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\data",
+    "files": 41,
+    "bytes": 489133007,
+    "by_kind": {
+      "json": {
+        "files": 37,
+        "bytes": 67496556
+      },
+      "jsonl": {
+        "files": 4,
+        "bytes": 421636451
+      }
+    },
+    "fingerprint": "26b180976ad0f45b7afe6ae6b28a7bb247251caf0cd9e32547df6e9ccf2a982a",
+    "excluded_files": 126,
+    "excluded_bytes": 254530310,
+    "policy": {
+      "name": "canri_native_v2_quality_policy",
+      "source": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\domain_packages\\local_llm\\training_data_policy.json"
+    },
+    "objective": "instruction",
+    "sampling_mode": "balanced",
+    "samples_per_source": 4,
+    "instruction_split_version": "sha256_v1",
+    "corpus": null
+  },
+  "lineage": {
+    "trained_from_random_initialization": true,
+    "downloaded_base_model": false,
+    "seed": 42,
+    "weight_transfer": {
+      "source_checkpoint": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\domain_packages\\local_llm\\checkpoints\\canri_native.pt",
+      "source_global_steps": 2679,
+      "source_parameters": 3389568,
+      "target_parameters": 4975264,
+      "source_config": {
+        "vocab_size": 8192,
+        "context_length": 192,
+        "embedding_size": 192,
+        "layers": 4,
+        "heads": 6,
+        "dropout": 0.1
+      },
+      "target_config": {
+        "vocab_size": 8448,
+        "context_length": 256,
+        "embedding_size": 224,
+        "layers": 5,
+        "heads": 7,
+        "dropout": 0.1
+      },
+      "transferred_state_elements": 5407296,
+      "exact_tensors": 0,
+      "partial_tensors": 65,
+      "cloned_layer_tensors": 12,
+      "missing_tensors": []
+    },
+    "instruction_split_version": "sha256_v1",
+    "instruction_split_enforced_since_step": -1
+  }
+}

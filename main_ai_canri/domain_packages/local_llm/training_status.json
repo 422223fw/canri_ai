@@ -1,0 +1,61 @@
+{
+  "schema_version": 2,
+  "status": "experimental_not_ready",
+  "ready_for_canri_default_backend": false,
+  "automated_gate_passed": false,
+  "manual_review_approved": false,
+  "checkpoint": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\domain_packages\\local_llm\\checkpoints\\canri_native.pt",
+  "checkpoint_bytes": 40740239,
+  "global_steps": 2679,
+  "parameters": 3389568,
+  "tokenizer_mode": "hybrid_word_character_v2",
+  "vocabulary_size": 8192,
+  "held_out_examples": 256,
+  "held_out_assistant_tokens": 25419,
+  "held_out_skip": 0,
+  "evaluation_protocol": "assistant_only_deterministic_holdout_v2",
+  "instruction_split_version": "sha256_v1",
+  "instruction_split_enforced_since_step": 1659,
+  "clean_holdout_lineage": false,
+  "validation_fraction": 0.05,
+  "validation_loss": 2.786372,
+  "perplexity": 16.2221,
+  "readiness_gate": {
+    "maximum_validation_loss": 1.5,
+    "minimum_training_steps": 20000,
+    "manual_generation_review_required": true,
+    "clean_holdout_lineage_required": true
+  },
+  "training_data": {
+    "root": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\data",
+    "files": 167,
+    "bytes": 743663156,
+    "by_kind": {
+      "json": {
+        "files": 159,
+        "bytes": 301115825
+      },
+      "jsonl": {
+        "files": 5,
+        "bytes": 421747843
+      },
+      "sqlite": {
+        "files": 3,
+        "bytes": 20799488
+      }
+    },
+    "fingerprint": "0effd7be9577b96655c14415193551489912c75d167a4e0b08e3faa7c312fc28",
+    "objective": "instruction",
+    "sampling_mode": "balanced",
+    "samples_per_source": 4,
+    "instruction_split_version": "sha256_v1",
+    "corpus": null
+  },
+  "lineage": {
+    "trained_from_random_initialization": true,
+    "downloaded_base_model": false,
+    "seed": 42,
+    "instruction_split_version": "sha256_v1",
+    "instruction_split_enforced_since_step": 1659
+  }
+}

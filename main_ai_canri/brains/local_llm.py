@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import re
 import shutil
 import subprocess
+from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from threading import RLock
 from typing import Any
@@ -28,6 +30,19 @@ DEFAULT_SETTINGS = {
     "max_prompt_characters": 48000,
     "max_project_files": 80,
     "max_total_output_bytes": 2_097_152,
+    "native_checkpoint_path": "domain_packages/local_llm/checkpoints/canri_native.pt",
+    "native_tokenizer_path": "domain_packages/local_llm/data/canri_tokenizer.json",
+    "native_training_status_path": "domain_packages/local_llm/training_status.json",
+    "native_allow_experimental": False,
+    "native_max_new_tokens": 256,
+    "native_top_k": 40,
+    "native_top_p": 0.92,
+    "native_repetition_penalty": 1.1,
+    "native_no_repeat_ngram_size": 4,
+    "native_lexical_token_bias": 0.35,
+    "native_shadow_enabled": False,
+    "native_shadow_log_path": "data/Local_llm_shadow.jsonl",
+    "native_shadow_max_output_characters": 4000,
 }
 
 
@@ -40,6 +55,7 @@ class LocalLLMBrain:
 
     _models: dict[tuple[str, int], Any] = {}
     _model_lock = RLock()
+    _shadow_lock = RLock()
 
     def __init__(self, settings_path: Path | None = None) -> None:
         self.settings_path = Path(settings_path or SETTINGS_FILE)
@@ -146,6 +162,57 @@ class LocalLLMBrain:
             "Paths must be relative and must not contain '..'.\n\n"
             f"INPUT={serialized}"
         )
+
+    def build_native_prompt(self, data: dict[str, Any]) -> str:
+        """Build a compact plain-text task for CANRI's small native context."""
+
+        results = data.get("results", {})
+        bridge = (
+            results.get("LLM_bridge_brain", {})
+            if isinstance(results, dict)
+            else {}
+        )
+        if isinstance(bridge, dict):
+            packet = bridge.get("context_packet", {})
+            if isinstance(packet, dict) and str(packet.get("native_prompt") or "").strip():
+                return str(packet["native_prompt"]).strip()
+
+        request = str(data.get("original_text") or data.get("corrected_text") or "").strip()
+        understanding = data.get("understanding", {})
+        understanding = understanding if isinstance(understanding, dict) else {}
+        contract = understanding.get("request_contract", {})
+        contract = contract if isinstance(contract, dict) else {}
+        requirements = contract.get("requirements", [])
+        if not isinstance(requirements, list):
+            requirements = []
+        failed = data.get("failed_requirements", [])
+        failed = failed if isinstance(failed, list) else []
+        evidence = self._compact_scanner(data)
+
+        sections = [f"Task: {request[:1600]}"]
+        if requirements:
+            sections.append(
+                "Requirements:\n"
+                + "\n".join(f"- {str(item)[:240]}" for item in requirements[:8])
+            )
+        if failed:
+            sections.append(
+                "Correct these failures:\n"
+                + "\n".join(f"- {str(item)[:240]}" for item in failed[:6])
+            )
+        if evidence:
+            sections.append(
+                "Reliable local context:\n"
+                + "\n".join(
+                    f"- {str(item.get('title') or '')[:100]}: "
+                    f"{str(item.get('summary') or '')[:320]}"
+                    for item in evidence[:3]
+                )
+            )
+        sections.append(
+            "Answer the task directly. Follow every requirement. Return only the user-facing result."
+        )
+        return "\n\n".join(sections)
 
     @staticmethod
     def _extract_json(text: str) -> dict[str, Any]:
@@ -268,9 +335,62 @@ class LocalLLMBrain:
             )
         return completed.stdout
 
+    def _run_native(self, prompt: str, settings: dict[str, Any]) -> str:
+        """Run CANRI's own from-scratch checkpoint without a remote service."""
+
+        from domain_packages.local_llm.inference import generate_text
+
+        project_root = DATA_DIR.parent
+        checkpoint = project_root / str(
+            settings.get("native_checkpoint_path")
+            or DEFAULT_SETTINGS["native_checkpoint_path"]
+        )
+        tokenizer = project_root / str(
+            settings.get("native_tokenizer_path")
+            or DEFAULT_SETTINGS["native_tokenizer_path"]
+        )
+        status_path = project_root / str(
+            settings.get("native_training_status_path")
+            or DEFAULT_SETTINGS["native_training_status_path"]
+        )
+        readiness = load_json_resilient(status_path, default={})
+        ready = bool(
+            isinstance(readiness, dict)
+            and readiness.get("ready_for_canri_default_backend") is True
+        )
+        if not ready and not settings.get("native_allow_experimental", False):
+            status = (
+                str(readiness.get("status") or "not_evaluated")
+                if isinstance(readiness, dict)
+                else "not_evaluated"
+            )
+            raise LocalModelError(
+                "The native CANRI checkpoint is experimental and is not ready "
+                f"for user answers (status: {status}). Continue training and evaluation, "
+                "or explicitly set native_allow_experimental to true for testing."
+            )
+        return generate_text(
+            prompt,
+            checkpoint=checkpoint,
+            tokenizer_path=tokenizer,
+            max_new_tokens=max(1, int(settings.get("native_max_new_tokens", 256))),
+            temperature=float(settings.get("temperature", 0.7)),
+            top_k=max(0, int(settings.get("native_top_k", 40))),
+            top_p=float(settings.get("native_top_p", 0.92)),
+            repetition_penalty=float(
+                settings.get("native_repetition_penalty", 1.1)
+            ),
+            no_repeat_ngram_size=max(
+                0, int(settings.get("native_no_repeat_ngram_size", 4))
+            ),
+            lexical_token_bias=float(
+                settings.get("native_lexical_token_bias", 0.35)
+            ),
+        )
+
     def _select_backend(self, settings: dict[str, Any]) -> str:
         configured = str(settings.get("backend") or "auto").casefold()
-        if configured in {"llama_cpp", "ollama"}:
+        if configured in {"llama_cpp", "ollama", "canri_native"}:
             return configured
         model_path = Path(str(settings.get("model_path") or "")).expanduser()
         if model_path.is_file():
@@ -280,6 +400,89 @@ class LocalLLMBrain:
         raise LocalModelError(
             "No local backend is ready. Configure a GGUF model_path or an installed Ollama model."
         )
+
+    def _append_shadow_record(self, record: dict[str, Any], settings: dict[str, Any]) -> None:
+        project_root = DATA_DIR.parent
+        configured = str(
+            settings.get("native_shadow_log_path")
+            or DEFAULT_SETTINGS["native_shadow_log_path"]
+        )
+        destination = project_root / configured
+        try:
+            destination.resolve().relative_to(project_root.resolve())
+        except (OSError, ValueError) as error:
+            raise LocalModelError("The native shadow log must remain inside CANRI.") from error
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        with self._shadow_lock:
+            with destination.open("a", encoding="utf-8", newline="\n") as handle:
+                handle.write(json.dumps(record, ensure_ascii=False, separators=(",", ":")))
+                handle.write("\n")
+
+    def process_shadow(self, data: Any) -> dict[str, Any]:
+        """Generate an experimental candidate without changing the user answer."""
+
+        payload = data if isinstance(data, dict) else {"original_text": str(data)}
+        settings = self.load_settings()
+        if not settings.get("native_shadow_enabled", False):
+            return {
+                "brain": "Local_LLM_shadow",
+                "status": "shadow_disabled",
+                "available": False,
+                "used_for_user_answer": False,
+            }
+        request = str(
+            payload.get("original_text") or payload.get("corrected_text") or ""
+        ).strip()
+        if not request:
+            return {
+                "brain": "Local_LLM_shadow",
+                "status": "shadow_skipped",
+                "available": False,
+                "reason": "empty_request",
+                "used_for_user_answer": False,
+            }
+        shadow_settings = dict(settings)
+        shadow_settings["native_allow_experimental"] = True
+        shadow_settings["temperature"] = 0.0
+        try:
+            candidate = self._run_native(
+                self.build_native_prompt(payload), shadow_settings
+            ).strip()
+            if not candidate:
+                raise LocalModelError("The native model produced an empty shadow candidate.")
+            maximum = max(
+                256,
+                int(settings.get("native_shadow_max_output_characters", 4000)),
+            )
+            candidate = candidate[:maximum]
+            record = {
+                "schema_version": 1,
+                "created_utc": datetime.now(timezone.utc).isoformat(),
+                "request_id": str(payload.get("_request_id") or ""),
+                "request_sha256": hashlib.sha256(request.encode("utf-8")).hexdigest(),
+                "candidate": candidate,
+                "used_for_user_answer": False,
+                "model_output_executed": False,
+            }
+            self._append_shadow_record(record, settings)
+            return {
+                "brain": "Local_LLM_shadow",
+                "status": "shadow_completed",
+                "available": True,
+                "candidate_output": candidate,
+                "used_for_user_answer": False,
+                "model_output_executed": False,
+                "request_sha256": record["request_sha256"],
+            }
+        except (LocalModelError, OSError, RuntimeError, ValueError) as error:
+            return {
+                "brain": "Local_LLM_shadow",
+                "status": "shadow_unavailable",
+                "available": False,
+                "reason": str(error),
+                "used_for_user_answer": False,
+                "model_output_executed": False,
+            }
 
     def process(self, data: Any) -> dict[str, Any]:
         payload = data if isinstance(data, dict) else {"original_text": str(data)}
@@ -294,13 +497,24 @@ class LocalLLMBrain:
             }
         try:
             backend = self._select_backend(settings)
-            prompt = self.build_prompt(payload, settings)
+            prompt = (
+                self.build_native_prompt(payload)
+                if backend == "canri_native"
+                else self.build_prompt(payload, settings)
+            )
             raw = (
                 self._run_llama_cpp(prompt, settings)
                 if backend == "llama_cpp"
                 else self._run_ollama(prompt, settings)
+                if backend == "ollama"
+                else self._run_native(prompt, settings)
             )
             parsed = self._extract_json(raw)
+            if not parsed and backend == "canri_native" and str(raw).strip():
+                parsed = {
+                    "final_output": str(raw).strip(),
+                    "analysis_summary": "Native CANRI checkpoint response.",
+                }
             if not parsed:
                 raise LocalModelError("The local model did not return valid JSON.")
             normalized = self._normalize_output(parsed, settings)
@@ -311,7 +525,9 @@ class LocalLLMBrain:
                 "backend": backend,
                 "external_api_used": False,
                 "model_output_executed": False,
-                "confidence": 82,
+                "confidence": 58 if backend == "canri_native" else 82,
+                "integration_mode": str(settings.get("integration_mode", "advisory")),
+                "used_for_user_answer": False,
                 **normalized,
             }
         except (LocalModelError, OSError, subprocess.SubprocessError) as error:

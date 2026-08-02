@@ -26,6 +26,7 @@ from Brain_storage import atomic_write_json, load_json_resilient
 
 DATA_DIR = Path(__file__).parent / "data"
 DEFAULT_STATISTICS_FILE = DATA_DIR / "Brain_runtime_statistics.json"
+DEFAULT_MEMORY_STATISTICS_FILE = DATA_DIR / "Cognitive_memory_statistics.json"
 
 
 def _configured_watchdog_seconds() -> Optional[float]:
@@ -58,6 +59,7 @@ DEFAULT_PROFILES = {
     "Image_brain": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": False},
     "Movie_brain": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": False},
     "Project_context_brain": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": False},
+    "LLM_bridge_brain": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": False},
     "Local_LLM_brain": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": False},
     "Agent_brain": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": True},
     "Vision_brain": {"timeout_seconds": EMERGENCY_BRAIN_WATCHDOG_SECONDS, "critical": False},
@@ -87,9 +89,13 @@ class BrainRuntime:
     def __init__(
         self,
         statistics_path: Optional[Path] = None,
+        memory_statistics_path: Optional[Path] = None,
         profiles: Optional[Mapping[str, Mapping[str, Any]]] = None,
     ):
         self.statistics_path = Path(statistics_path or DEFAULT_STATISTICS_FILE)
+        self.memory_statistics_path = Path(
+            memory_statistics_path or DEFAULT_MEMORY_STATISTICS_FILE
+        )
         self.profiles = {
             name: dict(profile)
             for name, profile in (profiles or DEFAULT_PROFILES).items()
@@ -99,6 +105,44 @@ class BrainRuntime:
         self._events = []
         self._dirty = False
         self._statistics = self._load_statistics()
+
+    @staticmethod
+    def serialized_bytes(value: Any) -> int:
+        """Measure the UTF-8 information volume exchanged between brains.
+
+        This intentionally measures reports and context, not process RSS. It is
+        therefore stable across machines and maps directly to what a brain read
+        or wrote during one request.
+        """
+
+        try:
+            serialized = json.dumps(
+                value,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+                default=lambda item: f"<{type(item).__name__}>",
+            )
+        except (TypeError, ValueError, RecursionError):
+            serialized = repr(value)
+        return len(serialized.encode("utf-8", errors="replace"))
+
+    @staticmethod
+    def model_family(brain_name: str) -> str:
+        name = str(brain_name or "").casefold()
+        return "LLM" if "local_llm" in name else "LFM"
+
+    @staticmethod
+    def caller_from_payload(payload: Any) -> str:
+        if not isinstance(payload, Mapping):
+            return "Main"
+        control = payload.get("_runtime_control", {})
+        if isinstance(control, Mapping) and control.get("brain"):
+            return str(control["brain"])
+        manager = payload.get("manager_context", {})
+        if isinstance(manager, Mapping) and manager.get("target_brain"):
+            return "Manager_brain"
+        return "Main"
 
     @staticmethod
     def utc_now() -> str:
@@ -375,6 +419,7 @@ class BrainRuntime:
     ) -> BrainExecution:
         brain_name = str(brain_name or "Unknown_brain")
         request_id = self._request_id(payload, request_id)
+        caller_brain = self.caller_from_payload(payload)
         profile = self.profile_for(brain_name)
         timeout_seconds = self.timeout_for(
             brain_name,
@@ -498,6 +543,7 @@ class BrainRuntime:
             deadline,
             cancel_event,
         )
+        input_bytes = self.serialized_bytes(prepared_payload)
 
         def run_processor() -> None:
             try:
@@ -553,6 +599,10 @@ class BrainRuntime:
                 attempt,
                 ["cooperative_cancellation_requested"],
                 profile,
+                caller_brain=caller_brain,
+                model_family=self.model_family(brain_name),
+                input_bytes=input_bytes,
+                output_bytes=self.serialized_bytes(result),
             )
             self._record(telemetry)
             return BrainExecution(result, telemetry)
@@ -579,6 +629,10 @@ class BrainRuntime:
                 profile,
                 exception_type=type(error).__name__,
                 exception_fingerprint=self._exception_fingerprint(error),
+                caller_brain=caller_brain,
+                model_family=self.model_family(brain_name),
+                input_bytes=input_bytes,
+                output_bytes=self.serialized_bytes(result),
             )
             self._record(telemetry)
             return BrainExecution(result, telemetry)
@@ -600,6 +654,10 @@ class BrainRuntime:
             attempt,
             warnings,
             profile,
+            caller_brain=caller_brain,
+            model_family=self.model_family(brain_name),
+            input_bytes=input_bytes,
+            output_bytes=self.serialized_bytes(result),
         )
         self._record(telemetry)
         return BrainExecution(result, telemetry)
@@ -645,6 +703,13 @@ class BrainRuntime:
             "warnings": list(warnings),
         }
         telemetry.update(extra)
+        input_bytes = max(0, int(telemetry.get("input_bytes", 0) or 0))
+        output_bytes = max(0, int(telemetry.get("output_bytes", 0) or 0))
+        telemetry["input_bytes"] = input_bytes
+        telemetry["output_bytes"] = output_bytes
+        telemetry["transfer_bytes"] = input_bytes + output_bytes
+        telemetry.setdefault("caller_brain", "Main")
+        telemetry.setdefault("model_family", self.model_family(brain_name))
         return telemetry
 
     def _record(self, telemetry: Mapping[str, Any]) -> None:
@@ -657,6 +722,8 @@ class BrainRuntime:
             self._events = self._events[-self.MAX_EVENT_HISTORY :]
             totals = self._statistics.setdefault("totals", {})
             totals["calls"] = int(totals.get("calls", 0)) + 1
+            for key in ("input_bytes", "output_bytes", "transfer_bytes"):
+                totals[key] = int(totals.get(key, 0)) + int(event.get(key, 0) or 0)
             status_bucket = {
                 "success": "success",
                 "timeout": "timeouts",
@@ -687,6 +754,13 @@ class BrainRuntime:
                 "maximum_seconds": round(max(float(brain_stats.get("maximum_seconds", 0.0)), elapsed), 4),
                 "last_status": status,
                 "last_finished_utc": event.get("finished_utc"),
+                "model_family": event.get("model_family", self.model_family(brain_name)),
+                "input_bytes": int(brain_stats.get("input_bytes", 0))
+                + int(event.get("input_bytes", 0) or 0),
+                "output_bytes": int(brain_stats.get("output_bytes", 0))
+                + int(event.get("output_bytes", 0) or 0),
+                "transfer_bytes": int(brain_stats.get("transfer_bytes", 0))
+                + int(event.get("transfer_bytes", 0) or 0),
             })
             self._statistics["updated_utc"] = event.get("finished_utc")
             self._dirty = True
@@ -699,6 +773,47 @@ class BrainRuntime:
                 if event.get("request_id") == request_id
             ]
         return matches[-max(int(limit), 1) :]
+
+    def record_information_exchange(
+        self,
+        brain_name: str,
+        payload: Any,
+        result: Any,
+        *,
+        request_id: str,
+        caller_brain: str = "Main",
+        phase: str = "direct_exchange",
+        status: str = "success",
+    ) -> Dict[str, Any]:
+        """Account for a direct brain call that cannot use ``invoke``.
+
+        A few persistence operations have multi-argument APIs and therefore do
+        not fit the regular process(payload) contract. Recording them here
+        keeps the per-response information ledger complete without changing
+        those established APIs.
+        """
+
+        started = time.perf_counter()
+        profile = self.profile_for(brain_name)
+        telemetry = self._telemetry(
+            str(brain_name),
+            str(request_id),
+            str(phase),
+            str(status),
+            self.utc_now(),
+            started,
+            None,
+            0.0,
+            1,
+            ["direct_exchange_accounted"],
+            profile,
+            caller_brain=str(caller_brain or "Main"),
+            model_family=self.model_family(brain_name),
+            input_bytes=self.serialized_bytes(payload),
+            output_bytes=self.serialized_bytes(result),
+        )
+        self._record(telemetry)
+        return telemetry
 
     @staticmethod
     def summarize_events(events: list[Mapping[str, Any]]) -> Dict[str, Any]:
@@ -721,7 +836,131 @@ class BrainRuntime:
                 for event in events
                 if event.get("slow")
             ],
+            "information_bytes": sum(
+                int(event.get("transfer_bytes", 0) or 0) for event in events
+            ),
         }
+
+    def memory_profile_for_request(
+        self,
+        request_id: str,
+        *,
+        limit: int = 1000,
+    ) -> Dict[str, Any]:
+        events = self.events_for_request(request_id, limit=limit)
+        per_brain: Dict[str, Dict[str, Any]] = {}
+        family_totals = {
+            "LFM": {"input_bytes": 0, "output_bytes": 0, "transfer_bytes": 0, "calls": 0},
+            "LLM": {"input_bytes": 0, "output_bytes": 0, "transfer_bytes": 0, "calls": 0},
+        }
+        edges: Dict[tuple[str, str, str], Dict[str, Any]] = {}
+        for event in events:
+            brain = str(event.get("brain") or "Unknown_brain")
+            caller = str(event.get("caller_brain") or "Main")
+            family = str(event.get("model_family") or self.model_family(brain))
+            family = family if family in family_totals else "LFM"
+            input_bytes = int(event.get("input_bytes", 0) or 0)
+            output_bytes = int(event.get("output_bytes", 0) or 0)
+            transfer_bytes = input_bytes + output_bytes
+            row = per_brain.setdefault(
+                brain,
+                {
+                    "brain": brain,
+                    "family": family,
+                    "calls": 0,
+                    "input_bytes": 0,
+                    "output_bytes": 0,
+                    "transfer_bytes": 0,
+                    "elapsed_seconds": 0.0,
+                },
+            )
+            row["calls"] += 1
+            row["input_bytes"] += input_bytes
+            row["output_bytes"] += output_bytes
+            row["transfer_bytes"] += transfer_bytes
+            row["elapsed_seconds"] = round(
+                float(row["elapsed_seconds"])
+                + float(event.get("elapsed_seconds", 0.0) or 0.0),
+                4,
+            )
+            family_totals[family]["calls"] += 1
+            family_totals[family]["input_bytes"] += input_bytes
+            family_totals[family]["output_bytes"] += output_bytes
+            family_totals[family]["transfer_bytes"] += transfer_bytes
+            for source, target, direction, size in (
+                (caller, brain, "read", input_bytes),
+                (brain, caller, "write", output_bytes),
+            ):
+                if size <= 0:
+                    continue
+                key = (source, target, direction)
+                edge = edges.setdefault(
+                    key,
+                    {
+                        "from": source,
+                        "to": target,
+                        "direction": direction,
+                        "bytes": 0,
+                        "transfers": 0,
+                    },
+                )
+                edge["bytes"] += size
+                edge["transfers"] += 1
+
+        ordered_brains = sorted(
+            per_brain.values(),
+            key=lambda item: (-int(item["transfer_bytes"]), item["brain"]),
+        )
+        total = sum(item["transfer_bytes"] for item in ordered_brains)
+        return {
+            "schema_version": 1,
+            "measurement": "utf8_serialized_information_volume",
+            "request_id": str(request_id),
+            "created_utc": self.utc_now(),
+            "total_bytes": total,
+            "lfm_bytes": family_totals["LFM"]["transfer_bytes"],
+            "llm_bytes": family_totals["LLM"]["transfer_bytes"],
+            "families": family_totals,
+            "brains": ordered_brains,
+            "transfers": sorted(
+                edges.values(),
+                key=lambda item: (-int(item["bytes"]), item["from"], item["to"]),
+            ),
+            "events": len(events),
+        }
+
+    def finalize_request_memory(
+        self,
+        request_id: str,
+        *,
+        session_id: Optional[str] = None,
+        user_preview: str = "",
+    ) -> Dict[str, Any]:
+        profile = self.memory_profile_for_request(request_id)
+        profile["session_id"] = str(session_id or "")
+        profile["user_preview"] = str(user_preview or "")[:240]
+        with self._lock:
+            stored = load_json_resilient(
+                self.memory_statistics_path,
+                default={"schema_version": 1, "requests": [], "totals": {}},
+            )
+            if not isinstance(stored, dict):
+                stored = {"schema_version": 1, "requests": [], "totals": {}}
+            requests = [
+                item for item in stored.get("requests", [])
+                if isinstance(item, dict) and item.get("request_id") != request_id
+            ]
+            requests.append(profile)
+            stored["requests"] = requests[-500:]
+            stored["updated_utc"] = self.utc_now()
+            stored["totals"] = {
+                "requests": len(stored["requests"]),
+                "total_bytes": sum(int(item.get("total_bytes", 0) or 0) for item in stored["requests"]),
+                "lfm_bytes": sum(int(item.get("lfm_bytes", 0) or 0) for item in stored["requests"]),
+                "llm_bytes": sum(int(item.get("llm_bytes", 0) or 0) for item in stored["requests"]),
+            }
+            atomic_write_json(self.memory_statistics_path, stored)
+        return profile
 
     def health_snapshot(self) -> Dict[str, Any]:
         with self._lock:

@@ -1,0 +1,217 @@
+{
+  "schema_version": 1,
+  "created_utc": "2026-07-29T10:07:38.292873+00:00",
+  "checkpoint": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\domain_packages\\local_llm\\checkpoints\\canri_native.pt",
+  "benchmark": "C:\\Users\\Anabel\\Documents\\Downloads\\canri AI\\main_ai_canri\\data\\Local_llm_generation_benchmark.json",
+  "cases": 12,
+  "automatic_average_score": 62.18,
+  "automatic_gate_passed": false,
+  "manual_review_required": true,
+  "manual_review_approved": false,
+  "results": [
+    {
+      "id": "greeting_en",
+      "category": "conversation",
+      "prompt": "Hello. Introduce yourself in one clear sentence.",
+      "output": "and of the of of aleres of and the the and atingerered the in the aterenterorer the to the is the cere the foles the by of in and and in",
+      "checks": {
+        "nonempty_and_bounded": true,
+        "required_signal_present": false,
+        "all_mandatory_signals_present": true,
+        "forbidden_signal_absent": true,
+        "repetition_bounded": false,
+        "unknown_token_artifacts_bounded": true
+      },
+      "score": 61.54,
+      "word_count": 31,
+      "repeated_word_ratio": 0.6129
+    },
+    {
+      "id": "greeting_he",
+      "category": "conversation",
+      "prompt": "שלום, תענה במשפט קצר וברור.",
+      "output": "is the of the the ateng the and the stincont the in the to the derentent of of and of alonte the is of in of s the cong of is a the i",
+      "checks": {
+        "nonempty_and_bounded": true,
+        "required_signal_present": false,
+        "all_mandatory_signals_present": true,
+        "forbidden_signal_absent": true,
+        "repetition_bounded": false,
+        "unknown_token_artifacts_bounded": true
+      },
+      "score": 61.54,
+      "word_count": 34,
+      "repeated_word_ratio": 0.5882
+    },
+    {
+      "id": "arithmetic",
+      "category": "math",
+      "prompt": "Answer only with the result: 2 + 3",
+      "output": "and sererenteredere and the of the aleres and of of and and aterinteng the the and in the coreratentintid and is the in of a the to",
+      "checks": {
+        "nonempty_and_bounded": false,
+        "required_signal_present": false,
+        "all_mandatory_signals_present": true,
+        "forbidden_signal_absent": true,
+        "repetition_bounded": false,
+        "unknown_token_artifacts_bounded": true
+      },
+      "score": 46.15,
+      "word_count": 27,
+      "repeated_word_ratio": 0.5926
+    },
+    {
+      "id": "quadratic",
+      "category": "math",
+      "prompt": "Solve x^2 - 5x + 6 = 0 and give both solutions.",
+      "output": "Sore in the of and the the a the s the and of the contederere the to the is the forering the in of of a of in and a and and s of s aleren",
+      "checks": {
+        "nonempty_and_bounded": true,
+        "required_signal_present": true,
+        "all_mandatory_signals_present": false,
+        "forbidden_signal_absent": true,
+        "repetition_bounded": false,
+        "unknown_token_artifacts_bounded": true
+      },
+      "score": 61.54,
+      "word_count": 36,
+      "repeated_word_ratio": 0.6667
+    },
+    {
+      "id": "gravity",
+      "category": "science",
+      "prompt": "What is gravity? Give a short scientific explanation.",
+      "output": "a of the of of a the the a and the cons the and of prestingered the in the to the is the fontererententinte the by the s the, the ple",
+      "checks": {
+        "nonempty_and_bounded": true,
+        "required_signal_present": false,
+        "all_mandatory_signals_present": true,
+        "forbidden_signal_absent": true,
+        "repetition_bounded": false,
+        "unknown_token_artifacts_bounded": true
+      },
+      "score": 61.54,
+      "word_count": 31,
+      "repeated_word_ratio": 0.5806
+    },
+    {
+      "id": "python_loop",
+      "category": "code",
+      "prompt": "Write Python code that asks for a name until the user types exit.",
+      "output": "the the alerenting the of the is the s the corerera the and the foredere the in the peres the, the intered the to the rer the der a",
+      "checks": {
+        "nonempty_and_bounded": true,
+        "required_signal_present": true,
+        "all_mandatory_signals_present": false,
+        "forbidden_signal_absent": true,
+        "repetition_bounded": true,
+        "unknown_token_artifacts_bounded": true
+      },
+      "score": 69.23,
+      "word_count": 29,
+      "repeated_word_ratio": 0.4828
+    },
+    {
+      "id": "code_explanation",
+      "category": "code",
+      "prompt": "Explain what print('Hello') does in Python.",
+      "output": "ales of the the of of and the atingeroredereres the and of a the in the cerentered the to the is the plere the forera the. the by the",
+      "checks": {
+        "nonempty_and_bounded": true,
+        "required_signal_present": false,
+        "all_mandatory_signals_present": true,
+        "forbidden_signal_absent": true,
+        "repetition_bounded": false,
+        "unknown_token_artifacts_bounded": true
+      },
+      "score": 61.54,
+      "word_count": 29,
+      "repeated_word_ratio": 0.5517
+    },
+    {
+      "id": "fact_uncertainty",
+      "category": "reasoning",
+      "prompt": "What should you do when a factual claim cannot be verified?",
+      "output": "the the of the aleresting the and the is the contederere the in the to the perentered the fore of of al the s the by the inteng of",
+      "checks": {
+        "nonempty_and_bounded": true,
+        "required_signal_present": false,
+        "all_mandatory_signals_present": true,
+        "forbidden_signal_absent": true,
+        "repetition_bounded": true,
+        "unknown_token_artifacts_bounded": true
+      },
+      "score": 69.23,
+      "word_count": 29,
+      "repeated_word_ratio": 0.5172
+    },
+    {
+      "id": "emotional_support",
+      "category": "conversation",
+      "prompt": "I had a tiring day. Give me one simple supportive suggestion.",
+      "output": "and of the of of atering the the and the corereraleres the atintind the in the is the prericerenticentere of and and at the to the",
+      "checks": {
+        "nonempty_and_bounded": true,
+        "required_signal_present": false,
+        "all_mandatory_signals_present": true,
+        "forbidden_signal_absent": true,
+        "repetition_bounded": false,
+        "unknown_token_artifacts_bounded": true
+      },
+      "score": 61.54,
+      "word_count": 26,
+      "repeated_word_ratio": 0.5769
+    },
+    {
+      "id": "story",
+      "category": "creative",
+      "prompt": "Write two sentences about Leo finding a glowing key in a park.",
+      "output": "of the the of of alererenting and the and of and alorers the alintered the in the is the ceres the, the to the prerater the for the.",
+      "checks": {
+        "nonempty_and_bounded": true,
+        "required_signal_present": true,
+        "all_mandatory_signals_present": false,
+        "forbidden_signal_absent": true,
+        "repetition_bounded": false,
+        "unknown_token_artifacts_bounded": true
+      },
+      "score": 61.54,
+      "word_count": 28,
+      "repeated_word_ratio": 0.5714
+    },
+    {
+      "id": "quality_retry",
+      "category": "task_following",
+      "prompt": "A quality checker finds one missing feature. What should happen next?",
+      "output": "and of the of of and the the aterons of alinterered the and and ating the in the cherententintis the is the to the by the prerorera",
+      "checks": {
+        "nonempty_and_bounded": true,
+        "required_signal_present": false,
+        "all_mandatory_signals_present": true,
+        "forbidden_signal_absent": true,
+        "repetition_bounded": false,
+        "unknown_token_artifacts_bounded": true
+      },
+      "score": 61.54,
+      "word_count": 27,
+      "repeated_word_ratio": 0.5556
+    },
+    {
+      "id": "output_constraint",
+      "category": "task_following",
+      "prompt": "The user requests final code only. Should you include a plan?",
+      "output": "the of the the and the aterins the is the corederere the in the to the s the. the foreraleres the, of of atingerentered the perec",
+      "checks": {
+        "nonempty_and_bounded": true,
+        "required_signal_present": false,
+        "all_mandatory_signals_present": true,
+        "forbidden_signal_absent": true,
+        "repetition_bounded": true,
+        "unknown_token_artifacts_bounded": true
+      },
+      "score": 69.23,
+      "word_count": 26,
+      "repeated_word_ratio": 0.5385
+    }
+  ]
+}

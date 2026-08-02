@@ -42,6 +42,7 @@ INTERNAL_ONLY_BRAINS = {
     "Memory_brain",
     "Collaboration_brain",
     "Nervous_system_brain",
+    "LLM_bridge_brain",
 }
 
 
@@ -542,6 +543,18 @@ class ResponseBrain:
 
         return score
 
+    @staticmethod
+    def llm_candidate_approved(results):
+
+        if not isinstance(results, dict):
+            return False
+        bridge = results.get("LLM_bridge_brain", {})
+        return bool(
+            isinstance(bridge, dict)
+            and bridge.get("candidate_accepted") is True
+            and bridge.get("candidate_role") == "general_conversation"
+        )
+
     def choose_primary_result(self, results, report=None):
 
         candidates = []
@@ -564,6 +577,8 @@ class ResponseBrain:
             if brain_name == "Creative_brain" and not allow_creative:
                 continue
             if brain_name == "Code_brain" and not allow_code:
+                continue
+            if brain_name == "Local_LLM_brain" and not self.llm_candidate_approved(results):
                 continue
             if not self.has_user_facing_output(brain_name, result):
                 continue
@@ -606,6 +621,8 @@ class ResponseBrain:
                 continue
             if permitted is not None and brain_name not in permitted:
                 continue
+            if brain_name == "Local_LLM_brain" and not self.llm_candidate_approved(results):
+                continue
             result = results.get(brain_name)
             if self.has_user_facing_output(brain_name, result):
                 return brain_name, result
@@ -626,6 +643,7 @@ class ResponseBrain:
             isinstance(local_result, dict)
             and local_result.get("status") == "completed"
             and local_result.get("final_output")
+            and self.llm_candidate_approved(results)
             and not reviewed_code_available
         ):
             preferred.insert(0, "Local_LLM_brain")
