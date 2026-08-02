@@ -2,3 +2,5 @@ main_ai_canri/data/*.json filter=lfs diff=lfs merge=lfs -text
 main_ai_canri/data/*.jsonl filter=lfs diff=lfs merge=lfs -text
 main_ai_canri/UnderstandingDk/data/*.json filter=lfs diff=lfs merge=lfs -text
 main_ai_canri/domain_packages/local_llm/checkpoints/*.pt filter=lfs diff=lfs merge=lfs -text
+main_ai_canri/domain_packages/local_llm/quality_corpus/*.jsonl filter=lfs diff=lfs merge=lfs -text
+main_ai_canri/domain_packages/local_llm/data/*.json filter=lfs diff=lfs merge=lfs -text
